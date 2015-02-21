@@ -7901,6 +7901,61 @@ static int ui_handle_list_event(bContext *C, const wmEvent *event, ARegion *ar)
 	return retval;
 }
 
+static int ui_handle_block_event(bContext *C, const wmEvent *event, ARegion *ar)
+{
+	uiBlock *block = NULL;
+	uiBut *but = ui_but_find_mouse_over(ar, event);
+	short retval = WM_UI_HANDLER_CONTINUE;
+
+#if 0
+	for (block = ar->uiblocks.first; block; block = block->next) {
+		int mx = event->x;
+		int my = event->y;
+		ui_window_to_block(ar, block, &mx, &my);
+		if (BLI_rctf_isect_pt(&block->rect, (float)mx, (float)my)) {
+			break;
+		}
+	}
+#endif
+	if (but) {
+		block = but->block;
+	}
+
+	if (block == NULL || but == NULL)
+		return WM_UI_HANDLER_CONTINUE;
+
+	switch (event->type) {
+		case LEFTMOUSE:
+			if (event->val == KM_PRESS) {
+				BLI_assert(block->drag_state == UI_BLOCK_DRAGSTATE_NONE);
+		
+				if (block->flag & UI_BLOCK_DRAGGABLE && but->icon == ICON_GRIP) {
+					block->drag_data.drag_state = UI_BLOCK_DRAGSTATE_DRAGGING;
+					BLI_strncpy(block->drag_data.dragged_subblock, but->subblock_id, MAX_NAME);
+//					block->oldblock = block;
+					retval = WM_UI_HANDLER_BREAK;
+				}
+			}
+			else if (event->val == KM_RELEASE && block->drag_data.drag_state == UI_BLOCK_DRAGSTATE_DRAGGING) {
+				block->drag_data.drag_state = 0;
+				retval = WM_UI_HANDLER_BREAK;
+			}
+			break;
+		case MOUSEMOVE:
+			if (block->drag_data.drag_state == UI_BLOCK_DRAGSTATE_DRAGGING) {
+				int mdelta_x = (event->x - event->prevclickx);
+				int mdelta_y = (event->y - event->prevclicky);
+				ui_block_translate(block, mdelta_x, mdelta_y);
+				ED_region_tag_redraw(ar);
+				retval = WM_UI_HANDLER_BREAK;
+			}
+			break;
+		default:
+			break;
+	}
+	return retval;
+}
+
 static void ui_handle_button_return_submenu(bContext *C, const wmEvent *event, uiBut *but)
 {
 	uiHandleButtonData *data;
@@ -9161,6 +9216,9 @@ static int ui_region_handler(bContext *C, const wmEvent *event, void *UNUSED(use
 	but = ui_but_find_active_in_region(ar);
 
 	retval = ui_handler_panel_region(C, event, ar);
+
+	if (retval == WM_UI_HANDLER_CONTINUE)
+		retval = ui_handle_block_event(C, event, ar);
 
 	if (retval == WM_UI_HANDLER_CONTINUE)
 		retval = ui_handle_list_event(C, event, ar);

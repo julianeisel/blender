@@ -1187,6 +1187,9 @@ void UI_block_update_from_old(const bContext *C, uiBlock *block)
 	block->auto_open = block->oldblock->auto_open;
 	block->auto_open_last = block->oldblock->auto_open_last;
 	block->tooltipdisabled = block->oldblock->tooltipdisabled;
+	block->drag_data.drag_state = block->oldblock->drag_data.drag_state;
+	block->rect = block->oldblock->rect;
+//	block->drag_data.tot_subblocks = block->oldblock->drag_data.tot_subblocks;
 	BLI_movelisttolist(&block->color_pickers.list, &block->oldblock->color_pickers.list);
 
 	block->oldblock = NULL;
@@ -1323,7 +1326,9 @@ static void ui_but_to_pixelrect(rcti *rect, const ARegion *ar, uiBlock *block, u
 void UI_block_draw(const bContext *C, uiBlock *block)
 {
 	uiStyle style = *UI_style_get_dpi();  /* XXX pass on as arg */
+	wmWindow *win = CTX_wm_window(C);
 	ARegion *ar;
+	uiLayout *layout;
 	uiBut *but;
 	rcti rect;
 	int multisample_enabled;
@@ -1335,6 +1340,12 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 
 	if (!block->endblock)
 		UI_block_end(C, block);
+
+//	if (block->flag & UI_BLOCK_DRAGGABLE) {
+////			block->rect = block->oldblock->rect;
+//			print_rcti("", &block->rect);
+//	}
+//	rect = block->rect;
 
 	/* disable AA, makes widgets too blurry */
 	multisample_enabled = glIsEnabled(GL_MULTISAMPLE_ARB);
@@ -1352,6 +1363,9 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 	
 	/* scale block min/max to rect */
 	ui_but_to_pixelrect(&rect, ar, block, NULL);
+//	if (block->flag & UI_BLOCK_DRAGGABLE && block->drag_data.drag_state) {
+//		ui_block_translate(block, win->eventstate->x - win->eventstate->prevclickx, win->eventstate->y - win->eventstate->prevclicky);
+//	}
 	
 	/* pixel space for AA widgets */
 	glMatrixMode(GL_PROJECTION);
@@ -1374,6 +1388,16 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 	for (but = block->buttons.first; but; but = but->next) {
 		if (!(but->flag & (UI_HIDDEN | UI_SCROLLED))) {
 			ui_but_to_pixelrect(&rect, ar, block, but);
+
+			if ((block->flag & UI_BLOCK_DRAGGABLE) && (block->drag_data.drag_state)) {
+				int i;
+				for (i = 0; i < block->drag_data.tot_subblocks; i++) {
+					if (STREQLEN(but->subblock_id, block->drag_data.dragged_subblock, strlen(but->subblock_id))) {
+						BLI_rcti_translate(&rect, win->eventstate->x - win->eventstate->prevclickx,
+						                   win->eventstate->y - win->eventstate->prevclicky);
+					}
+				}
+			}
 		
 			/* XXX: figure out why invalid coordinates happen when closing render window */
 			/* and material preview is redrawn in main window (temp fix for bug #23848) */
@@ -2515,7 +2539,7 @@ void UI_blocklist_free_inactive(const bContext *C, ListBase *lb)
 
 	for (block = lb->first; block; block = nextblock) {
 		nextblock = block->next;
-	
+
 		if (!block->handle) {
 			if (!block->active) {
 				BLI_remlink(lb, block);
@@ -2541,6 +2565,10 @@ void UI_block_region_set(uiBlock *block, ARegion *region)
 			oldblock->active = 0;
 			oldblock->panel = NULL;
 			oldblock->handle = NULL;
+			
+			if (oldblock->flag & UI_BLOCK_DRAGGABLE && oldblock->drag_data.drag_state) {
+				block->rect = oldblock->rect;
+			}
 		}
 
 		/* at the beginning of the list! for dynamical menus/blocks */

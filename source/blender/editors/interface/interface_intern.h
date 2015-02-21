@@ -294,6 +294,9 @@ struct uiBut {
 	void *dragpoin;
 	struct ImBuf *imb;
 	float imb_scale;
+
+	/* block drag and drop */
+	char subblock_id[64]; /* NAME_MAX */
 	
 	/* active button data */
 	struct uiHandleButtonData *active;
@@ -309,6 +312,13 @@ struct uiBut {
 	
 	/* pointer back */
 	uiBlock *block;
+};
+
+/* uiBlock->drag_state */
+enum {
+	UI_BLOCK_DRAGSTATE_NONE      = 0,
+	UI_BLOCK_DRAGSTATE_DRAGGING  = 1, /* block is being dragged */
+	UI_BLOCK_DRAGSTATE_ANIMATING = 2, /* key was released -> animation is running */
 };
 
 typedef struct ColorPicker {
@@ -332,6 +342,13 @@ struct PieMenuData {
 	float alphafac;
 };
 
+typedef struct BlockDragData {
+	short drag_state;           /* current state for block drag and drop */
+	char subblock_id[64][MAX_NAME]; /* buttons that have the same but->subblock_id build a subblock */
+	char dragged_subblock[MAX_NAME];
+	int tot_subblocks;
+} BlockDragData;
+
 struct uiBlock {
 	uiBlock *next, *prev;
 
@@ -343,6 +360,8 @@ struct uiBlock {
 
 	ListBase layouts;
 	struct uiLayout *curlayout;
+
+	ListBase subblocks;
 
 	ListBase contexts;
 	
@@ -415,6 +434,8 @@ struct uiBlock {
 	                          * used by color widgets to transform colors from/to scene linear
 	                          */
 	struct PieMenuData pie_data;
+
+	struct BlockDragData drag_data;
 };
 
 typedef struct uiSafetyRct {

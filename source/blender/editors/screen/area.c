@@ -432,13 +432,13 @@ void ED_region_set(const bContext *C, ARegion *ar)
 	ED_region_pixelspace(ar);
 }
 
-
 /* only exported for WM */
 void ED_region_do_draw(bContext *C, ARegion *ar)
 {
 	wmWindow *win = CTX_wm_window(C);
 	ScrArea *sa = CTX_wm_area(C);
 	ARegionType *at = ar->type;
+	uiBlock *block;
 	bool scissor_pad;
 
 	/* see BKE_spacedata_draw_locks() */
@@ -464,6 +464,13 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 	wmOrtho2_region_ui(ar);
 	
 	UI_SetTheme(sa ? sa->spacetype : 0, at->regionid);
+	
+//	for (block = ar->uiblocks.first; block; block = block->next) {
+//		if (block->flag & UI_BLOCK_DRAGGABLE && block->drag_state == UI_BLOCK_DRAGSTATE_DRAGGING) {
+//			UI_block_update_from_old(C, block);
+////			print_rctf("", &block->rect);
+//		}
+//	}
 	
 	/* optional header info instead? */
 	if (ar->headerstr) {
@@ -495,7 +502,7 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 
 	ar->do_draw = 0;
 	memset(&ar->drawrct, 0, sizeof(ar->drawrct));
-	
+
 	UI_blocklist_free_inactive(C, &ar->uiblocks);
 
 	if (sa && (win->screen->state != SCREENFULL)) {
@@ -1671,6 +1678,7 @@ int ED_area_header_switchbutton(const bContext *C, uiBlock *block, int yco)
 
 /************************ standard UI regions ************************/
 
+#include "../interface/interface_intern.h"
 void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *context, int contextnr)
 {
 	ScrArea *sa = CTX_wm_area(C);
@@ -1680,6 +1688,7 @@ void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *
 	Panel *panel;
 	View2D *v2d = &ar->v2d;
 	View2DScrollers *scrollers;
+	rctf rect;
 	int x, y, xco, yco, w, em, triangle;
 	bool is_context_new = 0;
 	int redo;
@@ -1792,6 +1801,13 @@ void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *
 			/* draw panel */
 			block = UI_block_begin(C, ar, pt->idname, UI_EMBOSS);
 			panel = UI_panel_begin(sa, ar, block, pt, panel, &open);
+//			for (block = ar->uiblocks.first; block; block = block->next) {
+//				if (block->flag & UI_BLOCK_DRAGGABLE && block->drag_state == UI_BLOCK_DRAGSTATE_DRAGGING) {
+//					UI_block_update_from_old(C, block);
+//					print_rctf("", &block->rect);
+			rect = block->rect;
+//				}
+//			}
 
 			/* bad fixed values */
 			triangle = (int)(UI_UNIT_Y * 1.1f);

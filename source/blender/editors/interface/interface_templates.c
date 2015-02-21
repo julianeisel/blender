@@ -820,16 +820,28 @@ static int modifier_is_simulation(ModifierData *md)
 	}
 }
 
+#if 0
+static uiBlock *ui_subblock_begin(uiBlock *parent)
+{
+	uiBlock *subblock = MEM_callocN(sizeof(uiBlock), "subblock");
+	
+	subblock = parent->
+
+	BLI_addtail(parent->subblocks, subblock);
+}
+#endif
+
 static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
                                ModifierData *md, int index, int cageIndex, int lastCageIndex)
 {
 	ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 	PointerRNA ptr;
 	uiBut *but;
-	uiBlock *block;
+	uiBlock *block, subblock;
 	uiLayout *box, *column, *row, *sub;
 	uiLayout *result = NULL;
 	int isVirtual = (md->mode & eModifierMode_Virtual);
+	int i;
 	char str[128];
 
 	/* create RNA pointer */
@@ -845,6 +857,9 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		row = uiLayoutRow(box, false);
 		uiLayoutSetAlignment(row, UI_LAYOUT_ALIGN_EXPAND);
 		block = uiLayoutGetBlock(row);
+
+		UI_block_flag_enable(block, UI_BLOCK_DRAGGABLE);
+
 		/* VIRTUAL MODIFIER */
 		/* XXX this is not used now, since these cannot be accessed via RNA */
 		BLI_snprintf(str, sizeof(str), IFACE_("%s parent deform"), md->name);
@@ -858,7 +873,11 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		/* REAL MODIFIER */
 		row = uiLayoutRow(box, false);
 		block = uiLayoutGetBlock(row);
-		
+	BLI_strncpy(block->drag_data.subblock_id[block->drag_data.tot_subblocks], md->name, MAX_NAME);
+	block->drag_data.tot_subblocks++;
+
+		UI_block_flag_enable(block, UI_BLOCK_DRAGGABLE);
+
 		UI_block_emboss_set(block, UI_EMBOSS_NONE);
 		/* Open/Close .................................  */
 		uiItemR(row, &ptr, "show_expanded", 0, "", ICON_NONE);
@@ -921,10 +940,12 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		UI_block_align_end(block);
 		
 		/* Up/Down + Delete ........................... */
+#if 0
 		UI_block_align_begin(block);
 		uiItemO(row, "", ICON_TRIA_UP, "OBJECT_OT_modifier_move_up");
 		uiItemO(row, "", ICON_TRIA_DOWN, "OBJECT_OT_modifier_move_down");
 		UI_block_align_end(block);
+#endif
 		
 		UI_block_emboss_set(block, UI_EMBOSS_NONE);
 		/* When Modifier is a simulation, show button to switch to context rather than the delete button. */
@@ -940,6 +961,10 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		else if (modifier_is_simulation(md) == 2) {
 			uiItemStringO(row, "", ICON_BUTS, "WM_OT_properties_context_change", "context", "PARTICLES");
 		}
+
+		but = uiDefIconBut(block, UI_BTYPE_GRIP, 0, ICON_GRIP, 0, 0, UI_UNIT_X * 0.7f, UI_UNIT_Y * 0.8f, NULL,
+	                       0, 0, 0, 0, "");
+
 		UI_block_emboss_set(block, UI_EMBOSS);
 	}
 
@@ -988,7 +1013,6 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 				        "OBJECT_OT_modifier_copy");
 			}
 		}
-		
 		/* result is the layout block inside the box, that we return so that modifier settings can be drawn */
 		result = uiLayoutColumn(box, false);
 		block = uiLayoutAbsoluteBlock(box);
@@ -1000,7 +1024,11 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		row = uiLayoutRow(box, false);
 		uiItemL(row, md->error, ICON_ERROR);
 	}
-	
+
+//	for (but = block->buttons.first; but; but = but->next) {
+//		BLI_strncpy(but->subblock_id, md->name, MAX_NAME);
+//	}
+
 	return result;
 }
 

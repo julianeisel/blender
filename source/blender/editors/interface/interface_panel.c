@@ -624,7 +624,7 @@ void ui_draw_aligned_panel(uiStyle *style, uiBlock *block, const rcti *rect, con
 		itemrect.ymin = headrect.ymin;
 		itemrect.ymax = headrect.ymax;
 
-		BLI_rctf_scale(&itemrect, 0.7f);
+		BLI_rctf_scale(&itemrect, 0.7f); /* XXX hardcoded size */
 		ui_draw_panel_dragwidget(&itemrect);
 	}
 
@@ -1025,12 +1025,14 @@ void UI_panels_draw(const bContext *C, ARegion *ar)
 	/* draw panels, selected on top */
 	for (block = ar->uiblocks.first; block; block = block->next) {
 		if (block->active && block->panel && !(block->panel->flag & PNL_SELECT)) {
+			
 			UI_block_draw(C, block);
 		}
 	}
 
 	for (block = ar->uiblocks.first; block; block = block->next) {
 		if (block->active && block->panel && (block->panel->flag & PNL_SELECT)) {
+			
 			UI_block_draw(C, block);
 		}
 	}
@@ -1051,6 +1053,7 @@ void UI_panels_scale(ARegion *ar, float new_width)
 				but->rect.xmin *= fac;
 				but->rect.xmax *= fac;
 			}
+			
 		}
 	}
 }
