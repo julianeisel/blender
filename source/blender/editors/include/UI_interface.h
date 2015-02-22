@@ -1024,6 +1024,9 @@ void UI_butstore_register(uiButStore *bs_handle, uiBut **but_p);
 bool UI_butstore_register_update(uiBlock *block, uiBut *but_dst, const uiBut *but_src);
 void UI_butstore_unregister(uiButStore *bs_handle, uiBut **but_p);
 
+/* UI_subblock_ helplers */
+bool UI_subblock_is_dragging(uiBlock *block);
+
 
 /* Float precision helpers */
 #define UI_PRECISION_FLOAT_MAX 7

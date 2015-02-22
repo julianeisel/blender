@@ -432,6 +432,7 @@ void ED_region_set(const bContext *C, ARegion *ar)
 	ED_region_pixelspace(ar);
 }
 
+
 /* only exported for WM */
 void ED_region_do_draw(bContext *C, ARegion *ar)
 {
@@ -494,7 +495,7 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 
 	ar->do_draw = 0;
 	memset(&ar->drawrct, 0, sizeof(ar->drawrct));
-
+	
 	UI_blocklist_free_inactive(C, &ar->uiblocks);
 
 	if (sa && (win->screen->state != SCREENFULL)) {

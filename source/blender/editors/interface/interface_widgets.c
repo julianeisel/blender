@@ -913,12 +913,12 @@ static void widget_draw_icon(const uiBut *but, BIFIconID icon, float alpha, cons
 		}
 		else if (icon == ICON_GRIP && (but->block->flag & UI_BLOCK_DRAGGABLE)) {
 			rctf drag_rect;
+
 			BLI_rctf_rcti_copy(&drag_rect, rect);
 			ui_draw_dragwidget(&drag_rect);
 		}
 		else {
 			float ofs = 1.0f / aspect;
-			
 			if (but->drawflag & UI_BUT_ICON_LEFT) {
 				if (but->block->flag & UI_BLOCK_LOOP) {
 					if (ELEM(but->type, UI_BTYPE_SEARCH_MENU, UI_BTYPE_SEARCH_MENU_UNLINK))
@@ -935,13 +935,13 @@ static void widget_draw_icon(const uiBut *but, BIFIconID icon, float alpha, cons
 				xs = (rect->xmin + rect->xmax - height) / 2.0f;
 				ys = (rect->ymin + rect->ymax - height) / 2.0f;
 			}
-			
+
 			/* force positions to integers, for zoom levels near 1. draws icons crisp. */
 			if (aspect > 0.95f && aspect < 1.05f) {
 				xs = (int)(xs + 0.1f);
 				ys = (int)(ys + 0.1f);
 			}
-			
+
 			/* to indicate draggable */
 			if (but->dragpoin && (but->flag & UI_ACTIVE)) {
 				float rgb[3] = {1.25f, 1.25f, 1.25f};

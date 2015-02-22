@@ -1025,14 +1025,12 @@ void UI_panels_draw(const bContext *C, ARegion *ar)
 	/* draw panels, selected on top */
 	for (block = ar->uiblocks.first; block; block = block->next) {
 		if (block->active && block->panel && !(block->panel->flag & PNL_SELECT)) {
-			
 			UI_block_draw(C, block);
 		}
 	}
 
 	for (block = ar->uiblocks.first; block; block = block->next) {
 		if (block->active && block->panel && (block->panel->flag & PNL_SELECT)) {
-			
 			UI_block_draw(C, block);
 		}
 	}
@@ -1053,7 +1051,6 @@ void UI_panels_scale(ARegion *ar, float new_width)
 				but->rect.xmin *= fac;
 				but->rect.xmax *= fac;
 			}
-			
 		}
 	}
 }

@@ -925,8 +925,7 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 
 		UI_block_align_end(block);
 		
-		/* Up/Down + Delete ........................... */
-		
+		/* Delete */
 		UI_block_emboss_set(block, UI_EMBOSS_NONE);
 		/* When Modifier is a simulation, show button to switch to context rather than the delete button. */
 		if (modifier_can_delete(md) &&
@@ -942,8 +941,9 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 			uiItemStringO(row, "", ICON_BUTS, "WM_OT_properties_context_change", "context", "PARTICLES");
 		}
 
-		but = uiDefIconBut(block, UI_BTYPE_GRIP, 0, ICON_GRIP, 0, 0, UI_UNIT_X * 0.7f, UI_UNIT_Y * 0.8f, NULL,
-	                       0, 0, 0, 0, "");
+		/* Drag Widget */
+		but = uiDefIconBut(block, UI_BTYPE_GRIP, 0, ICON_GRIP, 0, 0, UI_UNIT_X, UI_UNIT_Y * 0.8f, NULL,
+	                           0, 0, 0, 0, "");
 
 		UI_block_emboss_set(block, UI_EMBOSS);
 	}
@@ -993,6 +993,7 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 				        "OBJECT_OT_modifier_copy");
 			}
 		}
+		
 		/* result is the layout block inside the box, that we return so that modifier settings can be drawn */
 		result = uiLayoutColumn(box, false);
 		block = uiLayoutAbsoluteBlock(box);
@@ -1004,7 +1005,7 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		row = uiLayoutRow(box, false);
 		uiItemL(row, md->error, ICON_ERROR);
 	}
-
+	
 	return result;
 }
 

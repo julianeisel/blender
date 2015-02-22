@@ -1188,8 +1188,15 @@ void UI_block_update_from_old(const bContext *C, uiBlock *block)
 	block->auto_open_last = block->oldblock->auto_open_last;
 	block->tooltipdisabled = block->oldblock->tooltipdisabled;
 	BLI_movelisttolist(&block->color_pickers.list, &block->oldblock->color_pickers.list);
-	block->subblock.drag_state = block->oldblock->subblock.drag_state;
-	BLI_strncpy(block->subblock.dragged_subblock, block->oldblock->subblock.dragged_subblock, MAX_NAME);
+	/* sub-block drag & drop data */
+	if (UI_subblock_is_dragging(block->oldblock)) {
+		block->subblock.drag_state = block->oldblock->subblock.drag_state;
+		block->subblock.rect = block->oldblock->subblock.rect;
+		block->subblock.rect_above = block->oldblock->subblock.rect_above;
+		block->subblock.rect_below = block->oldblock->subblock.rect_below;
+		copy_v2_v2_int(block->subblock.drag_xy_prev, block->oldblock->subblock.drag_xy_prev);
+		BLI_strncpy(block->subblock.dragged_subblock, block->oldblock->subblock.dragged_subblock, MAX_NAME);
+	}
 
 	block->oldblock = NULL;
 }
@@ -1321,6 +1328,20 @@ static void ui_but_to_pixelrect(rcti *rect, const ARegion *ar, uiBlock *block, u
 	rect->ymax = floorf(rectf.ymax);
 }
 
+static void ui_but_draw(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rcti *rect)
+{
+	/* XXX: figure out why invalid coordinates happen when closing render window */
+	/* and material preview is redrawn in main window (temp fix for bug #23848) */
+	if (rect->xmin < rect->xmax && rect->ymin < rect->ymax)
+		ui_draw_but(C, ar, style, but, rect);
+}
+
+static bool ui_subblock_is_but_dragged(uiBlock *block, uiBut *but)
+{
+	return (but->subblock_id[0] && STREQ(but->subblock_id, block->subblock.dragged_subblock));
+}
+
+#include "BIF_glutil.h"
 /* uses local copy of style, to scale things down, and allow widgets to change stuff */
 void UI_block_draw(const bContext *C, uiBlock *block)
 {
@@ -1339,12 +1360,6 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 	if (!block->endblock)
 		UI_block_end(C, block);
 
-//	if (block->flag & UI_BLOCK_DRAGGABLE) {
-////			block->rect = block->oldblock->rect;
-//			print_rcti("", &block->rect);
-//	}
-//	rect = block->rect;
-
 	/* disable AA, makes widgets too blurry */
 	multisample_enabled = glIsEnabled(GL_MULTISAMPLE_ARB);
 	if (multisample_enabled)
@@ -1361,9 +1376,6 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 	
 	/* scale block min/max to rect */
 	ui_but_to_pixelrect(&rect, ar, block, NULL);
-//	if (block->flag & UI_BLOCK_DRAGGABLE && block->drag_data.drag_state) {
-//		ui_block_translate(block, win->eventstate->x - win->eventstate->prevclickx, win->eventstate->y - win->eventstate->prevclicky);
-//	}
 	
 	/* pixel space for AA widgets */
 	glMatrixMode(GL_PROJECTION);
@@ -1382,24 +1394,39 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 	else if (block->panel)
 		ui_draw_aligned_panel(&style, block, &rect, UI_panel_category_is_visible(ar));
 
-	/* widgets */
+	/********** widgets **********/
+
+	/* first pass: draw not-dragged widgets */
 	for (but = block->buttons.first; but; but = but->next) {
 		if (!(but->flag & (UI_HIDDEN | UI_SCROLLED))) {
 			ui_but_to_pixelrect(&rect, ar, block, but);
 
-			if ((block->flag & UI_BLOCK_DRAGGABLE) && (block->subblock.drag_state)) {
-				if (but->subblock_id[0]) {
-					if (STREQLEN(but->subblock_id, block->subblock.dragged_subblock, strlen(but->subblock_id))) {
-						BLI_rcti_translate(&rect, 0, win->eventstate->y - win->eventstate->prevclicky);
-					}
+			if (UI_subblock_is_dragging(block)) {
+				if (ui_subblock_is_but_dragged(block, but)) {
+					continue;
 				}
 			}
-		
-			/* XXX: figure out why invalid coordinates happen when closing render window */
-			/* and material preview is redrawn in main window (temp fix for bug #23848) */
-			if (rect.xmin < rect.xmax && rect.ymin < rect.ymax)
-				ui_draw_but(C, ar, &style, but, &rect);
+
+			ui_but_draw(C, ar, &style, but, &rect);
 		}
+	}
+	/* second pass: draw dragged widgets above others */
+	if (UI_subblock_is_dragging(block)) {
+		for (but = block->buttons.first; but; but = but->next) {
+			if (ui_subblock_is_but_dragged(block, but) &&
+			    !(but->flag & (UI_HIDDEN | UI_SCROLLED)))
+			{
+				ui_but_to_pixelrect(&rect, ar, block, but);
+				BLI_rcti_translate(&rect, 0, win->eventstate->y - block->subblock.drag_xy_prev[1]);
+
+				ui_but_draw(C, ar, &style, but, &rect);
+			}
+		}
+		BLI_rctf_translate(&block->subblock.rect, 0, win->eventstate->y - block->subblock.drag_xy_prev[1]);
+#if 0
+		fdrawcheckerboard(block->subblock.rect.xmin, block->subblock.rect.ymin,
+		                  block->subblock.rect.xmax, block->subblock.rect.ymax);
+#endif
 	}
 	
 	/* restore matrix */
@@ -2535,7 +2562,7 @@ void UI_blocklist_free_inactive(const bContext *C, ListBase *lb)
 
 	for (block = lb->first; block; block = nextblock) {
 		nextblock = block->next;
-
+	
 		if (!block->handle) {
 			if (!block->active) {
 				BLI_remlink(lb, block);
@@ -2561,8 +2588,8 @@ void UI_block_region_set(uiBlock *block, ARegion *region)
 			oldblock->active = 0;
 			oldblock->panel = NULL;
 			oldblock->handle = NULL;
-			
-			if (oldblock->flag & UI_BLOCK_DRAGGABLE && oldblock->subblock.drag_state) {
+
+			if (UI_subblock_is_dragging(oldblock)) {
 				block->rect = oldblock->rect;
 			}
 		}
