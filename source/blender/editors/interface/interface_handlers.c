@@ -7901,7 +7901,7 @@ static int ui_handle_list_event(bContext *C, const wmEvent *event, ARegion *ar)
 	return retval;
 }
 
-static int ui_handle_block_event(bContext *C, const wmEvent *event, ARegion *ar)
+static int ui_handle_block_event(bContext *UNUSED(C), const wmEvent *event, ARegion *ar)
 {
 	uiBlock *block = NULL;
 	uiBut *but = ui_but_find_mouse_over(ar, event);
@@ -7921,8 +7921,14 @@ static int ui_handle_block_event(bContext *C, const wmEvent *event, ARegion *ar)
 		block = but->block;
 	}
 
-	if (block == NULL || but == NULL)
+	if (block == NULL || but == NULL) {
+		if (but) {
+			for (block = ar->uiblocks.first; block; block = block->next) {
+				block->subblock.drag_state = UI_BLOCK_DRAGSTATE_NONE;
+			}
+		}
 		return WM_UI_HANDLER_CONTINUE;
+	}
 
 	switch (event->type) {
 		case LEFTMOUSE:
@@ -7930,22 +7936,20 @@ static int ui_handle_block_event(bContext *C, const wmEvent *event, ARegion *ar)
 				BLI_assert(block->drag_state == UI_BLOCK_DRAGSTATE_NONE);
 		
 				if (block->flag & UI_BLOCK_DRAGGABLE && but->icon == ICON_GRIP) {
-					block->drag_data.drag_state = UI_BLOCK_DRAGSTATE_DRAGGING;
-					BLI_strncpy(block->drag_data.dragged_subblock, but->subblock_id, MAX_NAME);
-//					block->oldblock = block;
+					block->subblock.drag_state = UI_BLOCK_DRAGSTATE_DRAGGING;
+					if (but->subblock_id[0]) {
+						BLI_strncpy(block->subblock.dragged_subblock, but->subblock_id, MAX_NAME);
+					}
 					retval = WM_UI_HANDLER_BREAK;
 				}
 			}
-			else if (event->val == KM_RELEASE && block->drag_data.drag_state == UI_BLOCK_DRAGSTATE_DRAGGING) {
-				block->drag_data.drag_state = 0;
+			else if (event->val == KM_RELEASE && block->subblock.drag_state == UI_BLOCK_DRAGSTATE_DRAGGING) {
+				block->subblock.drag_state = 0;
 				retval = WM_UI_HANDLER_BREAK;
 			}
 			break;
 		case MOUSEMOVE:
-			if (block->drag_data.drag_state == UI_BLOCK_DRAGSTATE_DRAGGING) {
-				int mdelta_x = (event->x - event->prevclickx);
-				int mdelta_y = (event->y - event->prevclicky);
-				ui_block_translate(block, mdelta_x, mdelta_y);
+			if (block->subblock.drag_state == UI_BLOCK_DRAGSTATE_DRAGGING) {
 				ED_region_tag_redraw(ar);
 				retval = WM_UI_HANDLER_BREAK;
 			}

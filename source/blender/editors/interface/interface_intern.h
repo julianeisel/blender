@@ -342,12 +342,14 @@ struct PieMenuData {
 	float alphafac;
 };
 
-typedef struct BlockDragData {
-	short drag_state;           /* current state for block drag and drop */
+typedef struct SubBlockData {
 	char subblock_id[64][MAX_NAME]; /* buttons that have the same but->subblock_id build a subblock */
-	char dragged_subblock[MAX_NAME];
 	int tot_subblocks;
-} BlockDragData;
+	bool is_subblock_building;
+
+	short drag_state;               /* current state for sub-block drag and drop */
+	char dragged_subblock[MAX_NAME];  /* name of the currently dragged sub-block */
+} SubBlockData;
 
 struct uiBlock {
 	uiBlock *next, *prev;
@@ -361,7 +363,7 @@ struct uiBlock {
 	ListBase layouts;
 	struct uiLayout *curlayout;
 
-	ListBase subblocks;
+	SubBlockData subblock;
 
 	ListBase contexts;
 	
@@ -434,8 +436,6 @@ struct uiBlock {
 	                          * used by color widgets to transform colors from/to scene linear
 	                          */
 	struct PieMenuData pie_data;
-
-	struct BlockDragData drag_data;
 };
 
 typedef struct uiSafetyRct {

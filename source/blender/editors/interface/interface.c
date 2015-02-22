@@ -1187,10 +1187,9 @@ void UI_block_update_from_old(const bContext *C, uiBlock *block)
 	block->auto_open = block->oldblock->auto_open;
 	block->auto_open_last = block->oldblock->auto_open_last;
 	block->tooltipdisabled = block->oldblock->tooltipdisabled;
-	block->drag_data.drag_state = block->oldblock->drag_data.drag_state;
-	block->rect = block->oldblock->rect;
-//	block->drag_data.tot_subblocks = block->oldblock->drag_data.tot_subblocks;
 	BLI_movelisttolist(&block->color_pickers.list, &block->oldblock->color_pickers.list);
+	block->subblock.drag_state = block->oldblock->subblock.drag_state;
+	BLI_strncpy(block->subblock.dragged_subblock, block->oldblock->subblock.dragged_subblock, MAX_NAME);
 
 	block->oldblock = NULL;
 }
@@ -1328,7 +1327,6 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 	uiStyle style = *UI_style_get_dpi();  /* XXX pass on as arg */
 	wmWindow *win = CTX_wm_window(C);
 	ARegion *ar;
-	uiLayout *layout;
 	uiBut *but;
 	rcti rect;
 	int multisample_enabled;
@@ -1389,12 +1387,10 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 		if (!(but->flag & (UI_HIDDEN | UI_SCROLLED))) {
 			ui_but_to_pixelrect(&rect, ar, block, but);
 
-			if ((block->flag & UI_BLOCK_DRAGGABLE) && (block->drag_data.drag_state)) {
-				int i;
-				for (i = 0; i < block->drag_data.tot_subblocks; i++) {
-					if (STREQLEN(but->subblock_id, block->drag_data.dragged_subblock, strlen(but->subblock_id))) {
-						BLI_rcti_translate(&rect, win->eventstate->x - win->eventstate->prevclickx,
-						                   win->eventstate->y - win->eventstate->prevclicky);
+			if ((block->flag & UI_BLOCK_DRAGGABLE) && (block->subblock.drag_state)) {
+				if (but->subblock_id[0]) {
+					if (STREQLEN(but->subblock_id, block->subblock.dragged_subblock, strlen(but->subblock_id))) {
+						BLI_rcti_translate(&rect, 0, win->eventstate->y - win->eventstate->prevclicky);
 					}
 				}
 			}
@@ -2566,7 +2562,7 @@ void UI_block_region_set(uiBlock *block, ARegion *region)
 			oldblock->panel = NULL;
 			oldblock->handle = NULL;
 			
-			if (oldblock->flag & UI_BLOCK_DRAGGABLE && oldblock->drag_data.drag_state) {
+			if (oldblock->flag & UI_BLOCK_DRAGGABLE && oldblock->subblock.drag_state) {
 				block->rect = oldblock->rect;
 			}
 		}
@@ -3149,6 +3145,10 @@ static uiBut *ui_def_but(uiBlock *block, int type, int retval, const char *str,
 		but->func_argN = MEM_dupallocN(block->func_argN);
 	
 	but->pos = -1;   /* cursor invisible */
+
+	if (block->subblock.is_subblock_building) {
+		BLI_strncpy(but->subblock_id, block->subblock.subblock_id[block->subblock.tot_subblocks], MAX_NAME);
+	}
 
 	if (ELEM(but->type, UI_BTYPE_NUM, UI_BTYPE_NUM_SLIDER)) {    /* add a space to name */
 		/* slen remains unchanged from previous assignment, ensure this stays true */
