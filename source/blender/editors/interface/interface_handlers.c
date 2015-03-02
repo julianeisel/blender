@@ -110,6 +110,9 @@
 /* This hack is needed because we don't have a good way to re-reference keymap items once added: T42944 */
 #define USE_KEYMAP_ADD_HACK
 
+static int ui_region_handler(bContext *C, const wmEvent *event, void *UNUSED(userdata));
+static void ui_region_handler_remove(bContext *C, void *UNUSED(userdata));
+
 /* proto */
 static void ui_but_smart_controller_add(bContext *C, uiBut *from, uiBut *to);
 static void ui_but_link_add(bContext *C, uiBut *from, uiBut *to);
@@ -7903,12 +7906,15 @@ static int ui_handle_list_event(bContext *C, const wmEvent *event, ARegion *ar)
 
 static rctf UI_subblock_boundbox_set(uiBlock *block, const char *subblock_id)
 {
-	uiBut *but = block->buttons.first;
-	rctf rect = but->rect;
+	uiBut *but;
+	rctf rect;
 
 	if (subblock_id && subblock_id[0]) {
-		for (; but; but = but->next) {
+		for (but = block->buttons.first; but; but = but->next) {
 			if (but->subblock_id[0] && STREQ(but->subblock_id, subblock_id)) {
+				if (BLI_rctf_is_empty(&rect)) {
+					rect = but->rect;
+				}
 				BLI_rctf_union(&rect, &but->rect);
 			}
 		}
@@ -7954,84 +7960,90 @@ static void UI_subblock_neighbours_rects_set(uiBlock *block, const char *subbloc
 	block->subblock.rect_below = UI_subblock_boundbox_set(block, UI_subblock_get_next_id(block, subblock_id));
 }
 
-static int ui_handle_block_region(bContext *C, const wmEvent *event, ARegion *ar, uiBut *but)
+static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata)
+{
+	uiBut *but = (uiBut *)userdata;
+	uiBlock *block = but->block;
+
+	if (!UI_subblock_is_dragging(block)) {
+		return WM_UI_HANDLER_CONTINUE;
+	}
+
+	WM_event_remove_ui_handler(&CTX_wm_region(C)->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
+
+	if (event->type == LEFTMOUSE && event->val == KM_RELEASE && UI_subblock_is_dragging(block)) {
+		block->subblock.drag_state = 0;
+		block->subblock.dragged_subblock[0] = '\0';
+
+		/* remove subblock handler, bring back region handler */
+		WM_event_remove_ui_handler(&CTX_wm_window(C)->modalhandlers, ui_subblock_handler, NULL, but, false);
+		WM_event_add_ui_handler(NULL, &CTX_wm_region(C)->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
+
+		WM_event_add_mousemove(C);
+
+		return WM_UI_HANDLER_BREAK;
+	}
+	else if (event->type == MOUSEMOVE) {
+		if (UI_subblock_is_dragging(block)) {
+			PointerRNA ptr_props;
+			/* up */
+			if ((BLI_rctf_is_empty(&block->subblock.rect_above) == false) &&
+			    (block->subblock.rect.ymax > block->subblock.rect_above.ymax))
+			{
+				WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_up");
+				RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
+				WM_operator_name_call(C, "OBJECT_OT_modifier_move_up", WM_OP_INVOKE_DEFAULT, &ptr_props);
+				
+				copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
+				UI_subblock_neighbours_rects_set(block, UI_subblock_get_prev_id(block, but->subblock_id));
+			}
+			/* down */
+			else if ((BLI_rctf_is_empty(&block->subblock.rect_below) == false) &&
+			     (block->subblock.rect.ymax < block->subblock.rect_below.ymax))
+			{
+				WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_down");
+				RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
+				WM_operator_name_call(C, "OBJECT_OT_modifier_move_down", WM_OP_INVOKE_DEFAULT, &ptr_props);
+				
+				copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
+				UI_subblock_neighbours_rects_set(block, UI_subblock_get_next_id(block, but->subblock_id));
+			}
+			block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
+			ED_region_tag_redraw(CTX_wm_region(C));
+
+			return WM_UI_HANDLER_BREAK;
+		}
+	}
+	return WM_UI_HANDLER_CONTINUE;
+}
+
+static int ui_handle_block_region(bContext *C, const wmEvent *event, uiBut *but)
 {
 	uiBlock *block;
-	short retval = WM_UI_HANDLER_CONTINUE;
 
 	if (!but)
 		return WM_UI_HANDLER_CONTINUE;
 
-	/* try to find a block with a dragged subblock */
-	for (block = ar->uiblocks.first; block; block = block->next) {
-		if (UI_subblock_is_dragging(block)) {
-			break;
+	block = but->block;
+
+	if (event->type == LEFTMOUSE && event->val == KM_PRESS) {
+		BLI_assert(block->subblock.drag_state == UI_BLOCK_DRAGSTATE_NONE);
+		if (block->flag & UI_BLOCK_DRAGGABLE && but->icon == ICON_GRIP) { /* XXX better check - but->flag? */
+			if (but->subblock_id[0]) {
+				/* initialize drag data */
+				block->subblock.drag_state = UI_BLOCK_DRAGSTATE_DRAGGING;
+				block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
+				copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
+				UI_subblock_neighbours_rects_set(block, but->subblock_id);
+				BLI_strncpy(block->subblock.dragged_subblock, but->subblock_id, MAX_NAME);
+				WM_event_add_ui_handler(C, &CTX_wm_window(C)->modalhandlers, ui_subblock_handler, NULL, but, false);
+
+				return WM_UI_HANDLER_BREAK;
+			}
 		}
 	}
 
-	if (!block) {
-		block = but->block;
-	}
-	BLI_assert(block != NULL);
-
-	switch (event->type) {
-		case LEFTMOUSE:
-			if (event->val == KM_PRESS) {
-				BLI_assert(block->subblock.drag_state == UI_BLOCK_DRAGSTATE_NONE);
-
-				if (block->flag & UI_BLOCK_DRAGGABLE && but->icon == ICON_GRIP) { /* XXX better check - but->flag? */
-					if (but->subblock_id[0]) {
-						/* initialize drag data */
-						block->subblock.drag_state = UI_BLOCK_DRAGSTATE_DRAGGING;
-						block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
-						copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
-						UI_subblock_neighbours_rects_set(block, but->subblock_id);
-						BLI_strncpy(block->subblock.dragged_subblock, but->subblock_id, MAX_NAME);
-
-						retval = WM_UI_HANDLER_BREAK;
-					}
-				}
-			}
-			else if (event->val == KM_RELEASE && UI_subblock_is_dragging(block)) {
-				block->subblock.drag_state = 0;
-				block->subblock.dragged_subblock[0] = '\0';
-				WM_event_add_mousemove(C);
-				retval = WM_UI_HANDLER_BREAK;
-			}
-			break;
-		case MOUSEMOVE:
-			if (UI_subblock_is_dragging(block)) {
-				PointerRNA ptr_props;
-				/* up */
-				if ((BLI_rctf_is_empty(&block->subblock.rect_above) == false) &&
-				    (block->subblock.rect.ymax > block->subblock.rect_above.ymax))
-				{
-					WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_up");
-					RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
-					WM_operator_name_call(C, "OBJECT_OT_modifier_move_up", WM_OP_INVOKE_DEFAULT, &ptr_props);
-					
-					copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
-					UI_subblock_neighbours_rects_set(block, UI_subblock_get_prev_id(block, but->subblock_id));
-				}
-				else if ((BLI_rctf_is_empty(&block->subblock.rect_below) == false) &&
-				     (block->subblock.rect.ymax < block->subblock.rect_below.ymax))
-				{
-					WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_down");
-					RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
-					WM_operator_name_call(C, "OBJECT_OT_modifier_move_down", WM_OP_INVOKE_DEFAULT, &ptr_props);
-					
-					copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
-					UI_subblock_neighbours_rects_set(block, UI_subblock_get_next_id(block, but->subblock_id));
-				}
-				block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
-				ED_region_tag_redraw(ar);
-				retval = WM_UI_HANDLER_BREAK;
-			}
-			break;
-		default:
-			break;
-	}
-	return retval;
+	return WM_UI_HANDLER_CONTINUE;
 }
 
 static void ui_handle_button_return_submenu(bContext *C, const wmEvent *event, uiBut *but)
@@ -9296,7 +9308,7 @@ static int ui_region_handler(bContext *C, const wmEvent *event, void *UNUSED(use
 	retval = ui_handler_panel_region(C, event, ar);
 
 	if (retval == WM_UI_HANDLER_CONTINUE)
-		retval = ui_handle_block_region(C, event, ar, but);
+		retval = ui_handle_block_region(C, event, but);
 
 	if (retval == WM_UI_HANDLER_CONTINUE)
 		retval = ui_handle_list_event(C, event, ar);

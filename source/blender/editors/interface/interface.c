@@ -1420,14 +1420,30 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 				BLI_rcti_translate(&rect, 0, win->eventstate->y - block->subblock.drag_xy_prev[1]);
 
 				ui_but_draw(C, ar, &style, but, &rect);
+//				fdrawcheckerboard(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
 			}
 		}
 		BLI_rctf_translate(&block->subblock.rect, 0, win->eventstate->y - block->subblock.drag_xy_prev[1]);
-#if 0
-		fdrawcheckerboard(block->subblock.rect.xmin, block->subblock.rect.ymin,
-		                  block->subblock.rect.xmax, block->subblock.rect.ymax);
-#endif
 	}
+
+#if 1 /* debugging - draw border around subblocks */
+	if (UI_subblock_is_dragging(block)) {
+		rctf rectf = block->subblock.rect;
+		
+		ui_block_to_window_rctf(ar, block, &rectf, &block->subblock.rect);
+		
+		rectf.xmin -= ar->winrct.xmin;
+		rectf.ymin -= ar->winrct.ymin;
+		rectf.xmax -= ar->winrct.xmin;
+		rectf.ymax -= ar->winrct.ymin;
+		
+		rect.xmin = floorf(rectf.xmin);
+		rect.ymin = floorf(rectf.ymin);
+		rect.xmax = floorf(rectf.xmax);
+		rect.ymax = floorf(rectf.ymax);
+		fdrawbox(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+	}
+#endif
 	
 	/* restore matrix */
 	glMatrixMode(GL_PROJECTION);
