@@ -7969,8 +7969,6 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 		return WM_UI_HANDLER_CONTINUE;
 	}
 
-	WM_event_remove_ui_handler(&CTX_wm_region(C)->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
-
 	if (event->type == LEFTMOUSE && event->val == KM_RELEASE && UI_subblock_is_dragging(block)) {
 		block->subblock.drag_state = 0;
 		block->subblock.dragged_subblock[0] = '\0';
@@ -8032,6 +8030,7 @@ static int ui_handle_block_region(bContext *C, const wmEvent *event, uiBut *but)
 				UI_subblock_neighbours_rects_set(block, but->subblock_id);
 				BLI_strncpy(block->subblock.dragged_subblock, but->subblock_id, MAX_NAME);
 				WM_event_add_ui_handler(C, &CTX_wm_window(C)->modalhandlers, ui_subblock_handler, NULL, but, false);
+				WM_event_remove_ui_handler(&CTX_wm_region(C)->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
 
 				return WM_UI_HANDLER_BREAK;
 			}
