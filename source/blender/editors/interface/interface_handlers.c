@@ -7984,35 +7984,33 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 		return WM_UI_HANDLER_BREAK;
 	}
 	else if (event->type == MOUSEMOVE) {
-		if (UI_subblock_is_dragging(block)) {
-			PointerRNA ptr_props;
-			/* up */
-			if ((BLI_rctf_is_empty(&block->subblock.rect_above) == false) &&
-			    (block->subblock.rect.ymax > block->subblock.rect_above.ymax))
-			{
-				WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_up");
-				RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
-				WM_operator_name_call(C, "OBJECT_OT_modifier_move_up", WM_OP_INVOKE_DEFAULT, &ptr_props);
-				
-				copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
-				UI_subblock_neighbours_rects_set(block, UI_subblock_get_prev_id(block, but->subblock_id));
-			}
-			/* down */
-			else if ((BLI_rctf_is_empty(&block->subblock.rect_below) == false) &&
-			     (block->subblock.rect.ymax < block->subblock.rect_below.ymax))
-			{
-				WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_down");
-				RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
-				WM_operator_name_call(C, "OBJECT_OT_modifier_move_down", WM_OP_INVOKE_DEFAULT, &ptr_props);
-				
-				copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
-				UI_subblock_neighbours_rects_set(block, UI_subblock_get_next_id(block, but->subblock_id));
-			}
-			block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
-			ED_region_tag_redraw(CTX_wm_region(C));
+		PointerRNA ptr_props;
+		/* up */
+		if ((BLI_rctf_is_empty(&block->subblock.rect_above) == false) &&
+		    (block->subblock.rect.ymax > block->subblock.rect_above.ymax))
+		{
+			WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_up");
+			RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
+			WM_operator_name_call(C, "OBJECT_OT_modifier_move_up", WM_OP_INVOKE_DEFAULT, &ptr_props);
 
-			return WM_UI_HANDLER_BREAK;
+			copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
+			UI_subblock_neighbours_rects_set(block, UI_subblock_get_prev_id(block, but->subblock_id));
 		}
+		/* down */
+		else if ((BLI_rctf_is_empty(&block->subblock.rect_below) == false) &&
+		         (block->subblock.rect.ymax < block->subblock.rect_below.ymax))
+		{
+			WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_down");
+			RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
+			WM_operator_name_call(C, "OBJECT_OT_modifier_move_down", WM_OP_INVOKE_DEFAULT, &ptr_props);
+
+			copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
+			UI_subblock_neighbours_rects_set(block, UI_subblock_get_next_id(block, but->subblock_id));
+		}
+		block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
+		ED_region_tag_redraw(CTX_wm_region(C));
+
+		return WM_UI_HANDLER_BREAK;
 	}
 	return WM_UI_HANDLER_CONTINUE;
 }
