@@ -7980,8 +7980,6 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 		WM_event_add_ui_handler(NULL, &CTX_wm_region(C)->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
 
 		WM_event_add_mousemove(C);
-
-		return WM_UI_HANDLER_BREAK;
 	}
 	else if (event->type == MOUSEMOVE) {
 		PointerRNA ptr_props;
@@ -8009,10 +8007,9 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 		}
 		block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
 		ED_region_tag_redraw(CTX_wm_region(C));
-
-		return WM_UI_HANDLER_BREAK;
 	}
-	return WM_UI_HANDLER_CONTINUE;
+
+	return WM_UI_HANDLER_BREAK;
 }
 
 static int ui_handle_block_region(bContext *C, const wmEvent *event, uiBut *but)
