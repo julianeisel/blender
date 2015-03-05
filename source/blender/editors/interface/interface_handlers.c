@@ -7965,17 +7965,19 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 	uiBut *but = (uiBut *)userdata;
 	uiBlock *block = but->block;
 
-	if (!UI_subblock_is_dragging(block)) {
+	if (UI_subblock_is_dragging(block) == false)
 		return WM_UI_HANDLER_CONTINUE;
-	}
 
-	if (event->type == LEFTMOUSE && event->val == KM_RELEASE && UI_subblock_is_dragging(block)) {
+	if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
+		wmWindow *win = CTX_wm_window(C);
+		ARegion *ar = CTX_wm_region(C);
+
 		block->subblock.drag_state = 0;
 		block->subblock.dragged_subblock[0] = '\0';
 
-		/* remove subblock handler, bring back region handler */
-		WM_event_remove_ui_handler(&CTX_wm_window(C)->modalhandlers, ui_subblock_handler, NULL, but, false);
-		WM_event_add_ui_handler(NULL, &CTX_wm_region(C)->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
+		/* remove subblock draggin handler, bring back region handler */
+		WM_event_remove_ui_handler(&win->modalhandlers, ui_subblock_handler, NULL, but, false);
+		WM_event_add_ui_handler(NULL, &ar->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
 
 		WM_event_add_mousemove(C);
 	}
@@ -8023,14 +8025,19 @@ static int ui_handle_block_region(bContext *C, const wmEvent *event, uiBut *but)
 		BLI_assert(block->subblock.drag_state == UI_BLOCK_DRAGSTATE_NONE);
 		if (block->flag & UI_BLOCK_DRAGGABLE && but->icon == ICON_GRIP) { /* XXX better check - but->flag? */
 			if (but->subblock_id[0]) {
+				wmWindow *win = CTX_wm_window(C);
+				ARegion *ar = CTX_wm_region(C);
+
 				/* initialize drag data */
 				block->subblock.drag_state = UI_BLOCK_DRAGSTATE_DRAGGING;
 				block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
 				copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
 				UI_subblock_neighbours_rects_set(block, but->subblock_id);
 				BLI_strncpy(block->subblock.dragged_subblock, but->subblock_id, MAX_NAME);
-				WM_event_add_ui_handler(C, &CTX_wm_window(C)->modalhandlers, ui_subblock_handler, NULL, but, false);
-				WM_event_remove_ui_handler(&CTX_wm_region(C)->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
+
+				/* add modal handler for dragging, remove ui handler to avoid conflicts */
+				WM_event_add_ui_handler(C, &win->modalhandlers, ui_subblock_handler, NULL, but, false);
+				WM_event_remove_ui_handler(&ar->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
 
 				return WM_UI_HANDLER_BREAK;
 			}
