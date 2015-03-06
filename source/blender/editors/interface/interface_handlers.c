@@ -7983,6 +7983,7 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 	}
 	else if (event->type == MOUSEMOVE) {
 		PointerRNA ptr_props;
+		/* XXX - ugly hardcoded operator calls, grrrr... */
 		/* up */
 		if ((BLI_rctf_is_empty(&block->subblock.rect_above) == false) &&
 		    (block->subblock.rect.ymax > block->subblock.rect_above.ymax))
@@ -7990,6 +7991,7 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 			WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_up");
 			RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
 			WM_operator_name_call(C, "OBJECT_OT_modifier_move_up", WM_OP_INVOKE_DEFAULT, &ptr_props);
+
 			WM_operator_properties_free(&ptr_props);
 
 			copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
@@ -8002,6 +8004,7 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 			WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_down");
 			RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
 			WM_operator_name_call(C, "OBJECT_OT_modifier_move_down", WM_OP_INVOKE_DEFAULT, &ptr_props);
+
 			WM_operator_properties_free(&ptr_props);
 
 			copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
