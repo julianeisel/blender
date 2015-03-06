@@ -1194,6 +1194,7 @@ void UI_block_update_from_old(const bContext *C, uiBlock *block)
 		block->subblock.rect = block->oldblock->subblock.rect;
 		block->subblock.rect_above = block->oldblock->subblock.rect_above;
 		block->subblock.rect_below = block->oldblock->subblock.rect_below;
+		copy_v2_v2_int(block->subblock.click_xy, block->oldblock->subblock.click_xy);
 		copy_v2_v2_int(block->subblock.drag_xy_prev, block->oldblock->subblock.drag_xy_prev);
 		BLI_strncpy(block->subblock.dragged_subblock, block->oldblock->subblock.dragged_subblock, MAX_NAME);
 	}
@@ -1410,23 +1411,30 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 			ui_but_draw(C, ar, &style, but, &rect);
 		}
 	}
+
 	/* second pass: draw dragged widgets above others */
 	if (UI_subblock_is_dragging(block)) {
+		int mx = win->eventstate->x, my = win->eventstate->y;
+		int drag_ofs_y = my - block->subblock.drag_xy_prev[1];
+		int ofs = 0;
+
+		ui_window_to_block(ar, block, &mx, &my);
+		ofs = block->subblock.click_xy[1] - (my - (block->subblock.rect.ymin + drag_ofs_y));
+
 		for (but = block->buttons.first; but; but = but->next) {
 			if (ui_subblock_is_but_dragged(block, but) &&
 			    !(but->flag & (UI_HIDDEN | UI_SCROLLED)))
 			{
 				ui_but_to_pixelrect(&rect, ar, block, but);
-				BLI_rcti_translate(&rect, 0, win->eventstate->y - block->subblock.drag_xy_prev[1]);
+				BLI_rcti_translate(&rect, 0, drag_ofs_y - ofs);
 
 				ui_but_draw(C, ar, &style, but, &rect);
-//				fdrawcheckerboard(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
 			}
 		}
-		BLI_rctf_translate(&block->subblock.rect, 0, win->eventstate->y - block->subblock.drag_xy_prev[1]);
+		BLI_rctf_translate(&block->subblock.rect, 0, drag_ofs_y - ofs);
 	}
 
-#if 1 /* debugging - draw border around subblocks */
+#if 0 /* debugging - draw border around sub-blocks */
 	if (UI_subblock_is_dragging(block)) {
 		rctf rectf = block->subblock.rect;
 		
@@ -1436,12 +1444,8 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 		rectf.ymin -= ar->winrct.ymin;
 		rectf.xmax -= ar->winrct.xmin;
 		rectf.ymax -= ar->winrct.ymin;
-		
-		rect.xmin = floorf(rectf.xmin);
-		rect.ymin = floorf(rectf.ymin);
-		rect.xmax = floorf(rectf.xmax);
-		rect.ymax = floorf(rectf.ymax);
-		fdrawbox(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+
+		fdrawbox(rectf.xmin, rectf.ymin, rectf.xmax, rectf.ymax);
 	}
 #endif
 	

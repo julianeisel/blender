@@ -352,6 +352,7 @@ typedef struct SubBlockData {
 	short drag_state;                /* current state for sub-block drag and drop */
 	char dragged_subblock[MAX_NAME]; /* name of the currently dragged sub-block */
 	int drag_xy_prev[2];             /* coordinates used to calc block position while dragging */
+	int click_xy[2];                 /* coordinates on mouse click relative to sub-block */
 	rctf rect_above, rect_below;     /* rectangles of the sub-blocks above and below the dragged one */
 } SubBlockData;
 

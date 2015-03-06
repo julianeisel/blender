@@ -7975,7 +7975,7 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 		block->subblock.drag_state = 0;
 		block->subblock.dragged_subblock[0] = '\0';
 
-		/* remove subblock draggin handler, bring back region handler */
+		/* remove sub-block dragging handler, bring back region handler */
 		WM_event_remove_ui_handler(&win->modalhandlers, ui_subblock_handler, NULL, but, false);
 		WM_event_add_ui_handler(NULL, &ar->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
 
@@ -8027,6 +8027,7 @@ static int ui_handle_block_region(bContext *C, const wmEvent *event, uiBut *but)
 			if (but->subblock_id[0]) {
 				wmWindow *win = CTX_wm_window(C);
 				ARegion *ar = CTX_wm_region(C);
+				int mx, my = event->y;
 
 				/* initialize drag data */
 				block->subblock.drag_state = UI_BLOCK_DRAGSTATE_DRAGGING;
@@ -8034,6 +8035,9 @@ static int ui_handle_block_region(bContext *C, const wmEvent *event, uiBut *but)
 				copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
 				UI_subblock_neighbours_rects_set(block, but->subblock_id);
 				BLI_strncpy(block->subblock.dragged_subblock, but->subblock_id, MAX_NAME);
+
+				ui_window_to_block(ar, block, &mx, &my);
+				block->subblock.click_xy[1] = my - (int)block->subblock.rect.ymin;
 
 				/* add modal handler for dragging, remove ui handler to avoid conflicts */
 				WM_event_add_ui_handler(C, &win->modalhandlers, ui_subblock_handler, NULL, but, false);
