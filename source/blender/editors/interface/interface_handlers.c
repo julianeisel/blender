@@ -7990,6 +7990,7 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 			WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_up");
 			RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
 			WM_operator_name_call(C, "OBJECT_OT_modifier_move_up", WM_OP_INVOKE_DEFAULT, &ptr_props);
+			WM_operator_properties_free(&ptr_props);
 
 			copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
 			UI_subblock_neighbours_rects_set(block, UI_subblock_get_prev_id(block, but->subblock_id));
@@ -8001,6 +8002,7 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 			WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_down");
 			RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
 			WM_operator_name_call(C, "OBJECT_OT_modifier_move_down", WM_OP_INVOKE_DEFAULT, &ptr_props);
+			WM_operator_properties_free(&ptr_props);
 
 			copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
 			UI_subblock_neighbours_rects_set(block, UI_subblock_get_next_id(block, but->subblock_id));
