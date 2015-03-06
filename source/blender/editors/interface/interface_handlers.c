@@ -7937,7 +7937,7 @@ static char *UI_subblock_get_prev_id(uiBlock *block, const char *subblock_id)
 			}
 		}
 	}
-	return '\0';
+	return NULL;
 }
 
 static char *UI_subblock_get_next_id(uiBlock *block, const char *subblock_id)
@@ -7951,7 +7951,7 @@ static char *UI_subblock_get_next_id(uiBlock *block, const char *subblock_id)
 			}
 		}
 	}
-	return '\0';
+	return NULL;
 }
 
 static void UI_subblock_neighbours_rects_set(uiBlock *block, const char *subblock_id)
