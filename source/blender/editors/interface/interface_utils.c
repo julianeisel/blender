@@ -489,6 +489,21 @@ void UI_butstore_update(uiBlock *block)
 /* -------------------------------------------------------------------- */
 /* Sub-Block API */
 
+uiSubBlock *UI_subblock_find(const uiBlock *block, const char *idname)
+{
+	uiSubBlock *subblock;
+
+	BLI_assert(UI_subblock_is_dragging(block));
+
+	for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
+		if (STREQ(subblock->subblock_id, idname)) {
+			return subblock;
+		}
+	}
+
+	return NULL;
+}
+
 bool UI_subblock_is_dragging(uiBlock *block)
 {
 	return ((block->flag & UI_BLOCK_DRAGGABLE) &&

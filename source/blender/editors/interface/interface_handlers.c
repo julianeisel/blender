@@ -7941,13 +7941,7 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 {
 	uiBut *but = (uiBut *)userdata;
 	uiBlock *block = but->block;
-	uiSubBlock *subblock;
-
-	for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
-		if (STREQ(subblock->subblock_id, but->subblock_id)) {
-			break;
-		}
-	}
+	uiSubBlock *subblock = UI_subblock_find(block, but->subblock_id);
 
 	if (subblock == NULL || UI_subblock_is_dragging(block) == false)
 		return WM_UI_HANDLER_CONTINUE;
@@ -8016,13 +8010,7 @@ static int ui_handle_block_region(bContext *C, const wmEvent *event, uiBut *but)
 	block = but->block;
 
 	if (event->type == LEFTMOUSE && event->val == KM_PRESS) {
-		uiSubBlock *subblock;
-
-		for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
-			if (STREQ(subblock->subblock_id, but->subblock_id)) {
-				break;
-			}
-		}
+		uiSubBlock *subblock = UI_subblock_find(block, but->subblock_id);
 
 		if (subblock && block->flag & UI_BLOCK_DRAGGABLE && but->icon == ICON_GRIP) { /* XXX better check - but->flag? */
 			wmWindow *win = CTX_wm_window(C);

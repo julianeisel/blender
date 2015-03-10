@@ -1025,6 +1025,7 @@ bool UI_butstore_register_update(uiBlock *block, uiBut *but_dst, const uiBut *bu
 void UI_butstore_unregister(uiButStore *bs_handle, uiBut **but_p);
 
 /* UI_subblock_ helplers */
+struct uiSubBlock *UI_subblock_find(const uiBlock *block, const char *idname);
 bool UI_subblock_is_dragging(uiBlock *block);
 
 

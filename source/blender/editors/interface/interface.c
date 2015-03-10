@@ -1412,16 +1412,10 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 
 	/* second pass: draw dragged widgets above others */
 	if (UI_subblock_is_dragging(block)) {
-		uiSubBlock *subblock;
+		uiSubBlock *subblock = UI_subblock_find(block, block->subblock.dragged_subblock);
 		int mx = win->eventstate->x, my = win->eventstate->y;
 		int drag_ofs_y = my - block->subblock.drag_xy_prev[1];
 		int ofs = 0;
-
-		for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
-			if (STREQ(subblock->subblock_id, block->subblock.dragged_subblock)) {
-				break;
-			}
-		}
 
 		if (subblock) {
 			ui_window_to_block(ar, block, &mx, &my);
