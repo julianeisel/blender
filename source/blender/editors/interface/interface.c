@@ -1191,12 +1191,10 @@ void UI_block_update_from_old(const bContext *C, uiBlock *block)
 	/* sub-block drag & drop data */
 	if (UI_subblock_is_dragging(block->oldblock)) {
 		block->subblock.drag_state = block->oldblock->subblock.drag_state;
-		block->subblock.rect = block->oldblock->subblock.rect;
-		block->subblock.rect_above = block->oldblock->subblock.rect_above;
-		block->subblock.rect_below = block->oldblock->subblock.rect_below;
 		copy_v2_v2_int(block->subblock.click_xy, block->oldblock->subblock.click_xy);
 		copy_v2_v2_int(block->subblock.drag_xy_prev, block->oldblock->subblock.drag_xy_prev);
 		BLI_strncpy(block->subblock.dragged_subblock, block->oldblock->subblock.dragged_subblock, MAX_NAME);
+		BLI_duplicatelist(&block->subblocks, &block->oldblock->subblocks);
 	}
 
 	block->oldblock = NULL;
@@ -1414,40 +1412,49 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 
 	/* second pass: draw dragged widgets above others */
 	if (UI_subblock_is_dragging(block)) {
+		uiSubBlock *subblock;
 		int mx = win->eventstate->x, my = win->eventstate->y;
 		int drag_ofs_y = my - block->subblock.drag_xy_prev[1];
 		int ofs = 0;
 
-		ui_window_to_block(ar, block, &mx, &my);
-		ofs = block->subblock.click_xy[1] - (my - (block->subblock.rect.ymin + drag_ofs_y));
-
-		for (but = block->buttons.first; but; but = but->next) {
-			if (ui_subblock_is_but_dragged(block, but) &&
-			    !(but->flag & (UI_HIDDEN | UI_SCROLLED)))
-			{
-				ui_but_to_pixelrect(&rect, ar, block, but);
-				BLI_rcti_translate(&rect, 0, drag_ofs_y - ofs);
-
-				ui_but_draw(C, ar, &style, but, &rect);
+		for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
+			if (STREQ(subblock->subblock_id, block->subblock.dragged_subblock)) {
+				break;
 			}
 		}
-		BLI_rctf_translate(&block->subblock.rect, 0, drag_ofs_y - ofs);
-	}
 
-#if 0 /* debugging - draw border around sub-blocks */
-	if (UI_subblock_is_dragging(block)) {
-		rctf rectf = block->subblock.rect;
-		
-		ui_block_to_window_rctf(ar, block, &rectf, &block->subblock.rect);
-		
-		rectf.xmin -= ar->winrct.xmin;
-		rectf.ymin -= ar->winrct.ymin;
-		rectf.xmax -= ar->winrct.xmin;
-		rectf.ymax -= ar->winrct.ymin;
+		if (subblock) {
+			ui_window_to_block(ar, block, &mx, &my);
+			ofs = block->subblock.click_xy[1] - (my - (subblock->rect.ymin + drag_ofs_y));
 
-		fdrawbox(rectf.xmin, rectf.ymin, rectf.xmax, rectf.ymax);
+			for (but = block->buttons.first; but; but = but->next) {
+				if (ui_subblock_is_but_dragged(block, but) &&
+				    !(but->flag & (UI_HIDDEN | UI_SCROLLED)))
+				{
+
+					ui_but_to_pixelrect(&rect, ar, block, but);
+					BLI_rcti_translate(&rect, 0, drag_ofs_y - ofs);
+
+					ui_but_draw(C, ar, &style, but, &rect);
+				}
+			}
+			BLI_rctf_translate(&subblock->rect, 0, drag_ofs_y);
+
+			/* debugging - draw border around sub-blocks */
+			if (0) {
+				rctf rectf = subblock->rect;
+
+				ui_block_to_window_rctf(ar, block, &rectf, &subblock->rect);
+
+				rectf.xmin -= ar->winrct.xmin;
+				rectf.ymin -= ar->winrct.ymin;
+				rectf.xmax -= ar->winrct.xmin;
+				rectf.ymax -= ar->winrct.ymin;
+
+				fdrawbox(rectf.xmin, rectf.ymin, rectf.xmax, rectf.ymax);
+			}
+		}
 	}
-#endif
 	
 	/* restore matrix */
 	glMatrixMode(GL_PROJECTION);
@@ -3193,8 +3200,11 @@ static uiBut *ui_def_but(uiBlock *block, int type, int retval, const char *str,
 	
 	but->pos = -1;   /* cursor invisible */
 
-	if (block->subblock.is_subblock_building) {
-		BLI_strncpy(but->subblock_id, block->subblock.subblock_id[block->subblock.tot_subblocks], MAX_NAME);
+	if ((BLI_listbase_is_empty(&block->subblocks)) == false) {
+		uiSubBlock *subblock = block->subblocks.last;
+		if (subblock->is_subblock_building) {
+			BLI_strncpy(but->subblock_id, subblock->subblock_id, MAX_NAME);
+		}
 	}
 
 	if (ELEM(but->type, UI_BTYPE_NUM, UI_BTYPE_NUM_SLIDER)) {    /* add a space to name */

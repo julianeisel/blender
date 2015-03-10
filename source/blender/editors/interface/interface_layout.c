@@ -3228,17 +3228,22 @@ void UI_block_layout_resolve(uiBlock *block, int *x, int *y)
 void uiLayoutSubblockBegin(uiLayout *layout, const char *identifier)
 {
 	uiBlock *block = layout->root->block;
+	uiSubBlock *subblock = MEM_callocN(sizeof(uiSubBlock), "uiSubBlock");
 
-	block->subblock.is_subblock_building = true;
-	BLI_strncpy(block->subblock.subblock_id[block->subblock.tot_subblocks], identifier, MAX_NAME);
+	subblock->is_subblock_building = true;
+	BLI_strncpy(subblock->subblock_id, identifier, MAX_NAME);
+	BLI_addtail(&block->subblocks, subblock);
 }
 
 void uiLayoutSubblockEnd(uiLayout *layout)
 {
 	uiBlock *block = layout->root->block;
+	uiSubBlock *subblock = block->subblocks.last;
 
-	block->subblock.is_subblock_building = false;
-	block->subblock.tot_subblocks++;
+	if (!subblock)
+		return;
+
+	subblock->is_subblock_building = false;
 }
 
 void uiLayoutSetContextPointer(uiLayout *layout, const char *name, PointerRNA *ptr)

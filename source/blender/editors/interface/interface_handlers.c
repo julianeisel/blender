@@ -7915,57 +7915,38 @@ static rctf UI_subblock_boundbox_set(uiBlock *block, const char *subblock_id)
 				if (BLI_rctf_is_empty(&rect)) {
 					rect = but->rect;
 				}
-				BLI_rctf_union(&rect, &but->rect);
+				else {
+					BLI_rctf_union(&rect, &but->rect);
+				}
 			}
 		}
-	}
-	else {
-		/* return empty rect */
-		rect.xmin = rect.xmax = rect.ymin = rect.ymax = 0;
 	}
 	return rect;
 }
 
-static char *UI_subblock_get_prev_id(uiBlock *block, const char *subblock_id)
+static void UI_subblock_neighbours_rects_set(uiBlock *block, uiSubBlock *subblock)
 {
-	int i;
-
-	for (i = 1; i < block->subblock.tot_subblocks; i++) {
-		if (STREQ(block->subblock.subblock_id[i], subblock_id)) {
-			if (block->subblock.subblock_id[i - 1] && block->subblock.subblock_id[i - 1][0]) {
-				return block->subblock.subblock_id[i - 1];
-			}
-		}
+	if (subblock->prev) {
+		subblock->prev->rect = UI_subblock_boundbox_set(block, subblock->prev->subblock_id);
 	}
-	return NULL;
-}
-
-static char *UI_subblock_get_next_id(uiBlock *block, const char *subblock_id)
-{
-	int i;
-
-	for (i = 0; i < block->subblock.tot_subblocks; i++) {
-		if (STREQ(block->subblock.subblock_id[i], subblock_id)) {
-			if (block->subblock.subblock_id[i + 1] && block->subblock.subblock_id[i + 1][0]) {
-				return block->subblock.subblock_id[i + 1];
-			}
-		}
+	if (subblock->next) {
+		subblock->next->rect = UI_subblock_boundbox_set(block, subblock->next->subblock_id);
 	}
-	return NULL;
-}
-
-static void UI_subblock_neighbours_rects_set(uiBlock *block, const char *subblock_id)
-{
-	block->subblock.rect_above = UI_subblock_boundbox_set(block, UI_subblock_get_prev_id(block, subblock_id));
-	block->subblock.rect_below = UI_subblock_boundbox_set(block, UI_subblock_get_next_id(block, subblock_id));
 }
 
 static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata)
 {
 	uiBut *but = (uiBut *)userdata;
 	uiBlock *block = but->block;
+	uiSubBlock *subblock;
 
-	if (UI_subblock_is_dragging(block) == false)
+	for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
+		if (STREQ(subblock->subblock_id, but->subblock_id)) {
+			break;
+		}
+	}
+
+	if (subblock == NULL || UI_subblock_is_dragging(block) == false)
 		return WM_UI_HANDLER_CONTINUE;
 
 	if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
@@ -7983,10 +7964,12 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 	}
 	else if (event->type == MOUSEMOVE) {
 		PointerRNA ptr_props;
+
 		/* XXX - ugly hardcoded operator calls, grrrr... */
 		/* up */
-		if ((BLI_rctf_is_empty(&block->subblock.rect_above) == false) &&
-		    (block->subblock.rect.ymax > block->subblock.rect_above.ymax))
+		if ((subblock->prev) &&
+		    (BLI_rctf_is_empty(&subblock->prev->rect) == false) &&
+		    (subblock->rect.ymax > subblock->prev->rect.ymax))
 		{
 			WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_up");
 			RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
@@ -7995,11 +7978,12 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 			WM_operator_properties_free(&ptr_props);
 
 			copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
-			UI_subblock_neighbours_rects_set(block, UI_subblock_get_prev_id(block, but->subblock_id));
+			UI_subblock_neighbours_rects_set(block, subblock);
 		}
 		/* down */
-		else if ((BLI_rctf_is_empty(&block->subblock.rect_below) == false) &&
-		         (block->subblock.rect.ymax < block->subblock.rect_below.ymax))
+		else if ((subblock->next) &&
+		         (BLI_rctf_is_empty(&subblock->next->rect) == false) &&
+		         (subblock->rect.ymax < subblock->next->rect.ymax))
 		{
 			WM_operator_properties_create(&ptr_props, "OBJECT_OT_modifier_move_down");
 			RNA_string_set(&ptr_props, "modifier", block->subblock.dragged_subblock);
@@ -8008,10 +7992,10 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 			WM_operator_properties_free(&ptr_props);
 
 			copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
-			UI_subblock_neighbours_rects_set(block, UI_subblock_get_next_id(block, but->subblock_id));
+			UI_subblock_neighbours_rects_set(block, subblock);
 		}
 		else {
-			block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
+			subblock->rect = UI_subblock_boundbox_set(block, but->subblock_id);
 		}
 		ED_region_tag_redraw(CTX_wm_region(C));
 	}
@@ -8023,35 +8007,42 @@ static int ui_handle_block_region(bContext *C, const wmEvent *event, uiBut *but)
 {
 	uiBlock *block;
 
-	if (!but)
+	if (!but || !but->subblock_id[0])
 		return WM_UI_HANDLER_CONTINUE;
 
 	block = but->block;
 
 	if (event->type == LEFTMOUSE && event->val == KM_PRESS) {
-		BLI_assert(block->subblock.drag_state == UI_BLOCK_DRAGSTATE_NONE);
-		if (block->flag & UI_BLOCK_DRAGGABLE && but->icon == ICON_GRIP) { /* XXX better check - but->flag? */
-			if (but->subblock_id[0]) {
-				wmWindow *win = CTX_wm_window(C);
-				ARegion *ar = CTX_wm_region(C);
-				int mx, my = event->y;
+		uiSubBlock *subblock;
 
-				/* initialize drag data */
-				block->subblock.drag_state = UI_BLOCK_DRAGSTATE_DRAGGING;
-				block->subblock.rect = UI_subblock_boundbox_set(block, but->subblock_id);
-				copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
-				UI_subblock_neighbours_rects_set(block, but->subblock_id);
-				BLI_strncpy(block->subblock.dragged_subblock, but->subblock_id, MAX_NAME);
-
-				ui_window_to_block(ar, block, &mx, &my);
-				block->subblock.click_xy[1] = my - (int)block->subblock.rect.ymin;
-
-				/* add modal handler for dragging, remove ui handler to avoid conflicts */
-				WM_event_add_ui_handler(C, &win->modalhandlers, ui_subblock_handler, NULL, but, false);
-				WM_event_remove_ui_handler(&ar->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
-
-				return WM_UI_HANDLER_BREAK;
+		for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
+			if (STREQ(subblock->subblock_id, but->subblock_id)) {
+				break;
 			}
+		}
+
+		if (subblock && block->flag & UI_BLOCK_DRAGGABLE && but->icon == ICON_GRIP) { /* XXX better check - but->flag? */
+			wmWindow *win = CTX_wm_window(C);
+			ARegion *ar = CTX_wm_region(C);
+			int mx, my = event->y;
+
+			BLI_assert(block->subblock.drag_state == UI_BLOCK_DRAGSTATE_NONE);
+
+			/* initialize drag data */
+			block->subblock.drag_state = UI_BLOCK_DRAGSTATE_DRAGGING;
+			subblock->rect = UI_subblock_boundbox_set(block, but->subblock_id);
+			copy_v2_v2_int(block->subblock.drag_xy_prev, &event->x);
+			UI_subblock_neighbours_rects_set(block, subblock);
+			BLI_strncpy(block->subblock.dragged_subblock, but->subblock_id, MAX_NAME);
+
+			ui_window_to_block(ar, block, &mx, &my);
+			block->subblock.click_xy[1] = my - (int)subblock->rect.ymin;
+
+			/* add modal handler for dragging, remove ui handler to avoid conflicts */
+			WM_event_add_ui_handler(C, &win->modalhandlers, ui_subblock_handler, NULL, but, false);
+			WM_event_remove_ui_handler(&ar->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
+
+			return WM_UI_HANDLER_BREAK;
 		}
 	}
 

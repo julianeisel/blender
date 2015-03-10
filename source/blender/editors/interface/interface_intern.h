@@ -343,18 +343,20 @@ enum {
 };
 
 typedef struct SubBlockData {
-	char subblock_id[64][MAX_NAME];  /* buttons that have the same but->subblock_id build a sub-block */
-	int tot_subblocks;               /* total amount of built sub-blocks */
-	rctf rect;                       /* bounds of the sub-block */
-	bool is_subblock_building;       /* set while buttons are collected to build the sub-block */
-
-	/* sub-but drag data */
 	short drag_state;                /* current state for sub-block drag and drop */
 	char dragged_subblock[MAX_NAME]; /* name of the currently dragged sub-block */
 	int drag_xy_prev[2];             /* coordinates used to calc block position while dragging */
 	int click_xy[2];                 /* coordinates on mouse click relative to sub-block */
 	rctf rect_above, rect_below;     /* rectangles of the sub-blocks above and below the dragged one */
 } SubBlockData;
+
+typedef struct uiSubBlock {
+	struct uiSubBlock *next, *prev;
+
+	char subblock_id[MAX_NAME];     /* buttons that have the same but->subblock_id are built into a sub-block */
+	rctf rect;                      /* bounds of the sub-block */
+	bool is_subblock_building;      /* set while buttons are collected to build the sub-block */
+} uiSubBlock;
 
 struct uiBlock {
 	uiBlock *next, *prev;
@@ -368,6 +370,7 @@ struct uiBlock {
 	ListBase layouts;
 	struct uiLayout *curlayout;
 
+	ListBase subblocks;
 	SubBlockData subblock;
 
 	ListBase contexts;
