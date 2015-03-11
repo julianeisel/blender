@@ -1026,7 +1026,8 @@ void UI_butstore_unregister(uiButStore *bs_handle, uiBut **but_p);
 
 /* UI_subblock_ helplers */
 struct uiSubBlock *UI_subblock_find(const uiBlock *block, const char *idname);
-bool UI_subblock_is_dragging(uiBlock *block);
+struct uiSubBlock *UI_subblock_dragging_find(const uiBlock *block);
+rctf UI_subblock_boundbox_get(uiBlock *block, const char *subblock_id);
 
 
 /* Float precision helpers */

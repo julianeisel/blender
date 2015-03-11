@@ -1189,11 +1189,7 @@ void UI_block_update_from_old(const bContext *C, uiBlock *block)
 	block->tooltipdisabled = block->oldblock->tooltipdisabled;
 	BLI_movelisttolist(&block->color_pickers.list, &block->oldblock->color_pickers.list);
 	/* sub-block drag & drop data */
-	if (UI_subblock_is_dragging(block->oldblock)) {
-		block->subblock.drag_state = block->oldblock->subblock.drag_state;
-		copy_v2_v2_int(block->subblock.click_xy, block->oldblock->subblock.click_xy);
-		copy_v2_v2_int(block->subblock.drag_xy_prev, block->oldblock->subblock.drag_xy_prev);
-		BLI_strncpy(block->subblock.dragged_subblock, block->oldblock->subblock.dragged_subblock, MAX_NAME);
+	if ((BLI_listbase_is_empty(&block->oldblock->subblocks) == false) && UI_subblock_dragging_find(block->oldblock)) {
 		BLI_duplicatelist(&block->subblocks, &block->oldblock->subblocks);
 	}
 
@@ -1337,7 +1333,13 @@ static void ui_but_draw(const bContext *C, ARegion *ar, uiStyle *style, uiBut *b
 
 static bool ui_subblock_is_but_dragged(uiBlock *block, uiBut *but)
 {
-	return (but->subblock_id[0] && STREQ(but->subblock_id, block->subblock.dragged_subblock));
+	if (but->subblock_id[0]) {
+		uiSubBlock *subblock = UI_subblock_dragging_find(block);
+		if (subblock && STREQ(but->subblock_id, subblock->subblock_id)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 #include "BIF_glutil.h"
@@ -1400,10 +1402,10 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 		if (!(but->flag & (UI_HIDDEN | UI_SCROLLED))) {
 			ui_but_to_pixelrect(&rect, ar, block, but);
 
-			if (UI_subblock_is_dragging(block)) {
-				if (ui_subblock_is_but_dragged(block, but)) {
-					continue;
-				}
+			if ((BLI_listbase_is_empty(&block->subblocks) == false) &&
+			    ui_subblock_is_but_dragged(block, but))
+			{
+				continue;
 			}
 
 			ui_but_draw(C, ar, &style, but, &rect);
@@ -1411,28 +1413,24 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 	}
 
 	/* second pass: draw dragged widgets above others */
-	if (UI_subblock_is_dragging(block)) {
-		uiSubBlock *subblock = UI_subblock_find(block, block->subblock.dragged_subblock);
+	if (BLI_listbase_is_empty(&block->subblocks) == false) {
+		uiSubBlock *subblock = UI_subblock_dragging_find(block);
 		int mx = win->eventstate->x, my = win->eventstate->y;
-		int drag_ofs_y = my - block->subblock.drag_xy_prev[1];
-		int ofs = 0;
 
 		if (subblock) {
 			ui_window_to_block(ar, block, &mx, &my);
-			ofs = block->subblock.click_xy[1] - (my - (subblock->rect.ymin + drag_ofs_y));
 
 			for (but = block->buttons.first; but; but = but->next) {
 				if (ui_subblock_is_but_dragged(block, but) &&
 				    !(but->flag & (UI_HIDDEN | UI_SCROLLED)))
 				{
-
 					ui_but_to_pixelrect(&rect, ar, block, but);
-					BLI_rcti_translate(&rect, 0, drag_ofs_y - ofs);
+					BLI_rcti_translate(&rect, 0, win->eventstate->y - win->eventstate->prevclicky);
 
 					ui_but_draw(C, ar, &style, but, &rect);
 				}
 			}
-			BLI_rctf_translate(&subblock->rect, 0, drag_ofs_y);
+			BLI_rctf_translate(&subblock->rect, 0, win->eventstate->y - win->eventstate->prevclicky);
 
 			/* debugging - draw border around sub-blocks */
 			if (0) {
@@ -2609,10 +2607,6 @@ void UI_block_region_set(uiBlock *block, ARegion *region)
 			oldblock->active = 0;
 			oldblock->panel = NULL;
 			oldblock->handle = NULL;
-
-			if (UI_subblock_is_dragging(oldblock)) {
-				block->rect = oldblock->rect;
-			}
 		}
 
 		/* at the beginning of the list! for dynamical menus/blocks */

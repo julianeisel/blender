@@ -339,23 +339,20 @@ struct PieMenuData {
 enum {
 	UI_BLOCK_DRAGSTATE_NONE      = 0,
 	UI_BLOCK_DRAGSTATE_DRAGGING  = 1, /* block is being dragged */
-	UI_BLOCK_DRAGSTATE_ANIMATING = 2, /* key was released -> animation is running */
+	UI_BLOCK_DRAGSTATE_ANIMATING = 2, /* animation is running */
 };
-
-typedef struct SubBlockData {
-	short drag_state;                /* current state for sub-block drag and drop */
-	char dragged_subblock[MAX_NAME]; /* name of the currently dragged sub-block */
-	int drag_xy_prev[2];             /* coordinates used to calc block position while dragging */
-	int click_xy[2];                 /* coordinates on mouse click relative to sub-block */
-	rctf rect_above, rect_below;     /* rectangles of the sub-blocks above and below the dragged one */
-} SubBlockData;
 
 typedef struct uiSubBlock {
 	struct uiSubBlock *next, *prev;
 
-	char subblock_id[MAX_NAME];     /* buttons that have the same but->subblock_id are built into a sub-block */
-	rctf rect;                      /* bounds of the sub-block */
-	bool is_subblock_building;      /* set while buttons are collected to build the sub-block */
+	char subblock_id[MAX_NAME]; /* buttons that have the same but->subblock_id are built into a sub-block */
+	rctf rect;                  /* sub-block bounds */
+	bool is_subblock_building;  /* set while buttons are collected to build the sub-block */
+
+	/* drag and drop data */
+	short drag_state;           /* current state for sub-block drag and drop */
+	short drag_idx_diff;        /* used to get a new index based on the drag position of a sub-block */
+	void (*drop)(struct bContext *, struct uiSubBlock *); /* executed when dropping the sub-block */
 } uiSubBlock;
 
 struct uiBlock {
@@ -371,7 +368,6 @@ struct uiBlock {
 	struct uiLayout *curlayout;
 
 	ListBase subblocks;
-	SubBlockData subblock;
 
 	ListBase contexts;
 	

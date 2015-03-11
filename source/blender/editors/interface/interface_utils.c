@@ -40,6 +40,7 @@
 #include "BLI_math.h"
 #include "BLI_string.h"
 #include "BLI_listbase.h"
+#include "BLI_rect.h"
 
 #include "BLF_translation.h"
 
@@ -493,8 +494,6 @@ uiSubBlock *UI_subblock_find(const uiBlock *block, const char *idname)
 {
 	uiSubBlock *subblock;
 
-	BLI_assert(UI_subblock_is_dragging(block));
-
 	for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
 		if (STREQ(subblock->subblock_id, idname)) {
 			return subblock;
@@ -504,10 +503,38 @@ uiSubBlock *UI_subblock_find(const uiBlock *block, const char *idname)
 	return NULL;
 }
 
-bool UI_subblock_is_dragging(uiBlock *block)
+uiSubBlock *UI_subblock_dragging_find(const uiBlock *block)
 {
-	return ((block->flag & UI_BLOCK_DRAGGABLE) &&
-	        (block->subblock.drag_state == UI_BLOCK_DRAGSTATE_DRAGGING));
+	uiSubBlock *subblock;
+
+	for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
+		if (subblock->drag_state == UI_BLOCK_DRAGSTATE_DRAGGING) {
+			return subblock;
+		}
+	}
+
+	return NULL;
+}
+
+rctf UI_subblock_boundbox_get(uiBlock *block, const char *subblock_id)
+{
+	uiBut *but;
+	rctf rect;
+
+	rect.xmin = rect.xmax = rect.ymin = rect.ymax = 0;
+	if (subblock_id && subblock_id[0]) {
+		for (but = block->buttons.first; but; but = but->next) {
+			if (but->subblock_id[0] && STREQ(but->subblock_id, subblock_id)) {
+				if (BLI_rctf_is_empty(&rect)) {
+					rect = but->rect;
+				}
+				else {
+					BLI_rctf_union(&rect, &but->rect);
+				}
+			}
+		}
+	}
+	return rect;
 }
 
 /** \} */
