@@ -353,6 +353,13 @@ typedef struct uiSubBlock {
 	short drag_state;           /* current state for sub-block drag and drop */
 	short drag_idx_diff;        /* used to get a new index based on the drag position of a sub-block */
 	void (*drop)(struct bContext *, struct uiSubBlock *); /* executed when dropping the sub-block */
+
+	/* animation */
+	struct wmTimer *animtimer;
+	double starttime;
+	int anim_from;              /* start position of the sub-block (is also key release coord) */
+	int anim_to;                /* animate towards this position */
+	int anim_ofs;               /* subblock offset during animation */
 } uiSubBlock;
 
 struct uiBlock {

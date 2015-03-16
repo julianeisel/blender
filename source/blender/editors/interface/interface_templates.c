@@ -778,6 +778,10 @@ static void modifiers_move_cb(bContext *C, uiSubBlock *subblock)
 	ModifierData *md_other = BLI_findlink(&ob->modifiers, BLI_findindex(&ob->modifiers, md) + subblock->drag_idx_diff);
 	ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
+	if (subblock->drag_idx_diff == 0) {
+		return;
+	}
+
 	/* XXX poll callback */
 	if (mti->flags & eModifierTypeFlag_RequiresOriginalData) {
 		ModifierTypeInfo *mti_other = modifierType_getInfo(md_other->type);

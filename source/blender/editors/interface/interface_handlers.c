@@ -7907,8 +7907,12 @@ static int ui_handle_list_event(bContext *C, const wmEvent *event, ARegion *ar)
 	return retval;
 }
 
+#define SUBBLOCK_ANIMATION_TIME      0.1f
+#define SUBBLOCK_ANIMATION_INTERVAL  0.02f
+
 static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata)
 {
+	wmWindow *win = CTX_wm_window(C);
 	uiBut *but = (uiBut *)userdata;
 	uiBlock *block = but->block;
 	uiSubBlock *subblock = UI_subblock_find(block, but->subblock_id);
@@ -7917,34 +7921,24 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 		return WM_UI_HANDLER_CONTINUE;
 
 	if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
-		wmWindow *win = CTX_wm_window(C);
-		ARegion *ar = CTX_wm_region(C);
-
-		subblock->drag_state = 0;
+		subblock->drag_state = UI_BLOCK_DRAGSTATE_ANIMATING;
+		subblock->animtimer = WM_event_add_timer(CTX_wm_manager(C), win, TIMER, SUBBLOCK_ANIMATION_INTERVAL);
+		subblock->anim_from = subblock->rect.ymax;
+		subblock->starttime = PIL_check_seconds_timer();
 		subblock->drop(C, subblock);
-
-		/* remove sub-block dragging handler, bring back region handler */
-		WM_event_remove_ui_handler(&win->modalhandlers, ui_subblock_handler, NULL, but, false);
-		WM_event_add_ui_handler(NULL, &ar->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
-
-		WM_event_add_mousemove(C);
 	}
 	else if (event->type == MOUSEMOVE) {
 		uiSubBlock *subblock_other;
 		int idx_diff = 0;
 
-		if (subblock->prev && (subblock->rect.ymax > subblock->prev->rect.ymax)) {
-			for (subblock_other = subblock->prev; subblock_other; subblock_other = subblock_other->prev) {
-				if (subblock->rect.ymax > subblock_other->rect.ymax) {
-					idx_diff--;
-				}
+		for (subblock_other = subblock->prev; subblock_other; subblock_other = subblock_other->prev) {
+			if (subblock->rect.ymax > subblock_other->rect.ymax) {
+				idx_diff--;
 			}
 		}
-		else if (subblock->next && (subblock->rect.ymax < subblock->next->rect.ymax)) {
-			for (subblock_other = subblock->next; subblock_other; subblock_other = subblock_other->next) {
-				if (subblock->rect.ymax < subblock_other->rect.ymax) {
-					idx_diff++;
-				}
+		for (subblock_other = subblock->next; subblock_other; subblock_other = subblock_other->next) {
+			if (subblock->rect.ymax < subblock_other->rect.ymax) {
+				idx_diff++;
 			}
 		}
 		subblock->drag_idx_diff = idx_diff;
@@ -7952,6 +7946,26 @@ static int ui_subblock_handler(bContext *C, const wmEvent *event, void *userdata
 			subblock_other->rect = UI_subblock_boundbox_get(block, subblock_other->subblock_id);
 		}
 		ED_region_tag_redraw(CTX_wm_region(C));
+	}
+	else if (event->type == TIMER && event->customdata == subblock->animtimer) {
+		ARegion *ar = CTX_wm_region(C);
+		float fac = (PIL_check_seconds_timer() - subblock->starttime) / SUBBLOCK_ANIMATION_TIME;
+		fac = min_ff(sqrt(fac), 1.0f);
+
+		subblock->anim_ofs = (int)((subblock->anim_from - subblock->anim_to) * (1 - fac));
+
+		if (fac >= 1.0f) {
+			WM_event_remove_timer(CTX_wm_manager(C), CTX_wm_window(C), subblock->animtimer);
+
+			subblock->drag_state = 0;
+
+			/* remove sub-block dragging handler, bring back region handler */
+			WM_event_remove_ui_handler(&win->modalhandlers, ui_subblock_handler, NULL, but, false);
+			WM_event_add_ui_handler(NULL, &ar->handlers, ui_region_handler, ui_region_handler_remove, NULL, false);
+
+			WM_event_add_mousemove(C);
+		}
+		ED_region_tag_redraw(ar);
 	}
 
 	return WM_UI_HANDLER_BREAK;
@@ -7978,6 +7992,7 @@ static int ui_handle_block_region(bContext *C, const wmEvent *event, uiBut *but)
 			for (subblock_other = block->subblocks.first; subblock_other; subblock_other = subblock_other->next) {
 				subblock_other->rect = UI_subblock_boundbox_get(block, subblock_other->subblock_id);
 			}
+			subblock->anim_to = subblock->rect.ymax;
 
 			/* add modal handler for dragging, remove ui handler to avoid conflicts */
 			WM_event_add_ui_handler(C, &win->modalhandlers, ui_subblock_handler, NULL, but, false);

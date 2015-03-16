@@ -516,6 +516,19 @@ uiSubBlock *UI_subblock_dragging_find(const uiBlock *block)
 	return NULL;
 }
 
+uiSubBlock *UI_subblock_animating_find(const uiBlock *block)
+{
+	uiSubBlock *subblock;
+
+	for (subblock = block->subblocks.first; subblock; subblock = subblock->next) {
+		if (subblock->drag_state == UI_BLOCK_DRAGSTATE_ANIMATING) {
+			return subblock;
+		}
+	}
+
+	return NULL;
+}
+
 rctf UI_subblock_boundbox_get(uiBlock *block, const char *subblock_id)
 {
 	uiBut *but;

@@ -1189,7 +1189,8 @@ void UI_block_update_from_old(const bContext *C, uiBlock *block)
 	block->tooltipdisabled = block->oldblock->tooltipdisabled;
 	BLI_movelisttolist(&block->color_pickers.list, &block->oldblock->color_pickers.list);
 	/* sub-block drag & drop data */
-	if ((BLI_listbase_is_empty(&block->oldblock->subblocks) == false) && UI_subblock_dragging_find(block->oldblock)) {
+	if ((BLI_listbase_is_empty(&block->oldblock->subblocks) == false) &&
+	    (UI_subblock_dragging_find(block->oldblock) || UI_subblock_animating_find(block->oldblock))) {
 		BLI_duplicatelist(&block->subblocks, &block->oldblock->subblocks);
 	}
 
@@ -1335,6 +1336,11 @@ static bool ui_subblock_is_but_dragged(uiBlock *block, uiBut *but)
 {
 	if (but->subblock_id[0]) {
 		uiSubBlock *subblock = UI_subblock_dragging_find(block);
+
+		if (subblock == NULL) {
+			subblock = UI_subblock_animating_find(block);
+		}
+
 		if (subblock && STREQ(but->subblock_id, subblock->subblock_id)) {
 			return true;
 		}
@@ -1417,6 +1423,10 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 		uiSubBlock *subblock = UI_subblock_dragging_find(block);
 		int mx = win->eventstate->x, my = win->eventstate->y;
 
+		if (subblock == NULL) {
+			subblock = UI_subblock_animating_find(block);
+		}
+
 		if (subblock) {
 			ui_window_to_block(ar, block, &mx, &my);
 
@@ -1425,7 +1435,13 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 				    !(but->flag & (UI_HIDDEN | UI_SCROLLED)))
 				{
 					ui_but_to_pixelrect(&rect, ar, block, but);
-					BLI_rcti_translate(&rect, 0, win->eventstate->y - win->eventstate->prevclicky);
+
+					if (subblock->drag_state == UI_BLOCK_DRAGSTATE_ANIMATING) {
+						BLI_rcti_translate(&rect, 0, subblock->anim_ofs);
+					}
+					else {
+						BLI_rcti_translate(&rect, 0, win->eventstate->y - win->eventstate->prevclicky);
+					}
 
 					ui_but_draw(C, ar, &style, but, &rect);
 				}

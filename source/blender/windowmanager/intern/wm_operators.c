@@ -1830,11 +1830,13 @@ static uiBlock *wm_block_create_splash(bContext *C, ARegion *ar, void *arg_unuse
 
 /* XXX: hack to refresh splash screen with updated preset menu name,
  * since popup blocks don't get regenerated like panels do */
-static void wm_block_splash_refreshmenu(bContext *UNUSED(C), void *UNUSED(arg_block), void *UNUSED(arg))
+static void wm_block_splash_refreshmenu(bContext *C, void *arg_region, void *arg_block)
 {
 	/* ugh, causes crashes in other buttons, disabling for now until 
 	 * a better fix */
-#if 0
+//	ED_region_tag_refresh_ui(arg_region);
+//	printf("test\n");
+#if 1
 	UI_popup_block_close(C, arg_block);
 	UI_popup_block_invoke(C, wm_block_create_splash, NULL);
 #endif
@@ -1924,7 +1926,7 @@ static uiBlock *wm_block_create_splash(bContext *C, ARegion *ar, void *UNUSED(ar
 	/* XXX splash scales with pixelsize, should become widget-units */
 	but = uiDefBut(block, UI_BTYPE_IMAGE, 0, "", 0, 0.5f * U.widget_unit, U.pixelsize * 501, U.pixelsize * 282, ibuf, 0.0, 0.0, 0, 0, ""); /* button owns the imbuf now */
 	UI_but_func_set(but, wm_block_splash_close, block, NULL);
-	UI_block_func_set(block, wm_block_splash_refreshmenu, block, NULL);
+	UI_block_func_set(block, wm_block_splash_refreshmenu, ar, block);
 
 	/* label for 'a' bugfix releases, or 'Release Candidate 1'...
 	 *  avoids recreating splash for version updates */
