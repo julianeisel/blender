@@ -27,7 +27,6 @@
  *  \ingroup edinterface
  */
 
-
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,8 +54,6 @@
 
 #include "UI_interface.h"
 #include "UI_interface_icons.h"
-
-#include "IMB_colormanagement.h"
 
 #include "interface_intern.h"
 
@@ -2392,9 +2389,9 @@ void ui_draw_gradient(const rcti *rect, const float hsv[3], const int type, cons
 	switch (type) {
 		case UI_GRAD_SV:
 			hsv_to_rgb(h, 0.0, 0.0,   &col1[0][0], &col1[0][1], &col1[0][2]);
-			hsv_to_rgb(h, 0.333, 0.0, &col1[1][0], &col1[1][1], &col1[1][2]);
-			hsv_to_rgb(h, 0.666, 0.0, &col1[2][0], &col1[2][1], &col1[2][2]);
-			hsv_to_rgb(h, 1.0, 0.0,   &col1[3][0], &col1[3][1], &col1[3][2]);
+			hsv_to_rgb(h, 0.0, 0.333, &col1[1][0], &col1[1][1], &col1[1][2]);
+			hsv_to_rgb(h, 0.0, 0.666, &col1[2][0], &col1[2][1], &col1[2][2]);
+			hsv_to_rgb(h, 0.0, 1.0,   &col1[3][0], &col1[3][1], &col1[3][2]);
 			break;
 		case UI_GRAD_HV:
 			hsv_to_rgb(0.0, s, 0.0,   &col1[0][0], &col1[0][1], &col1[0][2]);
@@ -2449,10 +2446,10 @@ void ui_draw_gradient(const rcti *rect, const float hsv[3], const int type, cons
 		/* new color */
 		switch (type) {
 			case UI_GRAD_SV:
-				hsv_to_rgb(h, 0.0, dx,   &col1[0][0], &col1[0][1], &col1[0][2]);
-				hsv_to_rgb(h, 0.333, dx, &col1[1][0], &col1[1][1], &col1[1][2]);
-				hsv_to_rgb(h, 0.666, dx, &col1[2][0], &col1[2][1], &col1[2][2]);
-				hsv_to_rgb(h, 1.0, dx,   &col1[3][0], &col1[3][1], &col1[3][2]);
+				hsv_to_rgb(h, dx, 0.0,   &col1[0][0], &col1[0][1], &col1[0][2]);
+				hsv_to_rgb(h, dx, 0.333, &col1[1][0], &col1[1][1], &col1[1][2]);
+				hsv_to_rgb(h, dx, 0.666, &col1[2][0], &col1[2][1], &col1[2][2]);
+				hsv_to_rgb(h, dx, 1.0,   &col1[3][0], &col1[3][1], &col1[3][2]);
 				break;
 			case UI_GRAD_HV:
 				hsv_to_rgb(dx_next, s, 0.0,   &col1[0][0], &col1[0][1], &col1[0][2]);
@@ -2535,7 +2532,7 @@ void ui_hsvcube_pos_from_vals(uiBut *but, const rcti *rect, float *hsv, float *x
 
 	switch ((int)but->a1) {
 		case UI_GRAD_SV:
-			x = hsv[2]; y = hsv[1]; break;
+			x = hsv[1]; y = hsv[2]; break;
 		case UI_GRAD_HV:
 			x = hsv[0]; y = hsv[2]; break;
 		case UI_GRAD_HS:
@@ -3075,7 +3072,7 @@ static void widget_swatch(uiBut *but, uiWidgetColors *wcol, rcti *rect, int stat
 		float width = rect->xmax - rect->xmin;
 		float height = rect->ymax - rect->ymin;
 		/* find color luminance and change it slightly */
-		float bw = IMB_colormanagement_get_luminance(col);
+		float bw = rgb_to_grayscale(col);
 
 		bw += (bw < 0.5f) ? 0.5f : -0.5f;
 		
