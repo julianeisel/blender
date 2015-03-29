@@ -1588,22 +1588,47 @@ void BKE_ffmpeg_image_type_verify(RenderData *rd, ImageFormatData *imf)
 {
 	int audio = 0;
 
-	if (imf->imtype == R_IMF_IMTYPE_FFMPEG) {
-		if (rd->ffcodecdata.type <= 0 ||
-		    rd->ffcodecdata.codec <= 0 ||
-		    rd->ffcodecdata.audio_codec <= 0 ||
-		    rd->ffcodecdata.video_bitrate <= 1)
-		{
-			rd->ffcodecdata.codec = AV_CODEC_ID_MPEG2VIDEO;
+	if (imf->imtype == R_IMF_IMTYPE_MPEG2) {
+//		if (rd->ffcodecdata.type <= 0 ||
+//		    rd->ffcodecdata.codec <= 0 ||
+//		    rd->ffcodecdata.audio_codec <= 0 ||
+//		    rd->ffcodecdata.video_bitrate <= 1)
+//		{
+//			rd->ffcodecdata.codec = AV_CODEC_ID_MPEG2VIDEO;
 
-			BKE_ffmpeg_preset_set(rd, FFMPEG_PRESET_DVD);
-		}
-		if (rd->ffcodecdata.type == FFMPEG_OGG) {
-			rd->ffcodecdata.type = FFMPEG_MPEG2;
+//			BKE_ffmpeg_preset_set(rd, FFMPEG_PRESET_DVD);
+//		}
+//		if (rd->ffcodecdata.type == FFMPEG_OGG) {
+//			rd->ffcodecdata.type = FFMPEG_MPEG2;
+//		}
+		if (rd->ffcodecdata.codec != AV_CODEC_ID_H264) {
+			BKE_ffmpeg_preset_set(rd, FFMPEG_PRESET_H264);
+			audio = 1;
 		}
 
 		audio = 1;
 	}
+	if (imf->imtype == R_IMF_IMTYPE_MPEG4) {
+//		if (rd->ffcodecdata.type <= 0 ||
+//			rd->ffcodecdata.codec <= 0 ||
+//			rd->ffcodecdata.audio_codec <= 0 ||
+//			rd->ffcodecdata.video_bitrate <= 1)
+//		{
+//			rd->ffcodecdata.codec = AV_CODEC_ID_MPEG4;
+
+//			BKE_ffmpeg_preset_set(rd, FFMPEG_PRESET_DVD);
+//		}
+//		if (rd->ffcodecdata.type == FFMPEG_OGG) {
+//			rd->ffcodecdata.type = FFMPEG_MPEG4;
+//		}
+		if (rd->ffcodecdata.codec != AV_CODEC_ID_H264) {
+			BKE_ffmpeg_preset_set(rd, FFMPEG_PRESET_H264);
+			audio = 1;
+		}
+
+		audio = 1;
+	}
+#if 0
 	else if (imf->imtype == R_IMF_IMTYPE_H264) {
 		if (rd->ffcodecdata.codec != AV_CODEC_ID_H264) {
 			BKE_ffmpeg_preset_set(rd, FFMPEG_PRESET_H264);
@@ -1616,6 +1641,7 @@ void BKE_ffmpeg_image_type_verify(RenderData *rd, ImageFormatData *imf)
 			audio = 1;
 		}
 	}
+#endif
 	else if (imf->imtype == R_IMF_IMTYPE_THEORA) {
 		if (rd->ffcodecdata.codec != AV_CODEC_ID_THEORA) {
 			BKE_ffmpeg_preset_set(rd, FFMPEG_PRESET_THEORA);

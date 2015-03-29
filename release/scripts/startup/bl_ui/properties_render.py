@@ -445,7 +445,7 @@ class RENDER_PT_encoding(RenderButtonsPanel, Panel):
     @classmethod
     def poll(cls, context):
         rd = context.scene.render
-        return rd.image_settings.file_format in {'FFMPEG', 'XVID', 'H264', 'THEORA'}
+        return rd.image_settings.file_format in {'MPEG2', 'MPEG4', 'THEORA'}
 
     def draw(self, context):
         layout = self.layout
@@ -453,34 +453,16 @@ class RENDER_PT_encoding(RenderButtonsPanel, Panel):
         rd = context.scene.render
         ffmpeg = rd.ffmpeg
 
-        layout.menu("RENDER_MT_ffmpeg_presets", text="Presets")
+        layout.prop(ffmpeg, "codec")
+
+        split = layout.split(percentage=0.5)
+        split.prop(ffmpeg, "video_bitrate")
+        split.prop(ffmpeg, "quality")
+
+        split = layout.split(percentage=0.5)
+        split.prop(ffmpeg, "gopsize")
 
         split = layout.split()
-        split.prop(rd.ffmpeg, "format")
-        if ffmpeg.format in {'AVI', 'QUICKTIME', 'MKV', 'OGG'}:
-            split.prop(ffmpeg, "codec")
-        elif rd.ffmpeg.format == 'H264':
-            split.prop(ffmpeg, "use_lossless_output")
-        else:
-            split.label()
-
-        row = layout.row()
-        row.prop(ffmpeg, "video_bitrate")
-        row.prop(ffmpeg, "gopsize")
-
-        split = layout.split()
-
-        col = split.column()
-        col.label(text="Rate:")
-        col.prop(ffmpeg, "minrate", text="Minimum")
-        col.prop(ffmpeg, "maxrate", text="Maximum")
-        col.prop(ffmpeg, "buffersize", text="Buffer")
-
-        col = split.column()
-        col.prop(ffmpeg, "use_autosplit")
-        col.label(text="Mux:")
-        col.prop(ffmpeg, "muxrate", text="Rate")
-        col.prop(ffmpeg, "packetsize", text="Packet Size")
 
         layout.separator()
 

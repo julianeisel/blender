@@ -271,19 +271,21 @@ EnumPropertyItem image_type_items[] = {
 	{0, "", 0, N_("Movie"), NULL},
 	{R_IMF_IMTYPE_AVIJPEG, "AVI_JPEG", ICON_FILE_MOVIE, "AVI JPEG", "Output video in AVI JPEG format"},
 	{R_IMF_IMTYPE_AVIRAW, "AVI_RAW", ICON_FILE_MOVIE, "AVI Raw", "Output video in AVI Raw format"},
-#ifdef WITH_FRAMESERVER
-	{R_IMF_IMTYPE_FRAMESERVER, "FRAMESERVER", ICON_FILE_SCRIPT, "Frame Server", "Output image to a frameserver"},
-#endif
 #ifdef WITH_FFMPEG
-	{R_IMF_IMTYPE_H264, "H264", ICON_FILE_MOVIE, "H.264", "Output video in H.264 format"},
-	{R_IMF_IMTYPE_FFMPEG, "FFMPEG", ICON_FILE_MOVIE, "MPEG", "Output video in MPEG format"},
+//	{R_IMF_IMTYPE_H264, "H264", ICON_FILE_MOVIE, "H.264", "Output video in H.264 format"},
+//	{R_IMF_IMTYPE_FFMPEG, "FFMPEG", ICON_FILE_MOVIE, "MPEG", "Output video in MPEG format"},
+	{R_IMF_IMTYPE_MPEG2, "MPEG2", ICON_FILE_MOVIE, "MPEG2", "Output video in MPEG2 format"},
+	{R_IMF_IMTYPE_MPEG4, "MPEG4", ICON_FILE_MOVIE, "MPEG4", "Output video in MPEG4 format"},
 	{R_IMF_IMTYPE_THEORA, "THEORA", ICON_FILE_MOVIE, "Ogg Theora", "Output video in Ogg format"},
 #endif
 #ifdef WITH_QUICKTIME
 	{R_IMF_IMTYPE_QUICKTIME, "QUICKTIME", ICON_FILE_MOVIE, "QuickTime", "Output video in Quicktime format"},
 #endif
-#ifdef WITH_FFMPEG
-	{R_IMF_IMTYPE_XVID, "XVID", ICON_FILE_MOVIE, "Xvid", "Output video in Xvid format"},
+//#ifdef WITH_FFMPEG
+//	{R_IMF_IMTYPE_XVID, "XVID", ICON_FILE_MOVIE, "Xvid", "Output video in Xvid format"},
+//#endif
+#ifdef WITH_FRAMESERVER
+	{R_IMF_IMTYPE_FRAMESERVER, "FRAMESERVER", ICON_FILE_SCRIPT, "Frame Server", "Output image to a frameserver"},
 #endif
 	{0, NULL, 0, NULL, NULL}
 };
@@ -781,7 +783,7 @@ static void rna_ImageFormatSettings_file_format_set(PointerRNA *ptr, int value)
 
 	/* ensure depth and color settings match */
 	if ( ((imf->planes == R_IMF_PLANES_BW) &&   !(chan_flag & IMA_CHAN_FLAG_BW)) ||
-	     ((imf->planes == R_IMF_PLANES_RGBA) && !(chan_flag & IMA_CHAN_FLAG_ALPHA)))
+		 ((imf->planes == R_IMF_PLANES_RGBA) && !(chan_flag & IMA_CHAN_FLAG_ALPHA)))
 	{
 		imf->planes = R_IMF_PLANES_RGB;
 	}
@@ -814,10 +816,10 @@ static void rna_ImageFormatSettings_file_format_set(PointerRNA *ptr, int value)
 		Scene *scene = ptr->id.data;
 		RenderData *rd = &scene->r;
 #ifdef WITH_FFMPEG
-		BKE_ffmpeg_image_type_verify(rd, imf);
+//		BKE_ffmpeg_image_type_verify(rd, imf);
 #endif
 #ifdef WITH_QUICKTIME
-		quicktime_verify_image_type(rd, imf);
+//		quicktime_verify_image_type(rd, imf);
 #endif
 		(void)rd;
 	}
@@ -4279,6 +4281,13 @@ static void rna_def_scene_ffmpeg_settings(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem ffmpeg_quality_items[] = {
+		{R_IMF_QUALITY_HIGH, "HIGH", 0, "High", "Use high quality settings for encoding"},
+		{R_IMF_QUALITY_MEDIUM, "MEDIUM", 0, "Medium", "Use medium quality settings for encoding"},
+		{R_IMF_QUALITY_LOW, "LOW", 0, "Low", "Use low quality settings for encoding"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	static EnumPropertyItem ffmpeg_audio_codec_items[] = {
 		{AV_CODEC_ID_NONE, "NONE", 0, "None", ""},
 		{AV_CODEC_ID_MP2, "MP2", 0, "MP2", ""},
@@ -4350,6 +4359,12 @@ static void rna_def_scene_ffmpeg_settings(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 	RNA_def_property_range(prop, 0, 100);
 	RNA_def_property_ui_text(prop, "GOP Size", "Distance between key frames");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "quality", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, ffmpeg_quality_items);
+	RNA_def_property_enum_funcs(prop, NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Quality", "Set the encoding quality");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "buffersize", PROP_INT, PROP_NONE);

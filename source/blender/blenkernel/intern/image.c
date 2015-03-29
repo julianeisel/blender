@@ -1101,10 +1101,12 @@ bool BKE_imtype_is_movie(const char imtype)
 		case R_IMF_IMTYPE_AVIRAW:
 		case R_IMF_IMTYPE_AVIJPEG:
 		case R_IMF_IMTYPE_QUICKTIME:
-		case R_IMF_IMTYPE_FFMPEG:
-		case R_IMF_IMTYPE_H264:
+//		case R_IMF_IMTYPE_FFMPEG:
+//		case R_IMF_IMTYPE_H264:
+		case R_IMF_IMTYPE_MPEG2:
+		case R_IMF_IMTYPE_MPEG4:
 		case R_IMF_IMTYPE_THEORA:
-		case R_IMF_IMTYPE_XVID:
+//		case R_IMF_IMTYPE_XVID:
 		case R_IMF_IMTYPE_FRAMESERVER:
 			return true;
 	}
@@ -1247,7 +1249,8 @@ char BKE_imtype_from_arg(const char *imtype_arg)
 	else if (STREQ(imtype_arg, "EXR")) return R_IMF_IMTYPE_OPENEXR;
 	else if (STREQ(imtype_arg, "MULTILAYER")) return R_IMF_IMTYPE_MULTILAYER;
 #endif
-	else if (STREQ(imtype_arg, "MPEG")) return R_IMF_IMTYPE_FFMPEG;
+	else if (STREQ(imtype_arg, "MPEG2")) return R_IMF_IMTYPE_MPEG2;
+	else if (STREQ(imtype_arg, "MPEG4")) return R_IMF_IMTYPE_MPEG4;
 	else if (STREQ(imtype_arg, "FRAMESERVER")) return R_IMF_IMTYPE_FRAMESERVER;
 #ifdef WITH_CINEON
 	else if (STREQ(imtype_arg, "CINEON")) return R_IMF_IMTYPE_CINEON;
@@ -1279,7 +1282,7 @@ static bool image_path_ensure_ext(char *string, const char imtype, const ImageFo
 			extension = extension_test;
 	}
 #endif
-	else if (ELEM(imtype, R_IMF_IMTYPE_PNG, R_IMF_IMTYPE_FFMPEG, R_IMF_IMTYPE_H264, R_IMF_IMTYPE_THEORA, R_IMF_IMTYPE_XVID)) {
+	else if (ELEM(imtype, R_IMF_IMTYPE_PNG, R_IMF_IMTYPE_MPEG2, R_IMF_IMTYPE_MPEG4, R_IMF_IMTYPE_THEORA)) {
 		if (!BLI_testextensie(string, extension_test = ".png"))
 			extension = extension_test;
 	}
@@ -1924,7 +1927,7 @@ int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
 		ibuf->ftype = RADHDR;
 	}
 #endif
-	else if (ELEM(imtype, R_IMF_IMTYPE_PNG, R_IMF_IMTYPE_FFMPEG, R_IMF_IMTYPE_H264, R_IMF_IMTYPE_THEORA, R_IMF_IMTYPE_XVID)) {
+	else if (ELEM(imtype, R_IMF_IMTYPE_PNG, R_IMF_IMTYPE_MPEG2, R_IMF_IMTYPE_MPEG4, R_IMF_IMTYPE_THEORA)) {
 		ibuf->ftype = PNG;
 
 		if (imtype == R_IMF_IMTYPE_PNG) {

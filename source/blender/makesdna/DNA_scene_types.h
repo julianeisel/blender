@@ -151,6 +151,8 @@ typedef struct FFMpegCodecData {
 	int rc_buffer_size;
 	int mux_packet_size;
 	int mux_rate;
+	char quality;        /* high/low/medium quality presets */
+	char pad[7];
 	IDProperty *properties;
 } FFMpegCodecData;
 
@@ -312,15 +314,17 @@ typedef struct ImageFormatData {
 #define R_IMF_IMTYPE_RADHDR         21
 #define R_IMF_IMTYPE_TIFF           22
 #define R_IMF_IMTYPE_OPENEXR        23
-#define R_IMF_IMTYPE_FFMPEG         24
+//#define R_IMF_IMTYPE_FFMPEG         24
 #define R_IMF_IMTYPE_FRAMESERVER    25
 #define R_IMF_IMTYPE_CINEON         26
 #define R_IMF_IMTYPE_DPX            27
 #define R_IMF_IMTYPE_MULTILAYER     28
 #define R_IMF_IMTYPE_DDS            29
 #define R_IMF_IMTYPE_JP2            30
-#define R_IMF_IMTYPE_H264           31
-#define R_IMF_IMTYPE_XVID           32
+#define R_IMF_IMTYPE_MPEG2          31
+#define R_IMF_IMTYPE_MPEG4          32
+//#define R_IMF_IMTYPE_H264           31
+//#define R_IMF_IMTYPE_XVID           32
 #define R_IMF_IMTYPE_THEORA         33
 #define R_IMF_IMTYPE_PSD            34
 
@@ -329,6 +333,11 @@ typedef struct ImageFormatData {
 /* ImageFormatData.flag */
 #define R_IMF_FLAG_ZBUF         (1<<0)   /* was R_OPENEXR_ZBUF */
 #define R_IMF_FLAG_PREVIEW_JPG  (1<<1)   /* was R_PREVIEW_JPG */
+
+/* ImageFormatData.quality_level */
+#define R_IMF_QUALITY_HIGH   0
+#define R_IMF_QUALITY_MEDIUM 1
+#define R_IMF_QUALITY_LOW    2
 
 /* return values from BKE_imtype_valid_depths, note this is depts per channel */
 #define R_IMF_CHAN_DEPTH_1  (1<<0) /* 1bits  (unused) */
