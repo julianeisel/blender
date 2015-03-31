@@ -45,6 +45,8 @@
 #include "BKE_paint.h"
 #include "BKE_scene.h"
 
+#include "GPU_extensions.h"
+
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
@@ -538,13 +540,13 @@ static void rna_Scene_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 
 static void rna_Scene_fps_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
-	sound_update_fps(scene);
+	BKE_sound_update_fps(scene);
 	BKE_sequencer_update_sound_bounds_all(scene);
 }
 
 static void rna_Scene_listener_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
-	sound_update_scene_listener(scene);
+	BKE_sound_update_scene_listener(scene);
 }
 
 static void rna_Scene_volume_set(PointerRNA *ptr, float value)
@@ -553,7 +555,7 @@ static void rna_Scene_volume_set(PointerRNA *ptr, float value)
 
 	scene->audio.volume = value;
 	if (scene->sound_scene)
-		sound_set_scene_volume(scene, value);
+		BKE_sound_set_scene_volume(scene, value);
 }
 
 static void rna_Scene_framelen_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
@@ -654,7 +656,7 @@ static void rna_Scene_preview_range_end_frame_set(PointerRNA *ptr, int value)
 static void rna_Scene_frame_update(Main *bmain, Scene *UNUSED(current_scene), PointerRNA *ptr)
 {
 	Scene *scene = (Scene *)ptr->id.data;
-	sound_seek_scene(bmain, scene);
+	BKE_sound_seek_scene(bmain, scene);
 }
 
 static PointerRNA rna_Scene_active_keying_set_get(PointerRNA *ptr)
@@ -1422,7 +1424,7 @@ static void rna_Scene_use_audio_set(PointerRNA *ptr, int value)
 	else
 		scene->audio.flag &= ~AUDIO_MUTE;
 
-	sound_mute_scene(scene, value);
+	BKE_sound_mute_scene(scene, value);
 }
 
 static int rna_Scene_sync_mode_get(PointerRNA *ptr)
@@ -1757,6 +1759,11 @@ static void rna_GPUDOFSettings_blades_set(PointerRNA *ptr, const int value)
 		dofsettings->num_blades = value;
 }
 
+
+static int rna_gpu_is_hq_supported_get(PointerRNA *UNUSED(ptr))
+{
+	return GPU_instanced_drawing_support() && GPU_geometry_shader_support();
+}
 
 #else
 
@@ -3945,6 +3952,12 @@ static void rna_def_gpu_dof_fx(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "use_high_quality", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "high_quality", 1);
+	RNA_def_property_ui_text(prop, "High Quality", "Use high quality depth of field");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "is_hq_supported", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_funcs(prop, "rna_gpu_is_hq_supported_get", NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "High Quality", "Use high quality depth of field");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 }

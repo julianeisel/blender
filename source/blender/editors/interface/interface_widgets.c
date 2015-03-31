@@ -919,7 +919,7 @@ static void widget_draw_icon(const uiBut *but, BIFIconID icon, float alpha, cons
 			float ofs = 1.0f / aspect;
 			if (but->drawflag & UI_BUT_ICON_LEFT) {
 				if (but->block->flag & UI_BLOCK_LOOP) {
-					if (ELEM(but->type, UI_BTYPE_SEARCH_MENU, UI_BTYPE_SEARCH_MENU_UNLINK))
+					if (but->type == UI_BTYPE_SEARCH_MENU)
 						xs = rect->xmin + 4.0f * ofs;
 					else
 						xs = rect->xmin + ofs;
@@ -933,7 +933,6 @@ static void widget_draw_icon(const uiBut *but, BIFIconID icon, float alpha, cons
 				xs = (rect->xmin + rect->xmax - height) / 2.0f;
 				ys = (rect->ymin + rect->ymax - height) / 2.0f;
 			}
-
 			/* force positions to integers, for zoom levels near 1. draws icons crisp. */
 			if (aspect > 0.95f && aspect < 1.05f) {
 				xs = (int)(xs + 0.1f);
@@ -948,6 +947,14 @@ static void widget_draw_icon(const uiBut *but, BIFIconID icon, float alpha, cons
 			else
 				UI_icon_draw_aspect(xs, ys, icon, aspect, alpha);
 		}
+		
+		/* to indicate draggable */
+		if (but->dragpoin && (but->flag & UI_ACTIVE)) {
+			float rgb[3] = {1.25f, 1.25f, 1.25f};
+			UI_icon_draw_aspect_color(xs, ys, icon, aspect, rgb);
+		}
+		else
+			UI_icon_draw_aspect(xs, ys, icon, aspect, alpha);
 	}
 
 	if (show_menu_icon) {
@@ -1365,7 +1372,7 @@ static void widget_draw_text(uiFontStyle *fstyle, uiWidgetColors *wcol, uiBut *b
 
 #ifdef WITH_INPUT_IME
 			/* FIXME, IME is modifying 'const char *drawstr! */
-			ime_data = ui_but_get_ime_data(but);
+			ime_data = ui_but_ime_data_get(but);
 
 			if (ime_data && ime_data->composite_len) {
 				/* insert composite string into cursor pos */
@@ -1589,7 +1596,7 @@ static void widget_draw_text_icon(uiFontStyle *fstyle, uiWidgetColors *wcol, uiB
 	}
 
 	/* unlink icon for this button type */
-	if ((but->type == UI_BTYPE_SEARCH_MENU_UNLINK) && ui_but_is_search_unlink_visible(but)) {
+	if ((but->type == UI_BTYPE_SEARCH_MENU) && ui_but_is_search_unlink_visible(but)) {
 		rcti temp = *rect;
 
 		temp.xmin = temp.xmax - (BLI_rcti_size_y(rect) * 1.08f);
@@ -3698,8 +3705,7 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 			case UI_BTYPE_TEXT:
 				wt = widget_type(UI_WTYPE_NAME);
 				break;
-			
-			case UI_BTYPE_SEARCH_MENU_UNLINK:
+
 			case UI_BTYPE_SEARCH_MENU:
 				wt = widget_type(UI_WTYPE_NAME);
 				if (but->block->flag & UI_BLOCK_LOOP)
