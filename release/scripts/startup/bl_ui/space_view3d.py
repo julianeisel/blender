@@ -2890,6 +2890,7 @@ class VIEW3D_PT_view3d_name(Panel):
     def draw(self, context):
         layout = self.layout
 
+        view = context.space_data
         ob = context.active_object
         row = layout.row()
         row.label(text="", icon='OBJECT_DATA')
@@ -3022,6 +3023,9 @@ class VIEW3D_PT_view3d_shading(Panel):
 
         if not scene.render.use_shading_nodes:
             col.prop(gs, "material_mode", text="")
+
+        if view.viewport_shade in {'BOUNDBOX', 'WIREFRAME', 'SOLID'}:
+            col.prop(view, "use_wire_color")
 
         if view.viewport_shade == 'SOLID':
             col.prop(view, "show_textured_solid")
