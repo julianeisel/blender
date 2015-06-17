@@ -389,7 +389,7 @@ typedef struct bTheme {
 	
 	/* 20 sets of bone colors for this theme */
 	ThemeWireColor tarm[20];
-	/*ThemeWireColor tobj[20];*/
+	ThemeWireColor tobj[20];
 	
 	int active_theme_area, pad;
 } bTheme;

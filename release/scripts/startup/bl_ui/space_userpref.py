@@ -841,6 +841,45 @@ class USERPREF_PT_theme(Panel):
                 colsub = padding.column()
                 colsub = padding.column()
                 colsub.row().prop(ui, "show_colored_constraints")
+        elif theme.theme_area == 'COLOR_SETS':
+            box = split.box()
+
+            row = box.row()
+            subsplit = row.split(percentage=0.38)
+
+            subsplit.label(text=iface_("Color ID:"))
+            subsplit.label(text=iface_("Normal:"))
+            subsplit.label(text=iface_("Selected:"))
+            subsplit.label(text=iface_("Active:"))
+            row.separator()
+
+            subsplit = row.split(percentage=0.38)
+
+            subsplit.label(text=iface_("Color ID:"))
+            subsplit.label(text=iface_("Normal:"))
+            subsplit.label(text=iface_("Selected:"))
+            subsplit.label(text=iface_("Active:"))
+            row.separator()
+
+            split = box.split()
+            col = split.column()
+
+            for i, ui in enumerate(theme.color_sets):
+                row = col.row(align=True)
+                subsplit = row.split(percentage=0.38, align=True)
+
+                subsplit.label(text=iface_("Color Set %d:") % (i + 1), translate=False)  # i starts from 0
+                subsplit.prop(ui, "normal", text="")
+                subsplit.prop(ui, "select", text="")
+                subsplit.prop(ui, "active", text="")
+
+                row.separator()
+
+                if i == 9:
+                    col = split.column()
+
+            box.separator()
+
         elif theme.theme_area == 'STYLE':
             col = split.column()
 
