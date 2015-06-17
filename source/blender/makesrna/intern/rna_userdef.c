@@ -2826,6 +2826,34 @@ static void rna_def_userdef_theme_colorset(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_userdef_update");
 }
 
+static void rna_def_userdef_theme_colorset_new(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "ThemeColorSet", NULL);
+	RNA_def_struct_sdna(srna, "ThemeWireColor");
+	RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
+	RNA_def_struct_ui_text(srna, "Theme Bone Color Set", "Theme settings for bone color sets");
+
+	prop = RNA_def_property(srna, "normal", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "solid");
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_ui_text(prop, "Normal", "Color used for the surface of bones");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop = RNA_def_property(srna, "select", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "select");
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_ui_text(prop, "Select", "Color used for selected bones");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop = RNA_def_property(srna, "active", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_ui_text(prop, "Active", "Color used for active bones");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+}
+
 static void rna_def_userdef_theme_space_clip(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -2921,6 +2949,7 @@ static void rna_def_userdef_themes(BlenderRNA *brna)
 		{0, "USER_INTERFACE", ICON_UI, "User Interface", ""},
 		{19, "STYLE", ICON_FONTPREVIEW, "Text Style", ""},
 		{18, "BONE_COLOR_SETS", ICON_COLOR, "Bone Color Sets", ""},
+		{21, "COLOR_SETS", ICON_COLOR, "Color Sets", ""},
 		{1, "VIEW_3D", ICON_VIEW3D, "3D View", ""},
 		{2, "TIMELINE", ICON_TIME, "Timeline", ""},
 		{3, "GRAPH_EDITOR", ICON_IPO, "Graph Editor", ""},
@@ -3071,6 +3100,12 @@ static void rna_def_userdef_themes(BlenderRNA *brna)
 	RNA_def_property_pointer_sdna(prop, NULL, "tclip");
 	RNA_def_property_struct_type(prop, "ThemeClipEditor");
 	RNA_def_property_ui_text(prop, "Clip Editor", "");
+
+	prop = RNA_def_property(srna, "color_sets", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_collection_sdna(prop, NULL, "tobj", "");
+	RNA_def_property_struct_type(prop, "ThemeColorSet");
+	RNA_def_property_ui_text(prop, "Color Sets", "");
 }
 
 static void rna_def_userdef_addon(BlenderRNA *brna)
@@ -3162,6 +3197,7 @@ static void rna_def_userdef_dothemes(BlenderRNA *brna)
 	rna_def_userdef_theme_space_logic(brna);
 	rna_def_userdef_theme_space_clip(brna);
 	rna_def_userdef_theme_colorset(brna);
+	rna_def_userdef_theme_colorset_new(brna);
 	rna_def_userdef_themes(brna);
 }
 

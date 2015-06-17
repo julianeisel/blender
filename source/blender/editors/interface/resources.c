@@ -2627,6 +2627,16 @@ void init_userdef_do_versions(void)
 		}
 	}
 
+	if (U.versionfile < 275 || (U.versionfile == 275 && U.subversionfile < 2)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			int i;
+			for (i = 0; i < 20; i++) {
+				btheme->tobj[i] = btheme->tarm[i];
+			}
+		}
+	}
+
 	if (U.pixelsize == 0.0f)
 		U.pixelsize = 1.0f;
 	
