@@ -2912,11 +2912,11 @@ static void ntree_update_link_pointers(bNodeTree *ntree)
 	bNode *node;
 	bNodeSocket *sock;
 	bNodeLink *link;
-	
+
 	/* first clear data */
 	for (node = ntree->nodes.first; node; node = node->next) {
 		for (sock = node->inputs.first; sock; sock = sock->next) {
-			sock->link = NULL;
+//			sock->link = NULL;
 		}
 	}
 
@@ -2979,6 +2979,7 @@ void ntreeUpdateTree(Main *bmain, bNodeTree *ntree)
 			
 			nodeUpdateInternalLinks(ntree, node);
 		}
+		node->flag &= ~NODE_HAS_OFFSET;
 	}
 	
 	/* generic tree update callback */

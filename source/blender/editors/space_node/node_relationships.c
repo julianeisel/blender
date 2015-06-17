@@ -1371,6 +1371,100 @@ static bNodeSocket *socket_best_match(ListBase *sockets)
 	return NULL;
 }
 
+#define NODE_MIN_MARGIN (UI_UNIT_X * 4.0f)
+
+/**
+ * \note Recursive function
+ */
+static void node_offset_output_chain(const bNodeTree *ntree, const bNode *node, const float offset_x)
+{
+	bNodeLink *link;
+
+	for (link = ntree->links.first; link; link = link->next) {
+		/* is the link part of the chain (meaning fromenode == node)? */
+		if (link->fromnode && link->tonode && (link->fromnode == node)) {
+			if (!(link->tonode->flag & NODE_HAS_OFFSET)) {
+				link->tonode->locx += offset_x;
+				link->tonode->flag |= NODE_HAS_OFFSET;
+			}
+			node_offset_output_chain(ntree, link->tonode, offset_x);
+		}
+	}
+}
+
+static void node_link_insert_align_nodetree(
+        const bNodeTree *ntree,
+        bNode *insert_node,
+        const bNode *prev, bNode *next)
+{
+	bNode *node;
+	rctf totr_insert;
+	const float width = NODE_WIDTH(insert_node);
+	const bool needs_alignment = !((next->totr.xmin - prev->totr.xmax) > (width + (NODE_MIN_MARGIN * 2.0f)));
+
+	float margin = width;
+	float locx, locy;
+	float old_x;
+
+
+	node_to_view(insert_node, 0.0f, 0.0f, &locx, &locy);
+	BLI_rctf_init(&totr_insert, locx, locx + width, locy, locy + NODE_HEIGHT(insert_node));
+
+	/* distance between insert_node and prev is smaller than min margin */
+	if (totr_insert.xmin - prev->totr.xmax < NODE_MIN_MARGIN) {
+		const float width_prev = NODE_WIDTH(prev);
+
+		old_x = totr_insert.xmin;
+
+		/* set insert_node xmin to prev xmax + min margin */
+		insert_node->locx = prev->locx + width_prev + NODE_MIN_MARGIN;
+		totr_insert.xmin = prev->totr.xmin + width_prev + NODE_MIN_MARGIN;
+		totr_insert.xmax = totr_insert.xmin + width;
+		insert_node->flag |= NODE_HAS_OFFSET;
+
+		margin += totr_insert.xmin - old_x;
+	}
+
+	if (next->totr.xmin - totr_insert.xmax < NODE_MIN_MARGIN) {
+		/* enough room is available, but we want to ensure the min margin at the right */
+		if (!needs_alignment) {
+			/* offset inserted node so that min margin is kept at the right */
+			insert_node->locx = next->locx - NODE_MIN_MARGIN - width;
+			BLI_assert(next->totr.xmin - totr_insert.xmax > NODE_MIN_MARGIN);
+
+			return;
+		}
+
+		old_x = next->totr.xmin;
+
+		next->locx = insert_node->locx + width + NODE_MIN_MARGIN;
+		next->totr.xmin = totr_insert.xmax + NODE_MIN_MARGIN;
+		next->flag |= NODE_HAS_OFFSET;
+
+		margin = next->totr.xmin - old_x;
+	}
+
+	/* enough room is available already and nothing more needs to be aligned */
+	if (!needs_alignment)
+		return;
+
+	for (node = ntree->nodes.first; node; node = node->next) {
+		if (ELEM(node, insert_node, next) || node->parent)
+			continue;
+
+		if (node->totr.xmin > totr_insert.xmin) {
+			if ((node->totr.ymax < totr_insert.ymax) ||
+			    (BLI_rctf_isect_y(&totr_insert, node->totr.xmin)))
+			{
+				node->locx += margin;
+				node->flag |= NODE_HAS_OFFSET;
+			}
+		}
+	}
+
+	node_offset_output_chain(ntree, insert_node, margin);
+}
+
 /* assumes link with NODE_LINKFLAG_HILITE set */
 void ED_node_link_insert(ScrArea *sa)
 {
@@ -1401,6 +1495,8 @@ void ED_node_link_insert(ScrArea *sa)
 			
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);
 			
+			node_link_insert_align_nodetree(snode->edittree, select, link->fromnode, node);
+
 			ntreeUpdateTree(G.main, snode->edittree);   /* needed for pointers */
 			snode_update(snode, select);
 			ED_node_tag_update_id(snode->id);
