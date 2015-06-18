@@ -3058,6 +3058,40 @@ class VIEW3D_PT_view3d_shading(Panel):
                 subcol.prop(ssao_settings, "samples")
                 subcol.prop(ssao_settings, "color")
 
+class VIEW3D_PT_view3d_wireframe_colors(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_label = "Wireframe Colors"
+
+    @classmethod
+    def poll(cls, context):
+        view = context.space_data
+        return view.viewport_shade in {'BOUNDBOX', 'WIREFRAME', 'SOLID'};
+
+    def draw(self, context):
+        layout = self.layout
+
+        ob = context.active_object
+        layout.prop(ob, "wireframe_color_method", text="Method")
+
+        if ob.wireframe_color_method == 'CUSTOM':
+            col_set = ob.custom_color_set
+
+            col = layout.column()
+
+            row = col.row()
+            row.label(text="Normal:")
+            row.prop(ob.custom_color_set, "normal", text="")
+
+            row = col.row()
+            row.label(text="Selected:")
+            row.prop(ob.custom_color_set, "select", text="")
+
+            row = col.row()
+            row.label(text="Active:")
+            row.prop(ob.custom_color_set, "active", text="")
+        elif ob.wireframe_color_method == 'COLORID':
+            layout.prop(ob, "color_set")
 
 class VIEW3D_PT_view3d_motion_tracking(Panel):
     bl_space_type = 'VIEW_3D'

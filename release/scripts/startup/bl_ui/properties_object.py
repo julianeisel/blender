@@ -253,12 +253,10 @@ class OBJECT_PT_display(ObjectButtonsPanel, Panel):
         col.prop(obj, "draw_type", text="")
 
         col = split.column()
-        if 1:
+        if is_geometry or is_empty_image:
             # Only useful with object having faces/materials...
             col.label(text="Object Color:")
-            row = col.row(align=True)
-            row.prop(obj, "color", text="")
-            row.prop(obj, "show_wire_color", text="", toggle=True, icon='WIRE')
+            col.prop(obj, "color", text="")
 
 
 class OBJECT_PT_duplication(ObjectButtonsPanel, Panel):

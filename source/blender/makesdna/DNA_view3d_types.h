@@ -376,9 +376,6 @@ enum {
 	(((v3d)->drawtype <= OB_SOLID) && \
 	 (((v3d)->flag2 & V3D_WIRE_COLOR_NOCUSTOM) == 0))
 
-#define V3D_IS_WIRECOLOR_OBJECT(scene, v3d, ob) \
-	V3D_IS_WIRECOLOR(scene, v3d) && ((ob)->dtx & OB_DRAW_WIRECOLOR)
-
 /* BGPic->source */
 /* may want to use 1 for select ?*/
 #define V3D_BGPIC_IMAGE		0

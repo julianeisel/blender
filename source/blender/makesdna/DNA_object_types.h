@@ -229,12 +229,17 @@ typedef struct Object {
 	char boundtype;            /* bounding box use for drawing */
 	char collision_boundtype;  /* bounding box type used for collision */
 
-	short dtx;			/* viewport draw extra settings */
-	char dt;			/* viewport draw type */
+	short dtx;           /* viewport draw extra settings */
+	char dt;             /* viewport draw type */
 	char empty_drawtype;
 	float empty_drawsize;
-	float dupfacesca;	/* dupliface scale */
-	
+	float dupfacesca;    /* dupliface scale */
+
+	/* wireframe colors */
+	char wirecol_method;    /* method used to determine wireframe color */
+	char color_set, pad[6]; /* theme color set for wireframe color */
+	ThemeWireColor custom;  /* custom color set for wireframe color */
+
 	ListBase prop;			/* game logic property list (not to be confused with IDProperties) */
 	ListBase sensors;		/* game logic sensors */
 	ListBase controllers;	/* game logic controllers */
@@ -455,7 +460,6 @@ enum {
 	/* enable transparent draw */
 	OB_DRAWTRANSP     = 1 << 7,
 	OB_DRAW_ALL_EDGES = 1 << 8,  /* only for meshes currently */
-	OB_DRAW_WIRECOLOR = 1 << 9,
 };
 
 /* empty_drawtype: no flags */
@@ -468,6 +472,14 @@ enum {
 	OB_EMPTY_SPHERE  = 6,
 	OB_EMPTY_CONE    = 7,
 	OB_EMPTY_IMAGE   = 8,
+};
+
+/* wire color method */
+enum {
+	OB_COL_METHOD_NONE       = 0,
+	OB_COL_METHOD_ID         = 1,
+	OB_COL_METHOD_COLLECTION = 2,
+	OB_COL_METHOD_CUSTOM     = 3,
 };
 
 /* boundtype */

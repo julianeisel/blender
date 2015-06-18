@@ -2180,6 +2180,17 @@ static void rna_def_object(BlenderRNA *brna)
 		                     "Axis Angle (W+XYZ), defines a rotation around some axis defined by 3D-Vector"},
 		{0, NULL, 0, NULL, NULL}
 	};
+
+	static EnumPropertyItem wirecol_method_items[] = {
+		{OB_COL_METHOD_NONE,       "NONE",       0, "None",           "Use wireframe color as defined in "
+		                                                              "3D View theme settings"},
+		{OB_COL_METHOD_ID,         "COLORID",    0, "Color ID",       "Determine wireframe color by selecting a "
+		                                                              "Color ID from theme settings"},
+		{OB_COL_METHOD_COLLECTION, "COLLECTION", 0, "Collection Set", "Use the color assigned to a Collection Set "
+		                                                              "for wireframe drawing"},
+		{OB_COL_METHOD_CUSTOM,     "CUSTOM",     0, "Custom",         "Use a custom wireframe color"},
+		{0, NULL, 0, NULL, NULL}
+	};
 	
 	static float default_quat[4] = {1, 0, 0, 0};    /* default quaternion values */
 	static float default_axisAngle[4] = {0, 0, 1, 0};   /* default axis-angle rotation values */
@@ -2744,11 +2755,6 @@ static void rna_def_object(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Draw All Edges", "Display all edges for mesh objects");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 
-	prop = RNA_def_property(srna, "show_wire_color", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "dtx", OB_DRAW_WIRECOLOR);
-	RNA_def_property_ui_text(prop, "Draw Wire Color", "Use custom wire color");
-	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
-
 	prop = RNA_def_property(srna, "show_transparent", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "dtx", OB_DRAWTRANSP);
 	RNA_def_property_ui_text(prop, "Draw Transparent",
@@ -2760,7 +2766,29 @@ static void rna_def_object(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "X-Ray",
 	                         "Make the object draw in front of others (unsupported for duplicator drawing)");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
-	
+
+	prop = RNA_def_property(srna, "wireframe_color_method", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "wirecol_method");
+	RNA_def_property_enum_items(prop, wirecol_method_items);
+	RNA_def_property_ui_text(prop, "Wireframe Color Method", "The method used to determine an"
+	                                                         "object's wireframe color");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
+
+	prop = RNA_def_property(srna, "color_set", PROP_INT, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+	RNA_def_property_int_sdna(prop, NULL, "color_set");
+	RNA_def_property_ui_text(prop, "Color Set", "Custom color set from the theme settings used for "
+	                                            "wireframe drawing of the object");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
+
+	prop = RNA_def_property(srna, "custom_color_set", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "ThemeColorSet");
+	/* NOTE: the DNA data is not really a pointer, but this code works :) */
+	RNA_def_property_pointer_sdna(prop, NULL, "custom");
+	RNA_def_property_ui_text(prop, "Custom Color Set", "Custom color set used for wireframe drawing of the object");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
+
 	/* Grease Pencil */
 	prop = RNA_def_property(srna, "grease_pencil", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "gpd");

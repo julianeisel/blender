@@ -841,6 +841,7 @@ class USERPREF_PT_theme(Panel):
                 colsub = padding.column()
                 colsub = padding.column()
                 colsub.row().prop(ui, "show_colored_constraints")
+
         elif theme.theme_area == 'COLOR_SETS':
             box = split.box()
 

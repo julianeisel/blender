@@ -2825,7 +2825,7 @@ static void view3d_draw_objects(
 			if (v3d->lay & base->lay) {
 				/* dupli drawing */
 				if (base->object->transflag & OB_DUPLI)
-					draw_dupli_objects(scene, ar, v3d, base, is_wire_color && (base->object->dtx & OB_DRAW_WIRECOLOR));
+					draw_dupli_objects(scene, ar, v3d, base, is_wire_color); /* XXX */
 
 				draw_object(scene, ar, v3d, base, 0);
 			}
@@ -2842,7 +2842,7 @@ static void view3d_draw_objects(
 
 				/* dupli drawing */
 				if (base->object->transflag & OB_DUPLI) {
-					draw_dupli_objects(scene, ar, v3d, base, is_wire_color && (base->object->dtx & OB_DRAW_WIRECOLOR));
+					draw_dupli_objects(scene, ar, v3d, base, is_wire_color); /* XXX */
 				}
 				if ((base->flag & SELECT) == 0) {
 					if (base->object != scene->obedit)
@@ -3114,11 +3114,6 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 #undef VIEWGRAD_RES_X
 #undef VIEWGRAD_RES_Y
 
-			if (is_wire_color) {
-				float col_mid[3];
-				mid_v3_v3v3(col_mid, col_hor, col_zen);
-				draw_object_bg_wire_color_set(col_mid);
-			}
 		}
 		else {  /* solid sky */
 			float col_hor[3];
@@ -3127,10 +3122,6 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 
 			glClearColor(col_hor[0], col_hor[1], col_hor[2], 1.0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-			if (is_wire_color) {
-				draw_object_bg_wire_color_set(col_hor);
-			}
 		}
 	}
 	else {
@@ -3168,12 +3159,6 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 
 			glMatrixMode(GL_MODELVIEW);
 			glPopMatrix();
-
-			if (is_wire_color) {
-				float col_mid[3];
-				mid_v3_v3v3(col_mid, col_low, col_high);
-				draw_object_bg_wire_color_set(col_mid);
-			}
 		}
 		else {
 			float col[3];
@@ -3182,10 +3167,6 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 
 			glClearColor(col[0], col[1], col[2], 0.0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-			if (is_wire_color) {
-				draw_object_bg_wire_color_set(col);
-			}
 		}
 	}
 }

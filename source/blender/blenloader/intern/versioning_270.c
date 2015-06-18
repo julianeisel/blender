@@ -845,4 +845,15 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			}
 		}
 	}
+	if (!MAIN_VERSION_ATLEAST(main, 275, 2)) {
+		if (!DNA_struct_elem_find(fd->filesdna, "Object", "float", "wirecol[4]")) {
+			Object *ob;
+
+			for (ob = main->object.first; ob; ob = ob->id.next) {
+				rgba_char_args_set(ob->custom.active , 230, 240, 255, 255);
+				rgba_char_args_set(ob->custom.select , 100, 140, 220, 255);
+				rgba_char_args_set(ob->custom.solid  , 50, 70, 150, 255);
+			}
+		}
+	}
 }

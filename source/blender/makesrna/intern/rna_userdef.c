@@ -3095,17 +3095,17 @@ static void rna_def_userdef_themes(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "ThemeBoneColorSet");
 	RNA_def_property_ui_text(prop, "Bone Color Sets", "");
 
-	prop = RNA_def_property(srna, "clip_editor", PROP_POINTER, PROP_NONE);
-	RNA_def_property_flag(prop, PROP_NEVER_NULL);
-	RNA_def_property_pointer_sdna(prop, NULL, "tclip");
-	RNA_def_property_struct_type(prop, "ThemeClipEditor");
-	RNA_def_property_ui_text(prop, "Clip Editor", "");
-
 	prop = RNA_def_property(srna, "color_sets", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
 	RNA_def_property_collection_sdna(prop, NULL, "tobj", "");
 	RNA_def_property_struct_type(prop, "ThemeColorSet");
 	RNA_def_property_ui_text(prop, "Color Sets", "");
+
+	prop = RNA_def_property(srna, "clip_editor", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_pointer_sdna(prop, NULL, "tclip");
+	RNA_def_property_struct_type(prop, "ThemeClipEditor");
+	RNA_def_property_ui_text(prop, "Clip Editor", "");
 }
 
 static void rna_def_userdef_addon(BlenderRNA *brna)

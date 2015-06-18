@@ -1041,6 +1041,10 @@ Object *BKE_object_add_only_object(Main *bmain, int type, const char *name)
 	ob->col_group = 0x01;
 	ob->col_mask = 0xffff;
 
+	rgba_char_args_set(ob->custom.active , 230, 240, 255, 255);
+	rgba_char_args_set(ob->custom.select , 100, 140, 220, 255);
+	rgba_char_args_set(ob->custom.solid  , 50, 70, 150, 255);
+
 	/* NT fluid sim defaults */
 	ob->fluidsimSettings = NULL;
 

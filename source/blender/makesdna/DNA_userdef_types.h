@@ -390,8 +390,10 @@ typedef struct bTheme {
 	/* 20 sets of bone colors for this theme */
 	ThemeWireColor tarm[20];
 	ThemeWireColor tobj[20];
+	char color_sets;
+	char pad2[3];
 	
-	int active_theme_area, pad;
+	int active_theme_area;
 } bTheme;
 
 #define UI_THEMESPACE_START(btheme)  (CHECK_TYPE_INLINE(btheme, bTheme *),  &((btheme)->tbuts))
