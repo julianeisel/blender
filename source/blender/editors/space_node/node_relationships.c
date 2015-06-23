@@ -1414,7 +1414,7 @@ static void node_parents_flag_enable(bNode *node, const int flag)
 
 #define NODE_OFFSET_APPLY(node, offset_x) \
 	if ((node->flag & NODE_HAS_OFFSET) == 0) { \
-		node->locx += offset_x; \
+		node->locx += (offset_x / UI_DPI_FAC); \
 		node->flag |= NODE_HAS_OFFSET; \
 	} (void)0;
 
