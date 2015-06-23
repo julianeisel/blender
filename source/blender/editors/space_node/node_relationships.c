@@ -1371,6 +1371,211 @@ static bNodeSocket *socket_best_match(ListBase *sockets)
 	return NULL;
 }
 
+/**
+ * \returns true if \a child has \a parent as a parent/grandparent/...
+ * \note Recursive
+ */
+static bool node_is_child_of(const bNode *parent, const bNode *child)
+{
+	if (parent == child) {
+		return true;
+	}
+	else if (child->parent) {
+		return node_is_child_of(parent, child->parent);
+	}
+	return false;
+}
+
+/**
+ * \returns the lowermost parent in the hierarchy
+ * \note Recursive
+ */
+static bNode *node_lowermost_parent_get(bNode *parent)
+{
+	if (parent->parent) {
+		return node_lowermost_parent_get(parent->parent);
+	}
+	else {
+		return parent;
+	}
+}
+
+/**
+ * Enables \a flag for all parents/grandparents/... of \a node
+ * \note Recursive
+ */
+static void node_parents_flag_enable(bNode *node, const int flag)
+{
+	if (node->parent) {
+		node->parent->flag |= flag;
+		node_parents_flag_enable(node->parent, flag);
+	}
+}
+
+#define NODE_OFFSET_APPLY(node, offset_x) \
+	if ((node->flag & NODE_HAS_OFFSET) == 0) { \
+		node->locx += offset_x; \
+		node->flag |= NODE_HAS_OFFSET; \
+	} (void)0;
+
+static void node_parent_offset_apply(const bNodeTree *ntree, bNode *parent, const float offset_x)
+{
+	bNode *node;
+
+	NODE_OFFSET_APPLY(parent, offset_x);
+
+	/* flag all childs as offset to prevent them from being offset
+	 * separately (they've already moved with the parent) */
+	for (node = ntree->nodes.first; node; node = node->next) {
+		if (node_is_child_of(parent, node)) {
+			node->flag |= NODE_HAS_OFFSET;
+		}
+	}
+}
+
+#define NODE_MIN_MARGIN (UI_UNIT_X * 4.0f)
+
+typedef struct NodeInsertOffsetData {
+	bNodeTree *ntree;
+	bNode *insert_parent;
+
+	float offset_x;
+} NodeInsertOffsetData;
+
+/**
+ * Callback that applies NodeInsertOffsetData.offset_x to a node or its parent, similiar
+ * to node_link_insert_offset_output_chain_cb below, but with slightly different logic
+ */
+static void node_link_insert_offset_frame_chain_cb(bNode *UNUSED(fromnode), bNode *tonode, void *userdata)
+{
+	NodeInsertOffsetData *data = (NodeInsertOffsetData *)userdata;
+
+	if (tonode->parent && tonode->parent != data->insert_parent) {
+		NODE_OFFSET_APPLY(tonode->parent, data->offset_x);
+	}
+	else {
+		NODE_OFFSET_APPLY(tonode, data->offset_x);
+	}
+}
+
+/**
+ * Applies NodeInsertOffsetData.offset_x to all childs of \a parent
+ */
+static void node_link_insert_offset_frame_chains(const bNodeTree *ntree, const bNode *parent, NodeInsertOffsetData *data)
+{
+	bNode *node;
+
+	for (node = ntree->nodes.first; node; node = node->next) {
+		if (node_is_child_of(parent, node)) {
+			nodeChainIter(ntree, node, node_link_insert_offset_frame_chain_cb, data);
+		}
+	}
+}
+
+/**
+ * Callback that applies NodeInsertOffsetData.offset_x to a node or its parent,
+ * considering the logic needed for offseting nodes after link insert
+ */
+static void node_link_insert_offset_output_chain_cb(bNode *UNUSED(fromnode), bNode *tonode, void *userdata)
+{
+	NodeInsertOffsetData *data = (NodeInsertOffsetData *)userdata;
+
+	if (data->insert_parent) {
+		if (tonode->parent && (tonode->parent->flag & NODE_HAS_OFFSET) == 0) {
+			node_parent_offset_apply(data->ntree, tonode->parent, data->offset_x);
+			node_link_insert_offset_frame_chains(data->ntree, tonode->parent, data);
+		}
+		else {
+			NODE_OFFSET_APPLY(tonode, data->offset_x);
+		}
+
+		if (node_is_child_of(data->insert_parent, tonode) == false) {
+			data->insert_parent = NULL;
+		}
+	}
+	else if (tonode->parent) {
+		NODE_OFFSET_APPLY(node_lowermost_parent_get(tonode->parent), data->offset_x);
+	}
+	else {
+		NODE_OFFSET_APPLY(tonode, data->offset_x);
+	}
+}
+
+static NodeInsertOffsetData *node_link_insert_offset_data_init(
+        bNodeTree *ntree, bNode *insert_parent,
+        const float offset_x)
+{
+	NodeInsertOffsetData *data = MEM_mallocN(sizeof(NodeInsertOffsetData), __func__);
+
+	data->ntree = ntree;
+	data->insert_parent = insert_parent;
+	data->offset_x = offset_x;
+
+	return data;
+}
+
+static void node_link_insert_offset_nodetree(
+        const bNodeTree *ntree,
+        bNode *insert,
+        bNode *prev, bNode *next)
+{
+	rctf totr_insert;
+	const float width = NODE_WIDTH(insert);
+	const bool needs_alignment = (next->totr.xmin - prev->totr.xmax) < (width + (NODE_MIN_MARGIN * 2.0f));
+
+	float margin = width;
+	float locx, locy;
+	float dist, addval;
+
+	/* insert->totr isn't updated yet, so totr_insert is used to get the correct worldspace coords */
+	node_to_view(insert, 0.0f, 0.0f, &locx, &locy);
+	BLI_rctf_init(&totr_insert, locx, locx + width, locy, locy + NODE_HEIGHT(insert));
+
+	/* *** ensure offset at the left of insert_node *** */
+	dist = totr_insert.xmin - prev->totr.xmax;
+	/* distance between insert_node and prev is smaller than min margin */
+	if (dist < NODE_MIN_MARGIN) {
+		addval = NODE_MIN_MARGIN - dist;
+
+		NODE_OFFSET_APPLY(insert, addval);
+		totr_insert.xmin  += addval;
+		totr_insert.xmax  += addval;
+		margin            += NODE_MIN_MARGIN;
+	}
+
+	/* *** ensure offset at the right of insert_node *** */
+	dist = next->totr.xmin - totr_insert.xmax;
+	/* distance between insert_node and next is smaller than min margin */
+	if (dist < NODE_MIN_MARGIN) {
+		addval = NODE_MIN_MARGIN - dist;
+		if (needs_alignment) {
+			if (!next->parent || next->parent == insert->parent || node_is_child_of(next->parent, insert)) {
+				NODE_OFFSET_APPLY(next, addval);
+			}
+			margin = addval;
+		}
+		/* enough room is available, but we want to ensure the min margin at the right */
+		else {
+			/* offset inserted node so that min margin is kept at the right */
+			NODE_OFFSET_APPLY(insert, -addval)
+		}
+	}
+
+	if (needs_alignment) {
+		NodeInsertOffsetData *data = node_link_insert_offset_data_init((bNodeTree *)ntree, insert->parent, margin);
+
+		/* flag all parents of insert as offset to prevent them from being offset */
+		node_parents_flag_enable(insert, NODE_HAS_OFFSET);
+		/* iterate over entire chain and apply offsets */
+		nodeChainIter(ntree, next, node_link_insert_offset_output_chain_cb, data);
+
+		MEM_freeN(data);
+	}
+}
+
+#undef NODE_MIN_MARGIN
+#undef NODE_OFFSET_APPLY
+
 /* assumes link with NODE_LINKFLAG_HILITE set */
 void ED_node_link_insert(ScrArea *sa)
 {
@@ -1400,7 +1605,9 @@ void ED_node_link_insert(ScrArea *sa)
 			link->flag &= ~NODE_LINKFLAG_HILITE;
 			
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);
-			
+
+			node_link_insert_offset_nodetree(snode->edittree, select, link->fromnode, node);
+
 			ntreeUpdateTree(G.main, snode->edittree);   /* needed for pointers */
 			snode_update(snode, select);
 			ED_node_tag_update_id(snode->id);

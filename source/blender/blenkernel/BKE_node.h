@@ -476,6 +476,8 @@ void            nodeDetachNode(struct bNode *node);
 struct bNode   *nodeFindNodebyName(struct bNodeTree *ntree, const char *name);
 int             nodeFindNode(struct bNodeTree *ntree, struct bNodeSocket *sock, struct bNode **nodep, int *sockindex);
 
+void            nodeChainIter(const bNodeTree *ntree, const bNode *node_start, void (*callback)(bNode *, bNode*, void *), void *userdata);
+
 struct bNodeLink *nodeFindLink(struct bNodeTree *ntree, struct bNodeSocket *from, struct bNodeSocket *to);
 int             nodeCountSocketLinks(struct bNodeTree *ntree, struct bNodeSocket *sock);
 

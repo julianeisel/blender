@@ -257,6 +257,9 @@ typedef struct bNode {
 	 */
 #define NODE_DO_OUTPUT_RECALC	(1<<17)
 
+	/* Node was offset in node_link_insert_offset_nodetree */
+#define NODE_HAS_OFFSET			(1<<18)
+
 /* node->update */
 /* XXX NODE_UPDATE is a generic update flag. More fine-grained updates
  * might be used in the future, but currently all work the same way.

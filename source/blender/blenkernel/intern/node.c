@@ -773,6 +773,26 @@ int nodeFindNode(bNodeTree *ntree, bNodeSocket *sock, bNode **nodep, int *sockin
 	return 0;
 }
 
+/**
+ * Iterate over a chain of nodes, starting with \a node_start, executing \a callback for each node
+ * 
+ * \note Recursive
+ */
+void nodeChainIter(
+        const bNodeTree *ntree, const bNode *node_start,
+        void (*callback)(bNode *, bNode*, void *), void *userdata)
+{
+	bNodeLink *link;
+
+	for (link = ntree->links.first; link; link = link->next) {
+		/* is the link part of the chain (meaning fromnode == node)? */
+		if (link->fromnode && link->tonode && (link->fromnode == node_start)) {
+			callback(link->fromnode, link->tonode, userdata);
+			nodeChainIter(ntree, link->tonode, callback, userdata);
+		}
+	}
+}
+
 /* ************** Add stuff ********** */
 
 /* Find the first available, non-duplicate name for a given node */
@@ -2976,6 +2996,7 @@ void ntreeUpdateTree(Main *bmain, bNodeTree *ntree)
 		if ((node->update & NODE_UPDATE) || (ntree->update & NTREE_UPDATE)) {
 			if (node->typeinfo->updatefunc)
 				node->typeinfo->updatefunc(ntree, node);
+			node->flag &= ~NODE_HAS_OFFSET;
 			
 			nodeUpdateInternalLinks(ntree, node);
 		}
