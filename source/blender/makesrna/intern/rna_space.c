@@ -4208,6 +4208,13 @@ static void rna_def_space_node(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Cursor Location", "Location for adding new nodes");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, NULL);
 
+	prop = RNA_def_property(srna, "auto_offset", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SNODE_SKIP_AUTO_OFFSET);
+	RNA_def_property_ui_text(prop, "Auto Offset", "Automatically offset following nodes in a "
+	                                              "chain when inserting a node");
+	RNA_def_property_ui_icon(prop, ICON_NODE_INSERT_ON, 1);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, NULL);
+
 	RNA_api_space_node(srna);
 }
 

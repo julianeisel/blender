@@ -114,6 +114,8 @@ class NODE_HT_header(Header):
 
         layout.separator()
 
+        layout.prop(snode, "auto_offset", text = "")
+
         # Snap
         row = layout.row(align=True)
         row.prop(toolsettings, "use_snap", text="")

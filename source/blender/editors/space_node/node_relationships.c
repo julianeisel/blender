@@ -1606,7 +1606,9 @@ void ED_node_link_insert(ScrArea *sa)
 			
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);
 
-			node_link_insert_offset_nodetree(snode->edittree, select, link->fromnode, node);
+			if ((snode->flag & SNODE_SKIP_AUTO_OFFSET) == 0) {
+				node_link_insert_offset_nodetree(snode->edittree, select, link->fromnode, node);
+			}
 
 			ntreeUpdateTree(G.main, snode->edittree);   /* needed for pointers */
 			snode_update(snode, select);

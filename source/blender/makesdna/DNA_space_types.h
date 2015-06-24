@@ -1006,8 +1006,9 @@ typedef enum eSpaceNode_Flag {
 	SNODE_AUTO_RENDER    = (1 << 5),
 	SNODE_SHOW_HIGHLIGHT = (1 << 6),
 //	SNODE_USE_HIDDEN_PREVIEW = (1 << 10), DNA_DEPRECATED December2013 
-	SNODE_NEW_SHADERS = (1 << 11),
-	SNODE_PIN            = (1 << 12),
+	SNODE_NEW_SHADERS      = (1 << 11),
+	SNODE_PIN              = (1 << 12),
+	SNODE_SKIP_AUTO_OFFSET = (1 << 13), /* automatically offset following nodes in a chain on insertion */
 } eSpaceNode_Flag;
 
 /* snode->texfrom */
