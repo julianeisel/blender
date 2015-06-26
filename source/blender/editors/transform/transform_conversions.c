@@ -5999,8 +5999,8 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 		special_aftertrans_update__node(C, t);
 		if (canceled == 0) {
 			ED_node_post_apply_transform(C, snode->edittree);
-			
-			ED_node_link_insert(t->sa);
+
+			ED_node_link_insert(t->sa, t->ar, t->mval);
 		}
 		
 		/* clear link line */

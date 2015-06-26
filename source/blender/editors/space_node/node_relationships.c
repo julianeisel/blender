@@ -1099,25 +1099,33 @@ void NODE_OT_join(wmOperatorType *ot)
 
 /* ****************** Attach ******************* */
 
-static int node_attach_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+static bNode *node_find_frame_to_attach(ARegion *ar, const bNodeTree *ntree, const int mouse_xy[2])
 {
-	ARegion *ar = CTX_wm_region(C);
-	SpaceNode *snode = CTX_wm_space_node(C);
-	bNodeTree *ntree = snode->edittree;
 	bNode *frame;
 	float cursor[2];
-	
+
 	/* convert mouse coordinates to v2d space */
-	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &cursor[0], &cursor[1]);
+	UI_view2d_region_to_view(&ar->v2d, UNPACK2(mouse_xy), &cursor[0], &cursor[1]);
 
 	/* check nodes front to back */
 	for (frame = ntree->nodes.last; frame; frame = frame->prev) {
 		/* skip selected, those are the nodes we want to attach */
 		if ((frame->type != NODE_FRAME) || (frame->flag & NODE_SELECT))
 			continue;
-		if (BLI_rctf_isect_pt(&frame->totr, cursor[0], cursor[1]))
-			break;
+		if (BLI_rctf_isect_pt_v(&frame->totr, cursor))
+			return frame;
 	}
+
+	return NULL;
+}
+
+static int node_attach_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+{
+	ARegion *ar = CTX_wm_region(C);
+	SpaceNode *snode = CTX_wm_space_node(C);
+	bNodeTree *ntree = snode->edittree;
+	bNode *frame = node_find_frame_to_attach(ar, ntree, &event->x);
+
 	if (frame) {
 		bNode *node, *parent;
 		for (node = ntree->nodes.last; node; node = node->prev) {
@@ -1390,13 +1398,13 @@ static bool node_is_child_of(const bNode *parent, const bNode *child)
  * \returns the lowermost parent in the hierarchy
  * \note Recursive
  */
-static bNode *node_lowermost_parent_get(bNode *parent)
+static bNode *node_lowermost_parent_get(bNode *node)
 {
-	if (parent->parent) {
-		return node_lowermost_parent_get(parent->parent);
+	if (node->parent) {
+		return node_lowermost_parent_get(node->parent);
 	}
 	else {
-		return parent;
+		return node->type == NODE_FRAME ? node : NULL;
 	}
 }
 
@@ -1517,11 +1525,14 @@ static NodeInsertOffsetData *node_link_insert_offset_data_init(
 }
 
 static void node_link_insert_offset_nodetree(
-        const bNodeTree *ntree,
+        ARegion *ar, const bNodeTree *ntree,
         bNode *insert,
-        bNode *prev, bNode *next)
+        bNode *prev, bNode *next,
+        const int mouse_xy[2])
 {
+	bNode *init_parent = insert->parent; /* store old insert->parent for restoring later */
 	rctf totr_insert;
+
 	const float width = NODE_WIDTH(insert);
 	const bool needs_alignment = (next->totr.xmin - prev->totr.xmax) < (width + (NODE_MIN_MARGIN * 2.0f));
 
@@ -1529,9 +1540,42 @@ static void node_link_insert_offset_nodetree(
 	float locx, locy;
 	float dist, addval;
 
+
 	/* insert->totr isn't updated yet, so totr_insert is used to get the correct worldspace coords */
 	node_to_view(insert, 0.0f, 0.0f, &locx, &locy);
 	BLI_rctf_init(&totr_insert, locx, locx + width, locy, locy + NODE_HEIGHT(insert));
+
+	/* frame attachement was't handled yet so we search the frame that the node will be attached to later */
+	insert->parent = node_find_frame_to_attach(ar, ntree, mouse_xy);
+
+	/* this makes sure nodes are also correctly of set when inserting a node on top of a frame
+	 * without actually making it a part of the frame (because mouse isn't intersecting it)
+	 * - logic here is similar to node_find_frame_to_attach */
+	if (!insert->parent ||
+	    (prev->parent && (prev->parent == next->parent) && (prev->parent != insert->parent)))
+	{
+		bNode *frame;
+
+		/* check nodes front to back */
+		for (frame = ntree->nodes.last; frame; frame = frame->prev) {
+			/* skip selected, those are the nodes we want to attach */
+			if ((frame->type != NODE_FRAME) || (frame->flag & NODE_SELECT))
+				continue;
+
+			if (BLI_rctf_isect_x(&frame->totr, totr_insert.xmin) &&
+			    BLI_rctf_isect_x(&frame->totr, totr_insert.xmax))
+			{
+				if (BLI_rctf_isect_y(&frame->totr, totr_insert.ymin) ||
+				    BLI_rctf_isect_y(&frame->totr, totr_insert.ymax))
+				{
+					/* frame isn't insert->parent actually, but this is needed to make offsetting
+					 * nodes work correctly for above checked cases (it is restored later) */
+					insert->parent = frame;
+					break;
+				}
+			}
+		}
+	}
 
 	/* *** ensure offset at the left of insert_node *** */
 	dist = totr_insert.xmin - prev->totr.xmax;
@@ -1573,12 +1617,17 @@ static void node_link_insert_offset_nodetree(
 
 		MEM_freeN(data);
 	}
+
+	insert->parent = init_parent;
 }
 
 #undef NODE_MIN_MARGIN
 
-/* assumes link with NODE_LINKFLAG_HILITE set */
-void ED_node_link_insert(ScrArea *sa)
+/**
+ * \note Assumes link with NODE_LINKFLAG_HILITE set
+ * \note \a mouse_xy is only used to find out if node will be inserted into a frame later on
+*/
+void ED_node_link_insert(ScrArea *sa, ARegion *ar, const int mouse_xy[2])
 {
 	bNode *node, *select;
 	SpaceNode *snode;
@@ -1608,7 +1657,7 @@ void ED_node_link_insert(ScrArea *sa)
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);
 
 			if ((snode->flag & SNODE_SKIP_AUTO_OFFSET) == 0) {
-				node_link_insert_offset_nodetree(snode->edittree, select, link->fromnode, node);
+				node_link_insert_offset_nodetree(ar, snode->edittree, select, link->fromnode, node, mouse_xy);
 			}
 
 			ntreeUpdateTree(G.main, snode->edittree);   /* needed for pointers */
