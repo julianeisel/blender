@@ -373,6 +373,7 @@ void            ntreeFreeCache(struct bNodeTree *ntree);
 
 int             ntreeNodeExists(struct bNodeTree *ntree, struct bNode *testnode);
 int             ntreeOutputExists(struct bNode *node, struct bNodeSocket *testsock);
+void            ntreeNodeFlagDisable(const bNodeTree *ntree, const int flag);
 struct bNodeTree *ntreeLocalize(struct bNodeTree *ntree);
 void            ntreeLocalSync(struct bNodeTree *localtree, struct bNodeTree *ntree);
 void            ntreeLocalMerge(struct bNodeTree *localtree, struct bNodeTree *ntree);

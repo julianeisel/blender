@@ -1983,6 +1983,17 @@ int ntreeOutputExists(bNode *node, bNodeSocket *testsock)
 	return 0;
 }
 
+/**
+ * \brief Disable flag for all nodes
+ */
+void ntreeNodeFlagDisable(const bNodeTree *ntree, const int flag)
+{
+	bNode *node = ntree->nodes.first;
+	for (; node; node = node->next) {
+		node->flag &= ~flag;
+	}
+}
+
 /* returns localized tree for execution in threads */
 bNodeTree *ntreeLocalize(bNodeTree *ntree)
 {
@@ -3014,7 +3025,6 @@ void ntreeUpdateTree(Main *bmain, bNodeTree *ntree)
 		if ((node->update & NODE_UPDATE) || (ntree->update & NTREE_UPDATE)) {
 			if (node->typeinfo->updatefunc)
 				node->typeinfo->updatefunc(ntree, node);
-			node->flag &= ~NODE_HAS_OFFSET;
 			
 			nodeUpdateInternalLinks(ntree, node);
 		}
