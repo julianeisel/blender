@@ -476,8 +476,12 @@ void            nodeDetachNode(struct bNode *node);
 
 struct bNode   *nodeFindNodebyName(struct bNodeTree *ntree, const char *name);
 int             nodeFindNode(struct bNodeTree *ntree, struct bNodeSocket *sock, struct bNode **nodep, int *sockindex);
+struct bNode   *nodeFindLowermostParent(bNode *node);
+
+bool            nodeIsChildOf(const bNode *parent, const bNode *child);
 
 void            nodeChainIter(const bNodeTree *ntree, const bNode *node_start, void (*callback)(bNode *, bNode*, void *), void *userdata);
+void            nodeParentsIter(bNode *node, void (*callback)(bNode *, void *), void *userdata);
 
 struct bNodeLink *nodeFindLink(struct bNodeTree *ntree, struct bNodeSocket *from, struct bNodeSocket *to);
 int             nodeCountSocketLinks(struct bNodeTree *ntree, struct bNodeSocket *sock);

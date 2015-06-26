@@ -776,6 +776,34 @@ int nodeFindNode(bNodeTree *ntree, bNodeSocket *sock, bNode **nodep, int *sockin
 }
 
 /**
+ * \note Recursive
+ */
+bNode *nodeFindLowermostParent(bNode *node)
+{
+	if (node->parent) {
+		return nodeFindLowermostParent(node->parent);
+	}
+	else {
+		return node->type == NODE_FRAME ? node : NULL;
+	}
+}
+
+/**
+ * \returns true if \a child has \a parent as a parent/grandparent/...
+ * \note Recursive
+ */
+bool nodeIsChildOf(const bNode *parent, const bNode *child)
+{
+	if (parent == child) {
+		return true;
+	}
+	else if (child->parent) {
+		return nodeIsChildOf(parent, child->parent);
+	}
+	return false;
+}
+
+/**
  * Iterate over a chain of nodes, starting with \a node_start, executing \a callback for each node
  * 
  * \note Recursive
@@ -792,6 +820,19 @@ void nodeChainIter(
 			callback(link->fromnode, link->tonode, userdata);
 			nodeChainIter(ntree, link->tonode, callback, userdata);
 		}
+	}
+}
+
+/**
+ * Iterate over all parents of \a node, executing \a callback for each parent
+ * 
+ * \note Recursive
+ */
+void nodeParentsIter(bNode *node, void (*callback)(bNode *, void *), void *userdata)
+{
+	if (node->parent) {
+		callback(node->parent, userdata);
+		nodeParentsIter(node->parent, callback, userdata);
 	}
 }
 

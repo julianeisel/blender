@@ -66,6 +66,13 @@ typedef struct bNodeListItem {
 	struct bNode *node;
 } bNodeListItem;
 
+typedef struct NodeInsertOffsetData {
+	bNodeTree *ntree;
+	bNode *insert_parent;
+
+	float offset_x;
+} NodeInsertOffsetData;
+
 static int sort_nodes_locx(const void *a, const void *b)
 {
 	const bNodeListItem *nli1 = a;
@@ -1379,45 +1386,10 @@ static bNodeSocket *socket_best_match(ListBase *sockets)
 	return NULL;
 }
 
-/**
- * \returns true if \a child has \a parent as a parent/grandparent/...
- * \note Recursive
- */
-static bool node_is_child_of(const bNode *parent, const bNode *child)
+static void node_parents_offset_flag_enable_cb(bNode *parent, void *UNUSED(userdata))
 {
-	if (parent == child) {
-		return true;
-	}
-	else if (child->parent) {
-		return node_is_child_of(parent, child->parent);
-	}
-	return false;
-}
-
-/**
- * \returns the lowermost parent in the hierarchy
- * \note Recursive
- */
-static bNode *node_lowermost_parent_get(bNode *node)
-{
-	if (node->parent) {
-		return node_lowermost_parent_get(node->parent);
-	}
-	else {
-		return node->type == NODE_FRAME ? node : NULL;
-	}
-}
-
-/**
- * Enables \a flag for all parents/grandparents/... of \a node
- * \note Recursive
- */
-static void node_parents_flag_enable(bNode *node, const int flag)
-{
-	if (node->parent) {
-		node->parent->flag |= flag;
-		node_parents_flag_enable(node->parent, flag);
-	}
+	/* NODE_TEST is used to flag nodes that shouldn't be offset (again) */
+	parent->flag |= NODE_TEST;
 }
 
 static void node_offset_apply(bNode *node, const float offset_x)
@@ -1438,7 +1410,7 @@ static void node_parent_offset_apply(const bNodeTree *ntree, bNode *parent, cons
 	/* flag all childs as offset to prevent them from being offset
 	 * separately (they've already moved with the parent) */
 	for (node = ntree->nodes.first; node; node = node->next) {
-		if (node_is_child_of(parent, node)) {
+		if (nodeIsChildOf(parent, node)) {
 			/* NODE_TEST is used to flag nodes that shouldn't be offset (again) */
 			node->flag |= NODE_TEST;
 		}
@@ -1446,13 +1418,6 @@ static void node_parent_offset_apply(const bNodeTree *ntree, bNode *parent, cons
 }
 
 #define NODE_MIN_MARGIN (UI_UNIT_X * 4.0f)
-
-typedef struct NodeInsertOffsetData {
-	bNodeTree *ntree;
-	bNode *insert_parent;
-
-	float offset_x;
-} NodeInsertOffsetData;
 
 /**
  * Callback that applies NodeInsertOffsetData.offset_x to a node or its parent, similiar
@@ -1478,7 +1443,7 @@ static void node_link_insert_offset_frame_chains(const bNodeTree *ntree, const b
 	bNode *node;
 
 	for (node = ntree->nodes.first; node; node = node->next) {
-		if (node_is_child_of(parent, node)) {
+		if (nodeIsChildOf(parent, node)) {
 			nodeChainIter(ntree, node, node_link_insert_offset_frame_chain_cb, data);
 		}
 	}
@@ -1501,12 +1466,12 @@ static void node_link_insert_offset_output_chain_cb(bNode *UNUSED(fromnode), bNo
 			node_offset_apply(tonode, data->offset_x);
 		}
 
-		if (node_is_child_of(data->insert_parent, tonode) == false) {
+		if (nodeIsChildOf(data->insert_parent, tonode) == false) {
 			data->insert_parent = NULL;
 		}
 	}
 	else if (tonode->parent) {
-		node_offset_apply(node_lowermost_parent_get(tonode), data->offset_x);
+		node_offset_apply(nodeFindLowermostParent(tonode), data->offset_x);
 	}
 	else {
 		node_offset_apply(tonode, data->offset_x);
@@ -1600,7 +1565,10 @@ static void node_link_insert_offset_ntree(
 	if (dist < NODE_MIN_MARGIN) {
 		addval = NODE_MIN_MARGIN - dist;
 		if (needs_alignment) {
-			if (!next->parent || next->parent == insert->parent || node_is_child_of(next->parent, insert)) {
+			if (!next->parent ||
+			    next->parent == insert->parent ||
+			    nodeIsChildOf(next->parent, insert))
+			{
 				node_offset_apply(next, addval);
 			}
 			margin = addval;
@@ -1616,7 +1584,7 @@ static void node_link_insert_offset_ntree(
 		NodeInsertOffsetData *data = node_link_insert_offset_data_init((bNodeTree *)ntree, insert->parent, margin);
 
 		/* flag all parents of insert as offset to prevent them from being offset */
-		node_parents_flag_enable(insert, NODE_TEST);
+		nodeParentsIter(insert, node_parents_offset_flag_enable_cb, NULL);
 		/* iterate over entire chain and apply offsets */
 		nodeChainIter(ntree, next, node_link_insert_offset_output_chain_cb, data);
 
