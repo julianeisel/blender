@@ -1412,17 +1412,19 @@ static void node_parents_flag_enable(bNode *node, const int flag)
 	}
 }
 
-#define NODE_OFFSET_APPLY(node, offset_x) \
-	if ((node->flag & NODE_HAS_OFFSET) == 0) { \
-		node->locx += (offset_x / UI_DPI_FAC); \
-		node->flag |= NODE_HAS_OFFSET; \
-	} (void)0;
+static void node_offset_apply(bNode *node, const float offset_x)
+{
+	if ((node->flag & NODE_HAS_OFFSET) == 0) {
+		node->locx += (offset_x / UI_DPI_FAC);
+		node->flag |= NODE_HAS_OFFSET;
+	}
+}
 
 static void node_parent_offset_apply(const bNodeTree *ntree, bNode *parent, const float offset_x)
 {
 	bNode *node;
 
-	NODE_OFFSET_APPLY(parent, offset_x);
+	node_offset_apply(parent, offset_x);
 
 	/* flag all childs as offset to prevent them from being offset
 	 * separately (they've already moved with the parent) */
@@ -1451,10 +1453,10 @@ static void node_link_insert_offset_frame_chain_cb(bNode *UNUSED(fromnode), bNod
 	NodeInsertOffsetData *data = (NodeInsertOffsetData *)userdata;
 
 	if (tonode->parent && tonode->parent != data->insert_parent) {
-		NODE_OFFSET_APPLY(tonode->parent, data->offset_x);
+		node_offset_apply(tonode->parent, data->offset_x);
 	}
 	else {
-		NODE_OFFSET_APPLY(tonode, data->offset_x);
+		node_offset_apply(tonode, data->offset_x);
 	}
 }
 
@@ -1486,7 +1488,7 @@ static void node_link_insert_offset_output_chain_cb(bNode *UNUSED(fromnode), bNo
 			node_link_insert_offset_frame_chains(data->ntree, tonode->parent, data);
 		}
 		else {
-			NODE_OFFSET_APPLY(tonode, data->offset_x);
+			node_offset_apply(tonode, data->offset_x);
 		}
 
 		if (node_is_child_of(data->insert_parent, tonode) == false) {
@@ -1494,10 +1496,10 @@ static void node_link_insert_offset_output_chain_cb(bNode *UNUSED(fromnode), bNo
 		}
 	}
 	else if (tonode->parent) {
-		NODE_OFFSET_APPLY(node_lowermost_parent_get(tonode->parent), data->offset_x);
+		node_offset_apply(node_lowermost_parent_get(tonode->parent), data->offset_x);
 	}
 	else {
-		NODE_OFFSET_APPLY(tonode, data->offset_x);
+		node_offset_apply(tonode, data->offset_x);
 	}
 }
 
@@ -1537,7 +1539,7 @@ static void node_link_insert_offset_nodetree(
 	if (dist < NODE_MIN_MARGIN) {
 		addval = NODE_MIN_MARGIN - dist;
 
-		NODE_OFFSET_APPLY(insert, addval);
+		node_offset_apply(insert, addval);
 		totr_insert.xmin  += addval;
 		totr_insert.xmax  += addval;
 		margin            += NODE_MIN_MARGIN;
@@ -1550,14 +1552,14 @@ static void node_link_insert_offset_nodetree(
 		addval = NODE_MIN_MARGIN - dist;
 		if (needs_alignment) {
 			if (!next->parent || next->parent == insert->parent || node_is_child_of(next->parent, insert)) {
-				NODE_OFFSET_APPLY(next, addval);
+				node_offset_apply(next, addval);
 			}
 			margin = addval;
 		}
 		/* enough room is available, but we want to ensure the min margin at the right */
 		else {
 			/* offset inserted node so that min margin is kept at the right */
-			NODE_OFFSET_APPLY(insert, -addval)
+			node_offset_apply(insert, -addval);
 		}
 	}
 
@@ -1574,7 +1576,6 @@ static void node_link_insert_offset_nodetree(
 }
 
 #undef NODE_MIN_MARGIN
-#undef NODE_OFFSET_APPLY
 
 /* assumes link with NODE_LINKFLAG_HILITE set */
 void ED_node_link_insert(ScrArea *sa)
