@@ -992,6 +992,9 @@ typedef struct SpaceNode {
 	ListBase linkdrag;  /* temporary data for modal linking operator */
 	
 	struct bGPdata *gpd;        /* grease-pencil data */
+
+	char insert_ofs_dir;        /* direction for offsetting nodes on insertion */
+	char pad5[7];
 } SpaceNode;
 
 /* snode->flag */
@@ -1025,6 +1028,11 @@ typedef enum eSpaceNode_ShaderFrom {
 	SNODE_SHADER_WORLD = 1,
 	SNODE_SHADER_LINESTYLE = 2,
 } eSpaceNode_ShaderFrom;
+
+typedef enum eSpaceNode_InsertOffsetDir {
+	SNODE_INSERTOFS_DIR_RIGHT = 0,
+	SNODE_INSERTOFS_DIR_LEFT  = 1,
+} eSpaceNode_InserOffsetDir;
 
 /* Game Logic Editor ===================================== */
 

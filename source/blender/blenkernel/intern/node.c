@@ -804,21 +804,27 @@ bool nodeIsChildOf(const bNode *parent, const bNode *child)
 }
 
 /**
- * Iterate over a chain of nodes, starting with \a node_start, executing \a callback for each node
+ * Iterate over a chain of nodes, starting with \a node_start, executing \a callback for each node.
  * 
+ * \param reversed for backwards iteration
  * \note Recursive
  */
 void nodeChainIter(
         const bNodeTree *ntree, const bNode *node_start,
-        void (*callback)(bNode *, bNode*, void *), void *userdata)
+        void (*callback)(bNode *, bNode *, void *, const bool), void *userdata,
+        const bool reversed)
 {
 	bNodeLink *link;
 
 	for (link = ntree->links.first; link; link = link->next) {
-		/* is the link part of the chain (meaning fromnode == node)? */
-		if (link->fromnode && link->tonode && (link->fromnode == node_start)) {
-			callback(link->fromnode, link->tonode, userdata);
-			nodeChainIter(ntree, link->tonode, callback, userdata);
+		if (link->tonode && link->fromnode) {
+			/* is the link part of the chain meaning node_start == fromnode (or tonode for reversed case)? */
+			if ((reversed && (link->tonode == node_start)) ||
+			    (!reversed && link->fromnode == node_start))
+			{
+				callback(link->fromnode, link->tonode, userdata, reversed);
+				nodeChainIter(ntree, reversed ? link->fromnode : link->tonode, callback, userdata, reversed);
+			}
 		}
 	}
 }

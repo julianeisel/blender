@@ -1423,28 +1423,35 @@ static void node_parent_offset_apply(const bNodeTree *ntree, bNode *parent, cons
  * Callback that applies NodeInsertOffsetData.offset_x to a node or its parent, similiar
  * to node_link_insert_offset_output_chain_cb below, but with slightly different logic
  */
-static void node_link_insert_offset_frame_chain_cb(bNode *UNUSED(fromnode), bNode *tonode, void *userdata)
+static void node_link_insert_offset_frame_chain_cb(
+        bNode *fromnode, bNode *tonode,
+        void *userdata,
+        const bool reversed)
 {
 	NodeInsertOffsetData *data = (NodeInsertOffsetData *)userdata;
+	bNode *ofs_node = reversed ? fromnode : tonode;
 
-	if (tonode->parent && tonode->parent != data->insert_parent) {
-		node_offset_apply(tonode->parent, data->offset_x);
+	if (ofs_node->parent && ofs_node->parent != data->insert_parent) {
+		node_offset_apply(ofs_node->parent, data->offset_x);
 	}
 	else {
-		node_offset_apply(tonode, data->offset_x);
+		node_offset_apply(ofs_node, data->offset_x);
 	}
 }
 
 /**
  * Applies NodeInsertOffsetData.offset_x to all childs of \a parent
  */
-static void node_link_insert_offset_frame_chains(const bNodeTree *ntree, const bNode *parent, NodeInsertOffsetData *data)
+static void node_link_insert_offset_frame_chains(
+        const bNodeTree *ntree, const bNode *parent,
+        NodeInsertOffsetData *data,
+        const bool reversed)
 {
 	bNode *node;
 
 	for (node = ntree->nodes.first; node; node = node->next) {
 		if (nodeIsChildOf(parent, node)) {
-			nodeChainIter(ntree, node, node_link_insert_offset_frame_chain_cb, data);
+			nodeChainIter(ntree, node, node_link_insert_offset_frame_chain_cb, data, reversed);
 		}
 	}
 }
@@ -1453,28 +1460,32 @@ static void node_link_insert_offset_frame_chains(const bNodeTree *ntree, const b
  * Callback that applies NodeInsertOffsetData.offset_x to a node or its parent,
  * considering the logic needed for offseting nodes after link insert
  */
-static void node_link_insert_offset_output_chain_cb(bNode *UNUSED(fromnode), bNode *tonode, void *userdata)
+static void node_link_insert_offset_chain_cb(
+        bNode *fromnode, bNode *tonode,
+        void *userdata,
+        const bool reversed)
 {
 	NodeInsertOffsetData *data = (NodeInsertOffsetData *)userdata;
+	bNode *ofs_node = reversed ? fromnode : tonode;
 
 	if (data->insert_parent) {
-		if (tonode->parent && (tonode->parent->flag & NODE_TEST) == 0) {
-			node_parent_offset_apply(data->ntree, tonode->parent, data->offset_x);
-			node_link_insert_offset_frame_chains(data->ntree, tonode->parent, data);
+		if (ofs_node->parent && (ofs_node->parent->flag & NODE_TEST) == 0) {
+			node_parent_offset_apply(data->ntree, ofs_node->parent, data->offset_x);
+			node_link_insert_offset_frame_chains(data->ntree, ofs_node->parent, data, reversed);
 		}
 		else {
-			node_offset_apply(tonode, data->offset_x);
+			node_offset_apply(ofs_node, data->offset_x);
 		}
 
-		if (nodeIsChildOf(data->insert_parent, tonode) == false) {
+		if (nodeIsChildOf(data->insert_parent, ofs_node) == false) {
 			data->insert_parent = NULL;
 		}
 	}
-	else if (tonode->parent) {
-		node_offset_apply(nodeFindLowermostParent(tonode), data->offset_x);
+	else if (ofs_node->parent) {
+		node_offset_apply(nodeFindLowermostParent(ofs_node), data->offset_x);
 	}
 	else {
-		node_offset_apply(tonode, data->offset_x);
+		node_offset_apply(ofs_node, data->offset_x);
 	}
 }
 
@@ -1495,7 +1506,7 @@ static void node_link_insert_offset_ntree(
         ARegion *ar, const bNodeTree *ntree,
         bNode *insert,
         bNode *prev, bNode *next,
-        const int mouse_xy[2])
+        const int mouse_xy[2], const bool right_alignment)
 {
 	const float width = NODE_WIDTH(insert);
 	const bool needs_alignment = (next->totr.xmin - prev->totr.xmax) < (width + (NODE_MIN_MARGIN * 2.0f));
@@ -1547,29 +1558,34 @@ static void node_link_insert_offset_ntree(
 		}
 	}
 
-	/* *** ensure offset at the left of insert_node *** */
-	dist = totr_insert.xmin - prev->totr.xmax;
+
+	/* *** ensure offset at the left (or right for right_alignment case) of insert_node *** */
+
+	dist = right_alignment ? totr_insert.xmin - prev->totr.xmax : next->totr.xmin - totr_insert.xmax;
 	/* distance between insert_node and prev is smaller than min margin */
 	if (dist < NODE_MIN_MARGIN) {
-		addval = NODE_MIN_MARGIN - dist;
+		addval = (NODE_MIN_MARGIN - dist) * (right_alignment ? 1.0f : -1.0f);
 
 		node_offset_apply(insert, addval);
+
 		totr_insert.xmin  += addval;
 		totr_insert.xmax  += addval;
 		margin            += NODE_MIN_MARGIN;
 	}
 
-	/* *** ensure offset at the right of insert_node *** */
-	dist = next->totr.xmin - totr_insert.xmax;
+	/* *** ensure offset at the right (or left for right_alignment case) of insert_node *** */
+
+	dist = right_alignment ? next->totr.xmin - totr_insert.xmax : totr_insert.xmin - prev->totr.xmax;
 	/* distance between insert_node and next is smaller than min margin */
 	if (dist < NODE_MIN_MARGIN) {
-		addval = NODE_MIN_MARGIN - dist;
+		addval = (NODE_MIN_MARGIN - dist) * (right_alignment ? 1.0f : -1.0f);
 		if (needs_alignment) {
-			if (!next->parent ||
-			    next->parent == insert->parent ||
-			    nodeIsChildOf(next->parent, insert))
+			bNode *offs_node = right_alignment ? next : prev;
+			if (!offs_node->parent ||
+			    offs_node->parent == insert->parent ||
+			    nodeIsChildOf(offs_node->parent, insert))
 			{
-				node_offset_apply(next, addval);
+				node_offset_apply(offs_node, addval);
 			}
 			margin = addval;
 		}
@@ -1580,13 +1596,14 @@ static void node_link_insert_offset_ntree(
 		}
 	}
 
+
 	if (needs_alignment) {
 		NodeInsertOffsetData *data = node_link_insert_offset_data_init((bNodeTree *)ntree, insert->parent, margin);
 
 		/* flag all parents of insert as offset to prevent them from being offset */
 		nodeParentsIter(insert, node_parents_offset_flag_enable_cb, NULL);
 		/* iterate over entire chain and apply offsets */
-		nodeChainIter(ntree, next, node_link_insert_offset_output_chain_cb, data);
+		nodeChainIter(ntree, right_alignment ? next : prev, node_link_insert_offset_chain_cb, data, !right_alignment);
 
 		MEM_freeN(data);
 	}
@@ -1630,7 +1647,10 @@ void ED_node_link_insert(ScrArea *sa, ARegion *ar, const int mouse_xy[2])
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);
 
 			if ((snode->flag & SNODE_SKIP_AUTO_OFFSET) == 0) {
-				node_link_insert_offset_ntree(ar, snode->edittree, select, link->fromnode, node, mouse_xy);
+				node_link_insert_offset_ntree(
+				            ar, snode->edittree, select,
+				            link->fromnode, node, mouse_xy,
+				            (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT));
 			}
 
 			ntreeUpdateTree(G.main, snode->edittree);   /* needed for pointers */

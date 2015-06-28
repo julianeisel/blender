@@ -4095,6 +4095,12 @@ static void rna_def_space_node(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem insert_ofs_dir_items[] = {
+	    {SNODE_INSERTOFS_DIR_RIGHT, "RIGHT", 0, "Right"},
+	    {SNODE_INSERTOFS_DIR_LEFT, "LEFT", 0, "Left"},
+	    {0, NULL, 0, NULL, NULL}
+	};
+
 	static EnumPropertyItem dummy_items[] = {
 		{0, "DUMMY", 0, "", ""},
 		{0, NULL, 0, NULL, NULL}};
@@ -4210,9 +4216,15 @@ static void rna_def_space_node(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "auto_offset", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SNODE_SKIP_AUTO_OFFSET);
-	RNA_def_property_ui_text(prop, "Auto Offset", "Automatically offset following nodes in a "
-	                                              "chain when inserting a node");
+	RNA_def_property_ui_text(prop, "Auto Offset", "Automatically offset following or previous nodes in a "
+	                                              "chain when inserting a new node");
 	RNA_def_property_ui_icon(prop, ICON_NODE_INSERT_ON, 1);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, NULL);
+
+	prop = RNA_def_property(srna, "insert_offset_direction", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "insert_ofs_dir");
+	RNA_def_property_enum_items(prop, insert_ofs_dir_items);
+	RNA_def_property_ui_text(prop, "Auto Offset Direction", "Direction to offset nodes on insertion");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, NULL);
 
 	RNA_api_space_node(srna);
