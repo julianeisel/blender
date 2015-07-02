@@ -778,10 +778,10 @@ int nodeFindNode(bNodeTree *ntree, bNodeSocket *sock, bNode **nodep, int *sockin
 /**
  * \note Recursive
  */
-bNode *nodeFindLowermostParent(bNode *node)
+bNode *nodeFindRootParent(bNode *node)
 {
 	if (node->parent) {
-		return nodeFindLowermostParent(node->parent);
+		return nodeFindRootParent(node->parent);
 	}
 	else {
 		return node->type == NODE_FRAME ? node : NULL;
@@ -804,14 +804,15 @@ bool nodeIsChildOf(const bNode *parent, const bNode *child)
 }
 
 /**
- * Iterate over a chain of nodes, starting with \a node_start, executing \a callback for each node.
+ * Iterate over a chain of nodes, starting with \a node_start, executing
+ * \a callback for each node (which can return false to end iterator).
  * 
  * \param reversed for backwards iteration
  * \note Recursive
  */
 void nodeChainIter(
         const bNodeTree *ntree, const bNode *node_start,
-        void (*callback)(bNode *, bNode *, void *, const bool), void *userdata,
+        bool (*callback)(bNode *, bNode *, void *, const bool), void *userdata,
         const bool reversed)
 {
 	bNodeLink *link;
@@ -822,7 +823,9 @@ void nodeChainIter(
 			if ((reversed && (link->tonode == node_start)) ||
 			    (!reversed && link->fromnode == node_start))
 			{
-				callback(link->fromnode, link->tonode, userdata, reversed);
+				if (!callback(link->fromnode, link->tonode, userdata, reversed)) {
+					return;
+				}
 				nodeChainIter(ntree, reversed ? link->fromnode : link->tonode, callback, userdata, reversed);
 			}
 		}
@@ -830,14 +833,16 @@ void nodeChainIter(
 }
 
 /**
- * Iterate over all parents of \a node, executing \a callback for each parent
+ * Iterate over all parents of \a node, executing \a callback for each parent (which can return false to end iterator)
  * 
  * \note Recursive
  */
-void nodeParentsIter(bNode *node, void (*callback)(bNode *, void *), void *userdata)
+void nodeParentsIter(bNode *node, bool (*callback)(bNode *, void *), void *userdata)
 {
 	if (node->parent) {
-		callback(node->parent, userdata);
+		if (!callback(node->parent, userdata)) {
+			return;
+		}
 		nodeParentsIter(node->parent, callback, userdata);
 	}
 }
@@ -2030,14 +2035,17 @@ int ntreeOutputExists(bNode *node, bNodeSocket *testsock)
 	return 0;
 }
 
-/**
- * \brief Disable flag for all nodes
- */
-void ntreeNodeFlagDisable(const bNodeTree *ntree, const int flag)
+void ntreeNodeFlagSet(const bNodeTree *ntree, const int flag, const bool enable)
 {
 	bNode *node = ntree->nodes.first;
+
 	for (; node; node = node->next) {
-		node->flag &= ~flag;
+		if (enable) {
+			node->flag |= flag;
+		}
+		else {
+			node->flag &= ~flag;
+		}
 	}
 }
 

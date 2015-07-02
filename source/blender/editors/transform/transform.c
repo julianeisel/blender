@@ -4275,7 +4275,7 @@ static void headerTranslation(TransInfo *t, const float vec[3], char str[MAX_INF
 	if (t->spacetype == SPACE_NODE) {
 		SpaceNode *snode = (SpaceNode *)t->sa->spacedata.first;
 
-		if ((snode->flag & SNODE_SKIP_AUTO_OFFSET) == 0) {
+		if ((snode->flag & SNODE_SKIP_INSOFFSET) == 0) {
 			const char *str_old = BLI_strdup(str);
 			const char *str_dir = (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT) ? "right" : "left";
 

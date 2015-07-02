@@ -985,16 +985,16 @@ typedef struct SpaceNode {
 	int treetype DNA_DEPRECATED; /* treetype: as same nodetree->type */
 	int pad3;
 	
-	short texfrom;      /* texfrom object, world or brush */
-	short shaderfrom;   /* shader from object or world */
-	short recalc;       /* currently on 0/1, for auto compo */
-	short pad4;
-	ListBase linkdrag;  /* temporary data for modal linking operator */
+	short texfrom;       /* texfrom object, world or brush */
+	short shaderfrom;    /* shader from object or world */
+	short recalc;        /* currently on 0/1, for auto compo */
+
+	char insert_ofs_dir; /* direction for offsetting nodes on insertion */
+	char pad4;
+
+	ListBase linkdrag;   /* temporary data for modal linking operator */
 	
 	struct bGPdata *gpd;        /* grease-pencil data */
-
-	char insert_ofs_dir;        /* direction for offsetting nodes on insertion */
-	char pad5[7];
 } SpaceNode;
 
 /* snode->flag */
@@ -1009,9 +1009,9 @@ typedef enum eSpaceNode_Flag {
 	SNODE_AUTO_RENDER    = (1 << 5),
 	SNODE_SHOW_HIGHLIGHT = (1 << 6),
 //	SNODE_USE_HIDDEN_PREVIEW = (1 << 10), DNA_DEPRECATED December2013 
-	SNODE_NEW_SHADERS      = (1 << 11),
-	SNODE_PIN              = (1 << 12),
-	SNODE_SKIP_AUTO_OFFSET = (1 << 13), /* automatically offset following nodes in a chain on insertion */
+	SNODE_NEW_SHADERS    = (1 << 11),
+	SNODE_PIN            = (1 << 12),
+	SNODE_SKIP_INSOFFSET = (1 << 13), /* automatically offset following nodes in a chain on insertion */
 } eSpaceNode_Flag;
 
 /* snode->texfrom */
@@ -1029,10 +1029,11 @@ typedef enum eSpaceNode_ShaderFrom {
 	SNODE_SHADER_LINESTYLE = 2,
 } eSpaceNode_ShaderFrom;
 
-typedef enum eSpaceNode_InsertOffsetDir {
+/* snode->insert_ofs_dir */
+enum {
 	SNODE_INSERTOFS_DIR_RIGHT = 0,
 	SNODE_INSERTOFS_DIR_LEFT  = 1,
-} eSpaceNode_InserOffsetDir;
+};
 
 /* Game Logic Editor ===================================== */
 

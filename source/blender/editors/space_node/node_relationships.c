@@ -1386,10 +1386,12 @@ static bNodeSocket *socket_best_match(ListBase *sockets)
 	return NULL;
 }
 
-static void node_parents_offset_flag_enable_cb(bNode *parent, void *UNUSED(userdata))
+static bool node_parents_offset_flag_enable_cb(bNode *parent, void *UNUSED(userdata))
 {
 	/* NODE_TEST is used to flag nodes that shouldn't be offset (again) */
 	parent->flag |= NODE_TEST;
+
+	return true;
 }
 
 static void node_offset_apply(bNode *node, const float offset_x)
@@ -1423,12 +1425,12 @@ static void node_parent_offset_apply(const bNodeTree *ntree, bNode *parent, cons
  * Callback that applies NodeInsertOffsetData.offset_x to a node or its parent, similiar
  * to node_link_insert_offset_output_chain_cb below, but with slightly different logic
  */
-static void node_link_insert_offset_frame_chain_cb(
+static bool node_link_insert_offset_frame_chain_cb(
         bNode *fromnode, bNode *tonode,
         void *userdata,
         const bool reversed)
 {
-	NodeInsertOffsetData *data = (NodeInsertOffsetData *)userdata;
+	NodeInsertOffsetData *data = userdata;
 	bNode *ofs_node = reversed ? fromnode : tonode;
 
 	if (ofs_node->parent && ofs_node->parent != data->insert_parent) {
@@ -1437,6 +1439,8 @@ static void node_link_insert_offset_frame_chain_cb(
 	else {
 		node_offset_apply(ofs_node, data->offset_x);
 	}
+
+	return true;
 }
 
 /**
@@ -1460,12 +1464,12 @@ static void node_link_insert_offset_frame_chains(
  * Callback that applies NodeInsertOffsetData.offset_x to a node or its parent,
  * considering the logic needed for offseting nodes after link insert
  */
-static void node_link_insert_offset_chain_cb(
+static bool node_link_insert_offset_chain_cb(
         bNode *fromnode, bNode *tonode,
         void *userdata,
         const bool reversed)
 {
-	NodeInsertOffsetData *data = (NodeInsertOffsetData *)userdata;
+	NodeInsertOffsetData *data = userdata;
 	bNode *ofs_node = reversed ? fromnode : tonode;
 
 	if (data->insert_parent) {
@@ -1482,28 +1486,17 @@ static void node_link_insert_offset_chain_cb(
 		}
 	}
 	else if (ofs_node->parent) {
-		node_offset_apply(nodeFindLowermostParent(ofs_node), data->offset_x);
+		node_offset_apply(nodeFindRootParent(ofs_node), data->offset_x);
 	}
 	else {
 		node_offset_apply(ofs_node, data->offset_x);
 	}
-}
 
-static NodeInsertOffsetData *node_link_insert_offset_data_init(
-        bNodeTree *ntree, bNode *insert_parent,
-        const float offset_x)
-{
-	NodeInsertOffsetData *data = MEM_mallocN(sizeof(NodeInsertOffsetData), __func__);
-
-	data->ntree = ntree;
-	data->insert_parent = insert_parent;
-	data->offset_x = offset_x;
-
-	return data;
+	return true;
 }
 
 static void node_link_insert_offset_ntree(
-        ARegion *ar, const bNodeTree *ntree,
+        ARegion *ar, bNodeTree *ntree,
         bNode *insert,
         bNode *prev, bNode *next,
         const int mouse_xy[2], const bool right_alignment)
@@ -1520,7 +1513,7 @@ static void node_link_insert_offset_ntree(
 
 
 	/* NODE_TEST will be used later, so disable for all nodes */
-	ntreeNodeFlagDisable(ntree, NODE_TEST);
+	ntreeNodeFlagSet(ntree, NODE_TEST, false);
 
 	/* insert->totr isn't updated yet, so totr_insert is used to get the correct worldspace coords */
 	node_to_view(insert, 0.0f, 0.0f, &locx, &locy);
@@ -1598,14 +1591,16 @@ static void node_link_insert_offset_ntree(
 
 
 	if (needs_alignment) {
-		NodeInsertOffsetData *data = node_link_insert_offset_data_init((bNodeTree *)ntree, insert->parent, margin);
+		NodeInsertOffsetData data;
+
+		data.ntree = ntree;
+		data.insert_parent = insert->parent;
+		data.offset_x = margin;
 
 		/* flag all parents of insert as offset to prevent them from being offset */
 		nodeParentsIter(insert, node_parents_offset_flag_enable_cb, NULL);
 		/* iterate over entire chain and apply offsets */
-		nodeChainIter(ntree, right_alignment ? next : prev, node_link_insert_offset_chain_cb, data, !right_alignment);
-
-		MEM_freeN(data);
+		nodeChainIter(ntree, right_alignment ? next : prev, node_link_insert_offset_chain_cb, &data, !right_alignment);
 	}
 
 	insert->parent = init_parent;
@@ -1646,7 +1641,7 @@ void ED_node_link_insert(ScrArea *sa, ARegion *ar, const int mouse_xy[2])
 			
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);
 
-			if ((snode->flag & SNODE_SKIP_AUTO_OFFSET) == 0) {
+			if ((snode->flag & SNODE_SKIP_INSOFFSET) == 0) {
 				node_link_insert_offset_ntree(
 				            ar, snode->edittree, select,
 				            link->fromnode, node, mouse_xy,
