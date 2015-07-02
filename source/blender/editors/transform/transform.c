@@ -4246,6 +4246,20 @@ static void headerTranslation(TransInfo *t, const float vec[3], char str[MAX_INF
 	if (t->flag & T_PROP_EDIT_ALL) {
 		ofs += BLI_snprintf(str + ofs, MAX_INFO_LEN - ofs, IFACE_(" Proportional size: %.2f"), t->prop_size);
 	}
+
+	if (t->spacetype == SPACE_NODE) {
+		SpaceNode *snode = (SpaceNode *)t->sa->spacedata.first;
+
+		BLI_assert(t->sa->spacetype == t->spacetype);
+
+		if ((snode->flag & SNODE_SKIP_AUTO_OFFSET) == 0) {
+			const char *str_old = BLI_strdup(str);
+			const char *str_dir = (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT) ? "right" : "left";
+
+			ofs += BLI_snprintf(str, MAX_INFO_LEN, "Auto offset set to %s - press T to toggle direction  |  %s",
+			                    str_dir, str_old);
+		}
+	}
 }
 
 static void applyTranslationValue(TransInfo *t, const float vec[3])
