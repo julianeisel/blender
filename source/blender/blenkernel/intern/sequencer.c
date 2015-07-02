@@ -1125,7 +1125,7 @@ const char *BKE_sequence_give_name(Sequence *seq)
 	const char *name = give_seqname_by_type(seq->type);
 
 	if (!name) {
-		if (seq->type < SEQ_TYPE_EFFECT) {
+		if (!(seq->type & SEQ_TYPE_EFFECT)) {
 			return seq->strip->dir;
 		}
 		else {
@@ -1608,7 +1608,10 @@ static bool seq_proxy_get_fname(Editing *ed, Sequence *seq, int cfra, int render
 		BLI_path_append(dir, sizeof(dir), fname);
 	}
 	else if (seq->type == SEQ_TYPE_IMAGE) {
-		BLI_snprintf(dir, PROXY_MAXFILE, "%s/BL_proxy", seq->strip->dir);
+		if (proxy->storage & SEQ_STORAGE_PROXY_CUSTOM_DIR)
+			BLI_strncpy(dir, seq->strip->proxy->dir, sizeof(dir));
+		else
+			BLI_snprintf(dir, PROXY_MAXFILE, "%s/BL_proxy", seq->strip->dir);
 	}
 	else {
 		return false;
@@ -4211,7 +4214,7 @@ void BKE_sequence_single_fix(Sequence *seq)
 
 bool BKE_sequence_tx_test(Sequence *seq)
 {
-	return (seq->type < SEQ_TYPE_EFFECT) || (BKE_sequence_effect_get_num_inputs(seq->type) == 0);
+	return !(seq->type & SEQ_TYPE_EFFECT) || (BKE_sequence_effect_get_num_inputs(seq->type) == 0);
 }
 
 static bool seq_overlap(Sequence *seq1, Sequence *seq2)
@@ -5234,13 +5237,11 @@ static Sequence *seq_dupli(Scene *scene, Scene *scene_to, Sequence *seq, int dup
 		seqn->strip->stripdata =
 		        MEM_dupallocN(seq->strip->stripdata);
 	}
-	else if (seq->type >= SEQ_TYPE_EFFECT) {
-		if (seq->type & SEQ_TYPE_EFFECT) {
-			struct SeqEffectHandle sh;
-			sh = BKE_sequence_get_effect(seq);
-			if (sh.copy)
-				sh.copy(seq, seqn);
-		}
+	else if (seq->type & SEQ_TYPE_EFFECT) {
+		struct SeqEffectHandle sh;
+		sh = BKE_sequence_get_effect(seq);
+		if (sh.copy)
+			sh.copy(seq, seqn);
 
 		seqn->strip->stripdata = NULL;
 
@@ -5263,7 +5264,7 @@ static void seq_new_fix_links_recursive(Sequence *seq)
 {
 	SequenceModifierData *smd;
 
-	if (seq->type >= SEQ_TYPE_EFFECT) {
+	if (seq->type & SEQ_TYPE_EFFECT) {
 		if (seq->seq1 && seq->seq1->tmp) seq->seq1 = seq->seq1->tmp;
 		if (seq->seq2 && seq->seq2->tmp) seq->seq2 = seq->seq2->tmp;
 		if (seq->seq3 && seq->seq3->tmp) seq->seq3 = seq->seq3->tmp;
