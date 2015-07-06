@@ -37,6 +37,7 @@
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
+#include "BLI_easing.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -69,6 +70,8 @@ typedef struct bNodeListItem {
 typedef struct NodeInsertOffsetData {
 	bNodeTree *ntree;
 	bNode *insert_parent;
+
+	wmTimer *anim_timer;
 
 	float offset_x;
 } NodeInsertOffsetData;
@@ -1398,12 +1401,13 @@ static void node_offset_apply(bNode *node, const float offset_x)
 {
 	/* NODE_TEST is used to flag nodes that shouldn't be offset (again) */
 	if ((node->flag & NODE_TEST) == 0) {
-		node->locx += (offset_x / UI_DPI_FAC);
+		node->anim_init = node->locx;
+		node->anim_ofsx = (offset_x / UI_DPI_FAC);
 		node->flag |= NODE_TEST;
 	}
 }
 
-static void node_parent_offset_apply(const bNodeTree *ntree, bNode *parent, const float offset_x)
+static void node_parent_offset_apply(NodeInsertOffsetData *data, bNode *parent, const float offset_x)
 {
 	bNode *node;
 
@@ -1411,7 +1415,7 @@ static void node_parent_offset_apply(const bNodeTree *ntree, bNode *parent, cons
 
 	/* flag all childs as offset to prevent them from being offset
 	 * separately (they've already moved with the parent) */
-	for (node = ntree->nodes.first; node; node = node->next) {
+	for (node = data->ntree->nodes.first; node; node = node->next) {
 		if (nodeIsChildOf(parent, node)) {
 			/* NODE_TEST is used to flag nodes that shouldn't be offset (again) */
 			node->flag |= NODE_TEST;
@@ -1474,7 +1478,7 @@ static bool node_link_insert_offset_chain_cb(
 
 	if (data->insert_parent) {
 		if (ofs_node->parent && (ofs_node->parent->flag & NODE_TEST) == 0) {
-			node_parent_offset_apply(data->ntree, ofs_node->parent, data->offset_x);
+			node_parent_offset_apply(data, ofs_node->parent, data->offset_x);
 			node_link_insert_offset_frame_chains(data->ntree, ofs_node->parent, data, reversed);
 		}
 		else {
@@ -1486,7 +1490,8 @@ static bool node_link_insert_offset_chain_cb(
 		}
 	}
 	else if (ofs_node->parent) {
-		node_offset_apply(nodeFindRootParent(ofs_node), data->offset_x);
+		bNode *node = nodeFindRootParent(ofs_node);
+		node_offset_apply(node, data->offset_x);
 	}
 	else {
 		node_offset_apply(ofs_node, data->offset_x);
@@ -1496,6 +1501,7 @@ static bool node_link_insert_offset_chain_cb(
 }
 
 static void node_link_insert_offset_ntree(
+        NodeInsertOffsetData *iofsd,
         ARegion *ar, bNodeTree *ntree,
         bNode *insert,
         bNode *prev, bNode *next,
@@ -1591,28 +1597,93 @@ static void node_link_insert_offset_ntree(
 
 
 	if (needs_alignment) {
-		NodeInsertOffsetData data;
-
-		data.ntree = ntree;
-		data.insert_parent = insert->parent;
-		data.offset_x = margin;
+		iofsd->insert_parent = insert->parent;
+		iofsd->offset_x = margin;
 
 		/* flag all parents of insert as offset to prevent them from being offset */
 		nodeParentsIter(insert, node_parents_offset_flag_enable_cb, NULL);
 		/* iterate over entire chain and apply offsets */
-		nodeChainIter(ntree, right_alignment ? next : prev, node_link_insert_offset_chain_cb, &data, !right_alignment);
+		nodeChainIter(ntree, right_alignment ? next : prev, node_link_insert_offset_chain_cb, iofsd, !right_alignment);
 	}
 
 	insert->parent = init_parent;
 }
 
+#define NODE_INSOFS_ANIM_DURATION 0.2f
+
+static int node_insert_offset_anim_exec(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+{
+	SpaceNode *snode = CTX_wm_space_node(C);
+	bNode *node;
+	const float duration = (float)snode->iofsd->anim_timer->duration;
+
+	if (!snode || snode->iofsd->anim_timer != event->customdata)
+		return OPERATOR_PASS_THROUGH;
+
+	/* end timer */
+	if (duration > NODE_INSOFS_ANIM_DURATION) {
+		WM_event_remove_timer(CTX_wm_manager(C), NULL, snode->iofsd->anim_timer);
+		MEM_freeN(snode->iofsd);
+
+		for (node = snode->edittree->nodes.first; node; node = node->next) {
+			node->anim_init = node->anim_ofsx = 0.0f;
+		}
+
+		return (OPERATOR_FINISHED | OPERATOR_PASS_THROUGH);
+	}
+
+	for (node = snode->edittree->nodes.first; node; node = node->next) {
+		if (node->anim_ofsx) {
+			node->locx = BLI_easing_cubic_ease_in_out(duration, node->anim_init, node->anim_ofsx,
+			                                          NODE_INSOFS_ANIM_DURATION);
+		}
+	}
+	ED_region_tag_redraw(CTX_wm_region(C));
+
+	return OPERATOR_FINISHED;
+}
+
+#undef NODE_INSOFS_ANIM_DURATION
 #undef NODE_MIN_MARGIN
+
+void NODE_OT_insert_offset_anim(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Insert Offset Animation";
+	ot->description = "Animation for insert offset preview";
+	ot->idname = "NODE_OT_insert_offset_anim";
+
+	/* callbacks */
+	ot->invoke = node_insert_offset_anim_exec;
+	ot->poll = ED_operator_node_editable;
+
+	/* flags */
+	ot->flag = OPTYPE_BLOCKING;
+}
+
+static void node_link_insert_offset_anim_begin(
+        wmWindowManager *wm, wmWindow *win, ARegion *ar,
+        SpaceNode *snode, bNodeTree *ntree,
+        bNode *insert, bNode *prev, bNode *next)
+{
+	NodeInsertOffsetData *iofsd = MEM_callocN(sizeof(NodeInsertOffsetData), __func__);
+
+	iofsd->ntree = ntree;
+	iofsd->anim_timer = WM_event_add_timer(wm, win, TIMER, 0.01);
+
+	node_link_insert_offset_ntree(
+	            iofsd, ar, snode->edittree,
+	            insert, prev, next, &win->eventstate->x,
+	            (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT));
+
+	snode->iofsd = iofsd;
+}
 
 /**
  * \note Assumes link with NODE_LINKFLAG_HILITE set
  * \note \a mouse_xy is only used to find out if node will be inserted into a frame later on
 */
-void ED_node_link_insert(ScrArea *sa, ARegion *ar, const int mouse_xy[2])
+void ED_node_link_insert(wmWindowManager *wm, wmWindow *win, ScrArea *sa, ARegion *ar)
 {
 	bNode *node, *select;
 	SpaceNode *snode;
@@ -1642,10 +1713,10 @@ void ED_node_link_insert(ScrArea *sa, ARegion *ar, const int mouse_xy[2])
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);
 
 			if ((snode->flag & SNODE_SKIP_INSOFFSET) == 0) {
-				node_link_insert_offset_ntree(
-				            ar, snode->edittree, select,
-				            link->fromnode, node, mouse_xy,
-				            (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT));
+				node_link_insert_offset_anim_begin(
+				            wm, win, ar, snode,
+				            snode->edittree, select,
+				            link->fromnode, node);
 			}
 
 			ntreeUpdateTree(G.main, snode->edittree);   /* needed for pointers */

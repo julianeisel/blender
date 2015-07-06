@@ -92,6 +92,8 @@ void node_operatortypes(void)
 	
 	WM_operatortype_append(NODE_OT_link_viewer);
 	
+	WM_operatortype_append(NODE_OT_insert_offset_anim);
+	
 	WM_operatortype_append(NODE_OT_read_renderlayers);
 	WM_operatortype_append(NODE_OT_read_fullsamplelayers);
 	WM_operatortype_append(NODE_OT_render_changed);
@@ -309,6 +311,8 @@ void node_keymap(struct wmKeyConfig *keyconf)
 	RNA_boolean_set(kmi->ptr, "prev", true);
 	
 	WM_keymap_add_item(keymap, "NODE_OT_find_node", FKEY, KM_PRESS, KM_CTRL, 0);
+	
+	WM_keymap_add_item(keymap, "NODE_OT_insert_offset_anim", TIMER, KM_ANY, KM_ANY, 0);
 	
 	/* node group operators */
 	WM_keymap_add_item(keymap, "NODE_OT_group_make", GKEY, KM_PRESS, KM_CTRL, 0);
