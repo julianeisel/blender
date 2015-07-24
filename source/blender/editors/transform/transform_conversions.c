@@ -6003,7 +6003,7 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 
 			ED_node_post_apply_transform(C, snode->edittree);
 
-			ED_node_link_insert(wm, win, t->sa, t->ar);
+			ED_node_link_insert(C, wm, win, t->sa, t->ar);
 		}
 		
 		/* clear link line */

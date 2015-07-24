@@ -46,6 +46,7 @@
 #include "ED_node.h"  /* own include */
 #include "ED_screen.h"
 #include "ED_render.h"
+#include "ED_util.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -1528,7 +1529,7 @@ static void node_link_insert_offset_ntree(
 	/* frame attachement was't handled yet so we search the frame that the node will be attached to later */
 	insert->parent = node_find_frame_to_attach(ar, ntree, mouse_xy);
 
-	/* this makes sure nodes are also correctly of set when inserting a node on top of a frame
+	/* this makes sure nodes are also correctly offset when inserting a node on top of a frame
 	 * without actually making it a part of the frame (because mouse isn't intersecting it)
 	 * - logic here is similar to node_find_frame_to_attach */
 	if (!insert->parent ||
@@ -1609,7 +1610,7 @@ static void node_link_insert_offset_ntree(
 	insert->parent = init_parent;
 }
 
-#define NODE_INSOFS_ANIM_DURATION 0.2f
+#define NODE_INSOFS_ANIM_DURATION 0.25f
 
 static int node_insert_offset_anim_exec(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 {
@@ -1629,6 +1630,8 @@ static int node_insert_offset_anim_exec(bContext *C, wmOperator *UNUSED(op), con
 			node->anim_init = node->anim_ofsx = 0.0f;
 		}
 
+		/* the next undo should lead us to this point */
+		ED_undo_push(C, "Insert Offset");
 		return (OPERATOR_FINISHED | OPERATOR_PASS_THROUGH);
 	}
 
@@ -1683,12 +1686,13 @@ static void node_link_insert_offset_anim_begin(
  * \note Assumes link with NODE_LINKFLAG_HILITE set
  * \note \a mouse_xy is only used to find out if node will be inserted into a frame later on
 */
-void ED_node_link_insert(wmWindowManager *wm, wmWindow *win, ScrArea *sa, ARegion *ar)
+void ED_node_link_insert(bContext *C, wmWindowManager *wm, wmWindow *win, ScrArea *sa, ARegion *ar)
 {
 	bNode *node, *select;
 	SpaceNode *snode;
 	bNodeLink *link;
 	bNodeSocket *sockto;
+	bool undo_push = true;
 
 	if (!ed_node_link_conditions(sa, true, &snode, &select)) return;
 
@@ -1709,7 +1713,7 @@ void ED_node_link_insert(wmWindowManager *wm, wmWindow *win, ScrArea *sa, ARegio
 			link->tosock = best_input;
 			node_remove_extra_links(snode, link, false);
 			link->flag &= ~NODE_LINKFLAG_HILITE;
-			
+
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);
 
 			if ((snode->flag & SNODE_SKIP_INSOFFSET) == 0) {
@@ -1717,11 +1721,20 @@ void ED_node_link_insert(wmWindowManager *wm, wmWindow *win, ScrArea *sa, ARegio
 				            wm, win, ar, snode,
 				            snode->edittree, select,
 				            link->fromnode, node);
+
+				/* undo is handled by insert offset animation */
+				undo_push = false;
 			}
 
 			ntreeUpdateTree(G.main, snode->edittree);   /* needed for pointers */
 			snode_update(snode, select);
 			ED_node_tag_update_id(snode->id);
 		}
+	}
+
+	/* Undo for NODE_OT_duplicate_move is disabled as it conflicts with
+	 * the insert offset animation. We need to handle undo "manually" */
+	if (undo_push) {
+		ED_undo_push(C, "Node Insert");
 	}
 }

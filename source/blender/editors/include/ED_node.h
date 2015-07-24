@@ -86,7 +86,7 @@ float ED_node_grid_size(void);
 
 /* node_relationships.c */
 void ED_node_link_intersect_test(struct ScrArea *sa, int test);
-void ED_node_link_insert(struct wmWindowManager *wm, struct wmWindow *win, struct ScrArea *sa, struct ARegion *ar);
+void ED_node_link_insert(struct bContext *C, struct wmWindowManager *wm, struct wmWindow *win, struct ScrArea *sa, struct ARegion *ar);
 
 /* node_edit.c */
 void ED_node_set_tree_type(struct SpaceNode *snode, struct bNodeTreeType *typeinfo);

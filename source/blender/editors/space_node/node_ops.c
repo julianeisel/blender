@@ -164,7 +164,9 @@ void ED_operatormacros_node(void)
 
 	ot = WM_operatortype_append_macro("NODE_OT_duplicate_move", "Duplicate",
 	                                  "Duplicate selected nodes and move them",
-	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
+	                                  /* don't add OPTYPE_UNDO here, it conflicts with insert
+	                                   * offset animation, so undo is handled later */
+	                                  OPTYPE_REGISTER);
 	WM_operatortype_macro_define(ot, "NODE_OT_duplicate");
 	WM_operatortype_macro_define(ot, "NODE_OT_translate_attach");
 
