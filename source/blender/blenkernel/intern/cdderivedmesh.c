@@ -639,7 +639,7 @@ static void cdDM_drawMappedFaces(
 	int i, j;
 	int start_element = 0, tot_element, tot_drawn;
 	int totpoly;
-	int tottri;
+	int tot_tri_elem;
 	int mat_index;
 	GPUBuffer *findex_buffer = NULL;
 
@@ -705,14 +705,14 @@ static void cdDM_drawMappedFaces(
 
 	glShadeModel(GL_SMOOTH);
 
-	tottri = dm->drawObject->tot_triangle_point;
+	tot_tri_elem = dm->drawObject->tot_triangle_point;
 
-	if (tottri == 0) {
+	if (tot_tri_elem == 0) {
 		/* avoid buffer problems in following code */
 	}
 	else if (setDrawOptions == NULL) {
 		/* just draw the entire face array */
-		GPU_buffer_draw_elements(dm->drawObject->triangles, GL_TRIANGLES, 0, tottri);
+		GPU_buffer_draw_elements(dm->drawObject->triangles, GL_TRIANGLES, 0, tot_tri_elem);
 	}
 	else {
 		for (mat_index = 0; mat_index < dm->drawObject->totmaterial; mat_index++) {
@@ -1281,9 +1281,9 @@ static void cdDM_buffer_copy_vertex(
 	}
 
 	/* copy loose points */
-	j = dm->drawObject->tot_triangle_point * 3;
+	j = dm->drawObject->tot_loop_verts * 3;
 	for (i = 0; i < dm->drawObject->totvert; i++) {
-		if (dm->drawObject->vert_points[i].point_index >= dm->drawObject->tot_triangle_point) {
+		if (dm->drawObject->vert_points[i].point_index >= dm->drawObject->tot_loop_verts) {
 			copy_v3_v3(&varray[j], mvert[i].co);
 			j += 3;
 		}
@@ -1607,7 +1607,7 @@ static void cdDM_drawobject_init_vert_points(
 	gdo->vert_points = MEM_mallocN(sizeof(GPUVertPointLink) * gdo->totvert,
 	                               "GPUDrawObject.vert_points");
 #ifdef USE_GPU_POINT_LINK
-	gdo->vert_points_mem = MEM_callocN(sizeof(GPUVertPointLink) * gdo->tot_triangle_point,
+	gdo->vert_points_mem = MEM_callocN(sizeof(GPUVertPointLink) * gdo->totvert,
 	                                   "GPUDrawObject.vert_points_mem");
 	gdo->vert_points_usage = 0;
 #endif
@@ -1644,19 +1644,13 @@ static void cdDM_drawobject_init_vert_points(
 	/* map any unused vertices to loose points */
 	for (i = 0; i < gdo->totvert; i++) {
 		if (gdo->vert_points[i].point_index == -1) {
-			gdo->vert_points[i].point_index = gdo->tot_triangle_point + gdo->tot_loose_point;
+			gdo->vert_points[i].point_index = gdo->tot_loop_verts + gdo->tot_loose_point;
 			gdo->tot_loose_point++;
 		}
 	}
 
 	MEM_freeN(mat_orig_to_new);
 }
-
-typedef struct {
-	int elements;
-	int loops;
-	int polys;
-} GPUMaterialInfo;
 
 /* see GPUDrawObject's structure definition for a description of the
  * data being initialized here */
@@ -1666,8 +1660,8 @@ static GPUDrawObject *cdDM_GPUobject_new(DerivedMesh *dm)
 	const MPoly *mpoly;
 	const MLoop *mloop;
 	int totmat = dm->totmat;
-	GPUMaterialInfo *mat_info;
-	int i, curmat, totelements, totloops, totpolys;
+	GPUBufferMaterial *mat_info;
+	int i, totloops, totpolys;
 
 	/* object contains at least one material (default included) so zero means uninitialized dm */
 	BLI_assert(totmat != 0);
@@ -1676,6 +1670,7 @@ static GPUDrawObject *cdDM_GPUobject_new(DerivedMesh *dm)
 	mloop = dm->getLoopArray(dm);
 
 	totpolys = dm->getNumPolys(dm);
+	totloops = dm->getNumLoops(dm);
 
 	/* get the number of points used by each material, treating
 	 * each quad as two triangles */
@@ -1683,49 +1678,23 @@ static GPUDrawObject *cdDM_GPUobject_new(DerivedMesh *dm)
 
 	for (i = 0; i < totpolys; i++) {
 		const int mat_nr = mpoly[i].mat_nr;
-		mat_info[mat_nr].polys++;
-		mat_info[mat_nr].elements += 3 * ME_POLY_TRI_TOT(&mpoly[i]);
-		mat_info[mat_nr].loops += mpoly[i].totloop;
+		mat_info[mat_nr].totpolys++;
+		mat_info[mat_nr].totelements += 3 * ME_POLY_TRI_TOT(&mpoly[i]);
+		mat_info[mat_nr].totloops += mpoly[i].totloop;
 	}
 	/* create the GPUDrawObject */
 	gdo = MEM_callocN(sizeof(GPUDrawObject), "GPUDrawObject");
 	gdo->totvert = dm->getNumVerts(dm);
 	gdo->totedge = dm->getNumEdges(dm);
 
-	/* count the number of materials used by this DerivedMesh */
-	for (i = 0; i < totmat; i++) {
-		if (mat_info[i].elements > 0)
-			gdo->totmaterial++;
-	}
-
-	/* allocate an array of materials used by this DerivedMesh */
-	gdo->materials = MEM_mallocN(sizeof(GPUBufferMaterial) * gdo->totmaterial,
-	                             "GPUDrawObject.materials");
-
-	/* initialize the materials array */
-	for (i = 0, curmat = 0, totelements = 0, totloops = 0; i < totmat; i++) {
-		if (mat_info[i].elements > 0) {
-			gdo->materials[curmat].start = totelements;
-			/* can set it to points now but used in cdDM_drawobject_init_vert_points as counter */
-			gdo->materials[curmat].totelements = mat_info[i].elements;
-			gdo->materials[curmat].totloops = mat_info[i].loops;
-			gdo->materials[curmat].mat_nr = i;
-			gdo->materials[curmat].totpolys = mat_info[i].polys;
-			gdo->materials[curmat].polys = MEM_mallocN(sizeof(int) * mat_info[i].polys, "GPUBufferMaterial.polys");
-
-			totelements += mat_info[i].elements;
-			totloops += mat_info[i].loops;
-			curmat++;
-		}
-	}
+	GPU_buffer_material_finalize(gdo, mat_info, totmat);
 
 	gdo->tot_loop_verts = totloops;
 
 	/* store total number of points used for triangles */
-	gdo->tot_triangle_point = totelements;
+	gdo->tot_triangle_point = dm->getNumLoopTri(dm) * 3;
 
 	cdDM_drawobject_init_vert_points(gdo, mpoly, mloop, totpolys, totmat);
-	MEM_freeN(mat_info);
 
 	return gdo;
 }
