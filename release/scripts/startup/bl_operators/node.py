@@ -125,7 +125,7 @@ class NodeAddOperator:
 
         if self.use_transform and ('FINISHED' in result):
             # removes the node again if transform is canceled
-            bpy.ops.transform.translate('INVOKE_DEFAULT', remove_on_cancel=True)
+            bpy.ops.node.translate_attach_remove_on_cancel('INVOKE_DEFAULT')
 
         return result
 
@@ -135,7 +135,7 @@ class NODE_OT_add_node(NodeAddOperator, Operator):
     '''Add a node to the active tree'''
     bl_idname = "node.add_node"
     bl_label = "Add Node"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'REGISTER'}
 
 
 # Add a node and link it to an existing socket

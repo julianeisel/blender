@@ -996,7 +996,7 @@ typedef struct SpaceNode {
 	
 	struct bGPdata *gpd;        /* grease-pencil data */
 
-	struct NodeInsertOffsetData *iofsd;
+	struct NodeInsertOfsData *iofsd;
 } SpaceNode;
 
 /* snode->flag */

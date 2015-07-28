@@ -92,7 +92,7 @@ void node_operatortypes(void)
 	
 	WM_operatortype_append(NODE_OT_link_viewer);
 	
-	WM_operatortype_append(NODE_OT_insert_offset_anim);
+	WM_operatortype_append(NODE_OT_insert_offset);
 	
 	WM_operatortype_append(NODE_OT_read_renderlayers);
 	WM_operatortype_append(NODE_OT_read_fullsamplelayers);
@@ -149,6 +149,17 @@ void ED_operatormacros_node(void)
 	mot = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
 	RNA_boolean_set(mot->ptr, "release_confirm", true);
 	WM_operatortype_macro_define(ot, "NODE_OT_attach");
+	WM_operatortype_macro_define(ot, "NODE_OT_insert_offset");
+	
+	/* NODE_OT_translate_attach with remove_on_canel set to true */
+	ot = WM_operatortype_append_macro("NODE_OT_translate_attach_remove_on_cancel", "Move and Attach",
+	                                  "Move nodes and attach to frame",
+	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
+	mot = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
+	RNA_boolean_set(mot->ptr, "release_confirm", true);
+	RNA_boolean_set(mot->ptr, "remove_on_cancel", true);
+	WM_operatortype_macro_define(ot, "NODE_OT_attach");
+	WM_operatortype_macro_define(ot, "NODE_OT_insert_offset");
 
 	/* Note: Currently not in a default keymap or menu due to messy keymaps
 	 * and tricky invoke functionality.
@@ -164,9 +175,7 @@ void ED_operatormacros_node(void)
 
 	ot = WM_operatortype_append_macro("NODE_OT_duplicate_move", "Duplicate",
 	                                  "Duplicate selected nodes and move them",
-	                                  /* don't add OPTYPE_UNDO here, it conflicts with insert
-	                                   * offset animation, so undo is handled later */
-	                                  OPTYPE_REGISTER);
+	                                   OPTYPE_UNDO | OPTYPE_REGISTER);
 	WM_operatortype_macro_define(ot, "NODE_OT_duplicate");
 	WM_operatortype_macro_define(ot, "NODE_OT_translate_attach");
 
@@ -313,8 +322,6 @@ void node_keymap(struct wmKeyConfig *keyconf)
 	RNA_boolean_set(kmi->ptr, "prev", true);
 	
 	WM_keymap_add_item(keymap, "NODE_OT_find_node", FKEY, KM_PRESS, KM_CTRL, 0);
-	
-	WM_keymap_add_item(keymap, "NODE_OT_insert_offset_anim", TIMER, KM_ANY, KM_ANY, 0);
 	
 	/* node group operators */
 	WM_keymap_add_item(keymap, "NODE_OT_group_make", GKEY, KM_PRESS, KM_CTRL, 0);

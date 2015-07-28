@@ -5998,12 +5998,9 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 		SpaceNode *snode = (SpaceNode *)t->sa->spacedata.first;
 		special_aftertrans_update__node(C, t);
 		if (canceled == 0) {
-			wmWindowManager *wm = CTX_wm_manager(C);
-			wmWindow *win = CTX_wm_window(C);
-
 			ED_node_post_apply_transform(C, snode->edittree);
 
-			ED_node_link_insert(C, wm, win, t->sa, t->ar);
+			ED_node_link_insert(t->sa);
 		}
 		
 		/* clear link line */
