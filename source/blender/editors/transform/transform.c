@@ -833,7 +833,7 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
 		{TFM_MODAL_EDGESLIDE_UP, "EDGESLIDE_EDGE_NEXT", 0, "Select next Edge Slide Edge", ""},
 		{TFM_MODAL_EDGESLIDE_DOWN, "EDGESLIDE_PREV_NEXT", 0, "Select previous Edge Slide Edge", ""},
 		{TFM_MODAL_PROPSIZE, "PROPORTIONAL_SIZE", 0, "Adjust Proportional Influence", ""},
-		{TFM_MODAL_INSERTOFS_TOGGLE_DIR, "INSERTOFS_TOGGLE_DIR", 0, "Toggle direction for Node Editor Auto Offset", ""},
+		{TFM_MODAL_INSERTOFS_TOGGLE_DIR, "INSERTOFS_TOGGLE_DIR", 0, "Toggle Direction for Node Auto Offset", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
@@ -4278,9 +4278,12 @@ static void headerTranslation(TransInfo *t, const float vec[3], char str[MAX_INF
 		if ((snode->flag & SNODE_SKIP_INSOFFSET) == 0) {
 			const char *str_old = BLI_strdup(str);
 			const char *str_dir = (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT) ? "right" : "left";
+			char str_km[MAX_INFO_LEN];
 
-			ofs += BLI_snprintf(str, MAX_INFO_LEN, "Auto offset set to %s - press T to toggle direction  |  %s",
-			                    str_dir, str_old);
+			WM_modalkeymap_items_to_string(t->keymap, TFM_MODAL_INSERTOFS_TOGGLE_DIR, true, sizeof(str), str_km);
+
+			ofs += BLI_snprintf(str, MAX_INFO_LEN, "Auto offset set to %s - press %s to toggle direction  |  %s",
+			                    str_dir, str_km, str_old);
 		}
 	}
 }
