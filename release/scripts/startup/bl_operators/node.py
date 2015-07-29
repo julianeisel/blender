@@ -135,7 +135,7 @@ class NODE_OT_add_node(NodeAddOperator, Operator):
     '''Add a node to the active tree'''
     bl_idname = "node.add_node"
     bl_label = "Add Node"
-    bl_options = {'REGISTER', 'UNDO'} # XXX should be fixed in master
+    bl_options = {'REGISTER'} # XXX should be fixed in master
 
 
 # Add a node and link it to an existing socket
