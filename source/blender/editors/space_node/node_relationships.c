@@ -1723,9 +1723,9 @@ void ED_node_link_insert(ScrArea *sa)
 			link->tosock = best_input;
 			node_remove_extra_links(snode, link, false);
 			link->flag &= ~NODE_LINKFLAG_HILITE;
-
+			
 			nodeAddLink(snode->edittree, select, best_output, node, sockto);
-
+			
 			/* set up insert offset data, it needs stuff from here */
 			if ((snode->flag & SNODE_SKIP_INSOFFSET) == 0) {
 				NodeInsertOfsData *iofsd = MEM_callocN(sizeof(NodeInsertOfsData), __func__);

@@ -175,7 +175,7 @@ void ED_operatormacros_node(void)
 
 	ot = WM_operatortype_append_macro("NODE_OT_duplicate_move", "Duplicate",
 	                                  "Duplicate selected nodes and move them",
-	                                   OPTYPE_UNDO | OPTYPE_REGISTER);
+	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
 	WM_operatortype_macro_define(ot, "NODE_OT_duplicate");
 	WM_operatortype_macro_define(ot, "NODE_OT_translate_attach");
 
@@ -344,9 +344,6 @@ void node_keymap(struct wmKeyConfig *keyconf)
 #endif
 	WM_keymap_add_item(keymap, "NODE_OT_viewer_border", BKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "NODE_OT_clear_viewer_border", BKEY, KM_PRESS, KM_ALT | KM_CTRL, 0);
-
-	kmi = WM_keymap_add_item(keymap, "WM_OT_context_toggle", VKEY, KM_PRESS, KM_SHIFT, 0);
-	RNA_string_set(kmi->ptr, "data_path", "space_data.auto_offset");
 
 	transform_keymap_for_space(keyconf, keymap, SPACE_NODE);
 }
