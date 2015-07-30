@@ -1592,6 +1592,9 @@ static void node_link_insert_offset_ntree(
 			{
 				node_offset_apply(offs_node, addval);
 			}
+			else if (!insert->parent && offs_node->parent) {
+				node_offset_apply(offs_node->parent, addval);
+			}
 			margin = addval;
 		}
 		/* enough room is available, but we want to ensure the min margin at the right */
