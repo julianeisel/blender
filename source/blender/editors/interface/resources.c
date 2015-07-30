@@ -473,6 +473,8 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 					cp = ts->syntaxd; break;
 				case TH_NODE_CURVING:
 					cp = &ts->noodle_curving; break;
+				case TH_NODE_MARGIN:
+					cp = &ts->node_margin; break;
 
 				case TH_SEQ_MOVIE:
 					cp = ts->movie; break;
@@ -1174,6 +1176,7 @@ void ui_theme_init_default(void)
 	rgba_char_args_set(btheme->tnode.syntaxd, 116, 151, 151, 255);  /* distort nodes */
 	rgba_char_args_set(btheme->tnode.console_output, 223, 202, 53, 255);  /* interface nodes */
 	btheme->tnode.noodle_curving = 5;
+	btheme->tnode.node_margin = 80;
 
 	/* space logic */
 	btheme->tlogic = btheme->tv3d;
@@ -2633,6 +2636,13 @@ void init_userdef_do_versions(void)
 
 	if (!USER_VERSION_ATLEAST(275, 2)) {
 		U.ndof_deadzone = 0.1;
+	}
+
+	if (!USER_VERSION_ATLEAST(275, 4)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			btheme->tnode.node_margin = 80;
+		}
 	}
 
 	if (U.pixelsize == 0.0f)

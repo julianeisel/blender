@@ -55,6 +55,7 @@
 #include "WM_types.h"
 
 #include "UI_view2d.h"
+#include "UI_resources.h"
 
 #include "BLF_translation.h"
 
@@ -1426,7 +1427,6 @@ static void node_parent_offset_apply(NodeInsertOfsData *data, bNode *parent, con
 	}
 }
 
-#define NODE_MIN_MARGIN (UI_UNIT_X * 4.0f)
 #define NODE_INSOFS_ANIM_DURATION 0.25f
 
 /**
@@ -1514,8 +1514,9 @@ static void node_link_insert_offset_ntree(
 	bNode *init_parent = insert->parent; /* store old insert->parent for restoring later */
 	rctf totr_insert;
 
+	const float min_margin = UI_GetThemeValue(TH_NODE_MARGIN) * UI_DPI_FAC;
 	const float width = NODE_WIDTH(insert);
-	const bool needs_alignment = (next->totr.xmin - prev->totr.xmax) < (width + (NODE_MIN_MARGIN * 2.0f));
+	const bool needs_alignment = (next->totr.xmin - prev->totr.xmax) < (width + (min_margin * 2.0f));
 
 	float margin = width;
 	float dist, addval;
@@ -1568,22 +1569,22 @@ static void node_link_insert_offset_ntree(
 
 	dist = right_alignment ? totr_insert.xmin - prev->totr.xmax : next->totr.xmin - totr_insert.xmax;
 	/* distance between insert_node and prev is smaller than min margin */
-	if (dist < NODE_MIN_MARGIN) {
-		addval = (NODE_MIN_MARGIN - dist) * (right_alignment ? 1.0f : -1.0f);
+	if (dist < min_margin) {
+		addval = (min_margin - dist) * (right_alignment ? 1.0f : -1.0f);
 
 		node_offset_apply(insert, addval);
 
 		totr_insert.xmin  += addval;
 		totr_insert.xmax  += addval;
-		margin            += NODE_MIN_MARGIN;
+		margin            += min_margin;
 	}
 
 	/* *** ensure offset at the right (or left for right_alignment case) of insert_node *** */
 
 	dist = right_alignment ? next->totr.xmin - totr_insert.xmax : totr_insert.xmin - prev->totr.xmax;
 	/* distance between insert_node and next is smaller than min margin */
-	if (dist < NODE_MIN_MARGIN) {
-		addval = (NODE_MIN_MARGIN - dist) * (right_alignment ? 1.0f : -1.0f);
+	if (dist < min_margin) {
+		addval = (min_margin - dist) * (right_alignment ? 1.0f : -1.0f);
 		if (needs_alignment) {
 			bNode *offs_node = right_alignment ? next : prev;
 			if (!offs_node->parent ||
@@ -1658,7 +1659,6 @@ static int node_insert_offset_modal(bContext *C, wmOperator *UNUSED(op), const w
 }
 
 #undef NODE_INSOFS_ANIM_DURATION
-#undef NODE_MIN_MARGIN
 
 static int node_insert_offset_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
