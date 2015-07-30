@@ -15,29 +15,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2015 Blender Foundation.
- * All rights reserved.
- *
- * Contributor(s): Sergey Sharybin.
- *
  * ***** END GPL LICENSE BLOCK *****
  */
 
-#ifndef __OPENSUBDIV_INTERN_H__
-#define __OPENSUBDIV_INTERN_H__
 
-/* Perform full topology validation when exporting it to OpenSubdiv. */
-#ifdef NDEBUG
-#  undef OPENSUBDIV_VALIDATE_TOPOLOGY
-#else
-#  define OPENSUBDIV_VALIDATE_TOPOLOGY
-#endif
-
-/* Currently OpenSubdiv expects topology to be oriented,
- * but sometimes it's handy to disable orientation code
- * to check whether it causes some weird issues by using
- * pre-oriented model.
+/** \file blender/python/mathutils/mathutils_bvhtree.h
+ *  \ingroup mathutils
  */
-#define OPENSUBDIV_ORIENT_TOPOLOGY
 
-#endif  /* __OPENSUBDIV_INTERN_H__ */
+#ifndef __MATHUTILS_BVHTREE_H__
+#define __MATHUTILS_BVHTREE_H__
+
+PyMODINIT_FUNC PyInit_mathutils_bvhtree(void);
+
+extern PyTypeObject PyBVHTree_Type;
+
+#define PyBVHTree_Check(_v)  PyObject_TypeCheck((_v), &PyBVHTree_Type)
+#define PyBVHTree_CheckExact(v)  (Py_TYPE(v) == &PyBVHTree_Type)
+
+#endif /* __MATHUTILS_BVHTREE_H__ */
