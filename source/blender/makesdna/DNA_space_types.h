@@ -993,10 +993,10 @@ typedef struct SpaceNode {
 	char pad4;
 
 	ListBase linkdrag;   /* temporary data for modal linking operator */
-	
-	struct bGPdata *gpd;        /* grease-pencil data */
+	/* XXX hack for translate_attach op-macros to pass data from transform op to insert_offset op */
+	struct NodeInsertOfsData *iofsd; /* temporary data for node insert offset (in UI called Auto-offset) */
 
-	struct NodeInsertOfsData *iofsd;
+	struct bGPdata *gpd;        /* grease-pencil data */
 } SpaceNode;
 
 /* snode->flag */

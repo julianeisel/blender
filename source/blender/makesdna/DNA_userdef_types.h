@@ -297,9 +297,7 @@ typedef struct ThemeSpace {
 	char bundle_solid[4];
 	char path_before[4], path_after[4];
 	char camera_path[4];
-	char hpad;
-
-	char node_margin; /* node insert offset (aka auto-offset) margin, but might be useful for later stuff as well */
+	char hpad[2];
 
 	char gp_vertex_size;
 	char gp_vertex[4], gp_vertex_select[4];
@@ -467,7 +465,8 @@ typedef struct UserDef {
 
 	int scrollback; /* console scrollback limit */
 	int dpi;		/* range 48-128? */
-	char pad2[2];
+	char node_margin; /* node insert offset (aka auto-offset) margin, but might be useful for later stuff as well */
+	char pad2;
 	short transopts;
 	short menuthreshold1, menuthreshold2;
 	

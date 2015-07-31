@@ -4280,10 +4280,12 @@ static void headerTranslation(TransInfo *t, const float vec[3], char str[MAX_INF
 			const char *str_dir = (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT) ? "right" : "left";
 			char str_km[MAX_INFO_LEN];
 
-			WM_modalkeymap_items_to_string(t->keymap, TFM_MODAL_INSERTOFS_TOGGLE_DIR, true, sizeof(str), str_km);
+			WM_modalkeymap_items_to_string(t->keymap, TFM_MODAL_INSERTOFS_TOGGLE_DIR, true, sizeof(str_km), str_km);
 
 			ofs += BLI_snprintf(str, MAX_INFO_LEN, "Auto offset set to %s - press %s to toggle direction  |  %s",
 			                    str_dir, str_km, str_old);
+
+			MEM_freeN((void *)str_old);
 		}
 	}
 }

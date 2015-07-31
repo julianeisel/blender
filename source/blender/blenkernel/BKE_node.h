@@ -482,7 +482,7 @@ bool            nodeIsChildOf(const bNode *parent, const bNode *child);
 
 void            nodeChainIter(
         const bNodeTree *ntree, const bNode *node_start,
-        bool (*callback)(bNode *, bNode*, void *, const bool), void *userdata,
+        bool (*callback)(bNode *, bNode *, void *, const bool), void *userdata,
         const bool reversed);
 void            nodeParentsIter(bNode *node, bool (*callback)(bNode *, void *), void *userdata);
 

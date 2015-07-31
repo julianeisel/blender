@@ -1514,7 +1514,7 @@ static void node_link_insert_offset_ntree(
 	bNode *init_parent = insert->parent; /* store old insert->parent for restoring later */
 	rctf totr_insert;
 
-	const float min_margin = UI_GetThemeValue(TH_NODE_MARGIN) * UI_DPI_FAC;
+	const float min_margin = U.node_margin * UI_DPI_FAC;
 	const float width = NODE_WIDTH(insert);
 	const bool needs_alignment = (next->totr.xmin - prev->totr.xmax) < (width + (min_margin * 2.0f));
 
