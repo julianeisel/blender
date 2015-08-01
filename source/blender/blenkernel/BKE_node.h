@@ -480,11 +480,11 @@ struct bNode   *nodeFindRootParent(bNode *node);
 
 bool            nodeIsChildOf(const bNode *parent, const bNode *child);
 
-void            nodeChainIter(
+void nodeChainIter(
         const bNodeTree *ntree, const bNode *node_start,
         bool (*callback)(bNode *, bNode *, void *, const bool), void *userdata,
         const bool reversed);
-void            nodeParentsIter(bNode *node, bool (*callback)(bNode *, void *), void *userdata);
+void nodeParentsIter(bNode *node, bool (*callback)(bNode *, void *), void *userdata);
 
 struct bNodeLink *nodeFindLink(struct bNodeTree *ntree, struct bNodeSocket *from, struct bNodeSocket *to);
 int             nodeCountSocketLinks(struct bNodeTree *ntree, struct bNodeSocket *sock);

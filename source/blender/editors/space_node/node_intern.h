@@ -84,7 +84,7 @@ void drawnodespace(const bContext *C, ARegion *ar);
 void node_set_cursor(struct wmWindow *win, struct SpaceNode *snode, float cursor[2]);
 	/* DPI scaled coords */
 void node_to_view(struct bNode *node, float x, float y, float *rx, float *ry);
-void node_to_updated_rect(bNode *node, rctf *r_rect);
+void node_to_updated_rect(struct bNode *node, rctf *r_rect);
 void node_from_view(struct bNode *node, float x, float y, float *rx, float *ry);
 
 /* node_buttons.c */
