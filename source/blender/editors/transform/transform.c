@@ -799,7 +799,7 @@ enum {
 
 /* for analog input, like trackpad */
 	TFM_MODAL_PROPSIZE       = 26,
-/* node editor auto offset (insert offset) direction toggle */
+/* node editor insert offset (aka auto-offset) direction toggle */
 	TFM_MODAL_INSERTOFS_TOGGLE_DIR         = 27,
 };
 
@@ -833,7 +833,7 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
 		{TFM_MODAL_EDGESLIDE_UP, "EDGESLIDE_EDGE_NEXT", 0, "Select next Edge Slide Edge", ""},
 		{TFM_MODAL_EDGESLIDE_DOWN, "EDGESLIDE_PREV_NEXT", 0, "Select previous Edge Slide Edge", ""},
 		{TFM_MODAL_PROPSIZE, "PROPORTIONAL_SIZE", 0, "Adjust Proportional Influence", ""},
-		{TFM_MODAL_INSERTOFS_TOGGLE_DIR, "INSERTOFS_TOGGLE_DIR", 0, "Toggle Direction for Node Auto Offset", ""},
+		{TFM_MODAL_INSERTOFS_TOGGLE_DIR, "INSERTOFS_TOGGLE_DIR", 0, "Toggle Direction for Node Auto-offset", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
