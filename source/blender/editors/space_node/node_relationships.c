@@ -1138,7 +1138,7 @@ static int node_attach_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent
 	ARegion *ar = CTX_wm_region(C);
 	SpaceNode *snode = CTX_wm_space_node(C);
 	bNodeTree *ntree = snode->edittree;
-	bNode *frame = node_find_frame_to_attach(ar, ntree, &event->x);
+	bNode *frame = node_find_frame_to_attach(ar, ntree, event->mval);
 
 	if (frame) {
 		bNode *node, *parent;
@@ -1675,7 +1675,7 @@ static int node_insert_offset_invoke(bContext *C, wmOperator *op, const wmEvent 
 
 	node_link_insert_offset_ntree(
 	            iofsd, CTX_wm_region(C),
-	            &event->x, (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT));
+	            event->mval, (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT));
 
 	/* add temp handler */
 	WM_event_add_modal_handler(C, op);
