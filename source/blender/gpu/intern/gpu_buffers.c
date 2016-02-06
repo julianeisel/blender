@@ -785,17 +785,17 @@ void GPU_facemap_setup(DerivedMesh *dm)
 {
 	if (!gpu_buffer_setup_common(dm, GPU_BUFFER_FACEMAP, false))
 		return;
-	
+
 	if (!gpu_buffer_setup_common(dm, GPU_BUFFER_VERTEX, false))
 		return;
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER_ARB, dm->drawObject->points->id);
 	glVertexPointer(3, GL_FLOAT, 0, 0);
-	
+
 	GLStates |= GPU_BUFFER_VERTEX_STATE;
 	glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, dm->drawObject->facemapindices->id);
-	
+
 	GLStates |= GPU_BUFFER_ELEMENT_STATE;
 }
 
