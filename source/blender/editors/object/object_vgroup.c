@@ -517,7 +517,7 @@ static void ED_mesh_defvert_mirror_update_ob(Object *ob, int def_nr, int vidx)
 	if (vidx == -1)
 		return;
 
-	vidx_mirr = mesh_get_x_mirror_vert(ob, vidx, use_topology);
+	vidx_mirr = mesh_get_x_mirror_vert(ob, NULL, vidx, use_topology);
 
 	if ((vidx_mirr) >= 0 && (vidx_mirr != vidx)) {
 		MDeformVert *dvert_src = &me->dvert[vidx];
@@ -1828,13 +1828,13 @@ static void vgroup_smooth_subset(
 					float tot_factor = 1.0f; \
 					if (expand_sign == 1) {  /* expand */ \
 						if (weight_other < weight_accum_prev[i]) { \
-							weight_other = (weight_accum_prev[i_other] * iexpand) + (weight_other * expand); \
+							weight_other = (weight_accum_prev[i] * expand) + (weight_other * iexpand); \
 							tot_factor = iexpand; \
 						} \
 					} \
 					else if (expand_sign == -1) {  /* contract */ \
 						if (weight_other > weight_accum_prev[i]) { \
-							weight_other = (weight_accum_prev[i_other] * iexpand) + (weight_other * expand); \
+							weight_other = (weight_accum_prev[i] * expand) + (weight_other * iexpand); \
 							tot_factor = iexpand; \
 						} \
 					} \
@@ -2244,7 +2244,7 @@ void ED_vgroup_mirror(Object *ob,
 
 			for (vidx = 0, mv = me->mvert; vidx < me->totvert; vidx++, mv++) {
 				if ((mv->flag & ME_VERT_TMP_TAG) == 0) {
-					if ((vidx_mirr = mesh_get_x_mirror_vert(ob, vidx, use_topology)) != -1) {
+					if ((vidx_mirr = mesh_get_x_mirror_vert(ob, NULL, vidx, use_topology)) != -1) {
 						if (vidx != vidx_mirr) {
 							mv_mirr = &me->mvert[vidx_mirr];
 							if ((mv_mirr->flag & ME_VERT_TMP_TAG) == 0) {
@@ -3327,8 +3327,14 @@ static int vertex_group_copy_to_selected_exec(bContext *C, wmOperator *op)
 	CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects)
 	{
 		if (obact != ob) {
-			if (ED_vgroup_array_copy(ob, obact)) changed_tot++;
-			else fail++;
+			if (ED_vgroup_array_copy(ob, obact)) {
+				DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+				WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob);
+				changed_tot++;
+			}
+			else {
+				fail++;
+			}
 		}
 	}
 	CTX_DATA_END;

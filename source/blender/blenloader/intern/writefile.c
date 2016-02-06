@@ -2914,7 +2914,7 @@ static void write_libraries(WriteData *wd, Main *main)
 			found_one = false;
 			while (tot--) {
 				for (id= lbarray[tot]->first; id; id= id->next) {
-					if (id->us>0 && (id->flag & LIB_EXTERN)) {
+					if (id->us > 0 && (id->tag & LIB_TAG_EXTERN)) {
 						found_one = true;
 						break;
 					}
@@ -2939,7 +2939,7 @@ static void write_libraries(WriteData *wd, Main *main)
 			
 			while (a--) {
 				for (id= lbarray[a]->first; id; id= id->next) {
-					if (id->us>0 && (id->flag & LIB_EXTERN)) {
+					if (id->us > 0 && (id->tag & LIB_TAG_EXTERN)) {
 						if (!BKE_idcode_is_linkable(GS(id->name))) {
 							printf("ERROR: write file: datablock '%s' from lib '%s' is not linkable "
 							       "but is flagged as directly linked", id->name, main->curlib->filepath);
@@ -3815,24 +3815,28 @@ static bool do_history(const char *name, ReportList *reports)
 		BKE_report(reports, RPT_ERROR, "Unable to make version backup: filename too short");
 		return 1;
 	}
-		
+
 	while (hisnr > 1) {
 		BLI_snprintf(tempname1, sizeof(tempname1), "%s%d", name, hisnr-1);
-		BLI_snprintf(tempname2, sizeof(tempname2), "%s%d", name, hisnr);
-	
-		if (BLI_rename(tempname1, tempname2)) {
-			BKE_report(reports, RPT_ERROR, "Unable to make version backup");
-			return 1;
+		if (BLI_exists(tempname1)) {
+			BLI_snprintf(tempname2, sizeof(tempname2), "%s%d", name, hisnr);
+
+			if (BLI_rename(tempname1, tempname2)) {
+				BKE_report(reports, RPT_ERROR, "Unable to make version backup");
+				return true;
+			}
 		}
 		hisnr--;
 	}
 
 	/* is needed when hisnr==1 */
-	BLI_snprintf(tempname1, sizeof(tempname1), "%s%d", name, hisnr);
+	if (BLI_exists(name)) {
+		BLI_snprintf(tempname1, sizeof(tempname1), "%s%d", name, hisnr);
 
-	if (BLI_rename(name, tempname1)) {
-		BKE_report(reports, RPT_ERROR, "Unable to make version backup");
-		return 1;
+		if (BLI_rename(name, tempname1)) {
+			BKE_report(reports, RPT_ERROR, "Unable to make version backup");
+			return true;
+		}
 	}
 
 	return 0;
