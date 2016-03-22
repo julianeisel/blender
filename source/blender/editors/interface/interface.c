@@ -1221,8 +1221,9 @@ void UI_block_update_from_old(const bContext *C, uiBlock *block)
 	BLI_movelisttolist(&block->color_pickers.list, &block->oldblock->color_pickers.list);
 	/* sub-block drag & drop data */
 	if ((BLI_listbase_is_empty(&block->oldblock->subblocks) == false) &&
-	    (UI_subblock_dragging_find(block->oldblock) || UI_subblock_animating_find(block->oldblock))) {
-		BLI_duplicatelist(&block->subblocks, &block->oldblock->subblocks);
+	    (UI_subblock_dragging_find(block->oldblock) || UI_subblock_animating_find(block->oldblock)))
+	{
+		block->subblocks = block->oldblock->subblocks;
 	}
 
 	block->oldblock = NULL;
