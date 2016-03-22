@@ -214,23 +214,20 @@ bool GHOST_System::getFullScreen(void)
 }
 
 
-bool GHOST_System::dispatchEvents()
+void GHOST_System::dispatchEvents()
 {
-	bool handled = false;
-
 #ifdef WITH_INPUT_NDOF
 	// NDOF Motion event is sent only once per dispatch, so do it now:
 	if (m_ndofManager) {
-		handled |= m_ndofManager->sendMotionEvent();
+		m_ndofManager->sendMotionEvent();
 	}
 #endif
 
 	if (m_eventManager) {
-		handled |= m_eventManager->dispatchEvents();
+		m_eventManager->dispatchEvents();
 	}
 
 	m_timerManager->fireTimers(getMilliSeconds());
-	return handled;
 }
 
 
@@ -293,6 +290,15 @@ GHOST_TSuccess GHOST_System::getButtonState(GHOST_TButtonMask mask, bool& isDown
 		isDown = buttons.get(mask);
 	}
 	return success;
+}
+
+void GHOST_System::setNDOFDeadZone(float deadzone)
+{
+#ifdef WITH_INPUT_NDOF
+	this->m_ndofManager->setDeadZone(deadzone);
+#else
+	(void)deadzone;
+#endif
 }
 
 GHOST_TSuccess GHOST_System::init()

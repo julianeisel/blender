@@ -163,6 +163,10 @@ ccl_device float3 mirrorball_to_direction(float u, float v)
 
 	dir.x = 2.0f*u - 1.0f;
 	dir.z = 2.0f*v - 1.0f;
+
+	if(dir.x*dir.x + dir.z*dir.z > 1.0f)
+		return make_float3(0.0f, 0.0f, 0.0f);
+
 	dir.y = -sqrtf(max(1.0f - dir.x*dir.x - dir.z*dir.z, 0.0f));
 
 	/* reflection */
@@ -191,6 +195,8 @@ ccl_device float3 panorama_to_direction(KernelGlobals *kg, float u, float v)
 	switch(kernel_data.cam.panorama_type) {
 		case PANORAMA_EQUIRECTANGULAR:
 			return equirectangular_range_to_direction(u, v, kernel_data.cam.equirectangular_range);
+		case PANORAMA_MIRRORBALL:
+			return mirrorball_to_direction(u, v);
 		case PANORAMA_FISHEYE_EQUIDISTANT:
 			return fisheye_to_direction(u, v, kernel_data.cam.fisheye_fov);
 		case PANORAMA_FISHEYE_EQUISOLID:
@@ -205,6 +211,8 @@ ccl_device float2 direction_to_panorama(KernelGlobals *kg, float3 dir)
 	switch(kernel_data.cam.panorama_type) {
 		case PANORAMA_EQUIRECTANGULAR:
 			return direction_to_equirectangular_range(dir, kernel_data.cam.equirectangular_range);
+		case PANORAMA_MIRRORBALL:
+			return direction_to_mirrorball(dir);
 		case PANORAMA_FISHEYE_EQUIDISTANT:
 			return direction_to_fisheye(dir, kernel_data.cam.fisheye_fov);
 		case PANORAMA_FISHEYE_EQUISOLID:
@@ -214,7 +222,48 @@ ccl_device float2 direction_to_panorama(KernelGlobals *kg, float3 dir)
 	}
 }
 
+ccl_device float3 spherical_stereo_position(KernelGlobals *kg,
+                                            float3 dir,
+                                            float3 pos)
+{
+	const float interocular_offset = kernel_data.cam.interocular_offset;
+
+	/* Interocular offset of zero means either non stereo, or stereo without
+	 * spherical stereo.
+	 */
+	if(interocular_offset == 0.0f) {
+		return pos;
+	}
+
+	float3 up = make_float3(0.0f, 0.0f, 1.0f);
+	float3 side = normalize(cross(dir, up));
+
+	return pos + (side * interocular_offset);
+}
+
+/* NOTE: Ensures direction is normalized. */
+ccl_device float3 spherical_stereo_direction(KernelGlobals *kg,
+                                             float3 dir,
+                                             float3 pos,
+                                             float3 newpos)
+{
+	const float convergence_distance = kernel_data.cam.convergence_distance;
+	const float3 normalized_dir = normalize(dir);
+	/* Interocular offset of zero means either no stereo, or stereo without
+	 * spherical stereo.
+	 * Convergence distance is FLT_MAX in the case of parallel convergence mode,
+	 * no need to mdify direction in this case either.
+	 */
+	if(kernel_data.cam.interocular_offset == 0.0f ||
+	   convergence_distance == FLT_MAX)
+	{
+		return normalized_dir;
+	}
+
+	float3 screenpos = pos + (normalized_dir * convergence_distance);
+	return normalize(screenpos - newpos);
+}
+
 CCL_NAMESPACE_END
 
-#endif /* __KERNEL_PROJECTION_CL__ */
-
+#endif  /* __KERNEL_PROJECTION_CL__ */

@@ -32,12 +32,53 @@ class Scene;
 /* Camera
  *
  * The camera parameters are quite standard, tested to be both compatible with
- * Renderman, and Blender after remapping. */
+ * Renderman, and Blender after remapping.
+ */
 
 class Camera {
 public:
+	/* Specifies an offset for the shutter's time interval. */
+	enum MotionPosition {
+		/* Shutter opens at the current frame. */
+		MOTION_POSITION_START = 0,
+		/* Shutter is fully open at the current frame. */
+		MOTION_POSITION_CENTER = 1,
+		/* Shutter closes at the current frame. */
+		MOTION_POSITION_END = 2,
+
+		MOTION_NUM_POSITIONS,
+	};
+
+	/* Specifies rolling shutter effect. */
+	enum RollingShutterType {
+		/* No rolling shutter effect. */
+		ROLLING_SHUTTER_NONE = 0,
+		/* Sensor is being scanned vertically from top to bottom. */
+		ROLLING_SHUTTER_TOP = 1,
+
+		ROLLING_SHUTTER_NUM_TYPES,
+	};
+
+	/* Stereo Type */
+	enum StereoEye {
+		STEREO_NONE,
+		STEREO_LEFT,
+		STEREO_RIGHT,
+	};
+
 	/* motion blur */
 	float shuttertime;
+	MotionPosition motion_position;
+	float shutter_curve[RAMP_TABLE_SIZE];
+	size_t shutter_table_offset;
+
+	/* ** Rolling shutter effect. ** */
+	/* Defines rolling shutter effect type. */
+	RollingShutterType rolling_shutter_type;
+	/* Specifies exposure time of scanlines when using
+	 * rolling shutter effect.
+	 */
+	float rolling_shutter_duration;
 
 	/* depth of field */
 	float focaldistance;
@@ -57,6 +98,12 @@ public:
 	float latitude_max;
 	float longitude_min;
 	float longitude_max;
+
+	/* panorama stereo */
+	StereoEye stereo_eye;
+	bool use_spherical_stereo;
+	float interocular_distance;
+	float convergence_distance;
 
 	/* anamorphic lens bokeh */
 	float aperture_ratio;
@@ -83,7 +130,9 @@ public:
 
 	/* motion */
 	MotionTransform motion;
-	bool use_motion;
+	bool use_motion, use_perspective_motion;
+	float fov_pre, fov_post;
+	PerspectiveMotionTransform perspective_motion;
 
 	/* computed camera parameters */
 	Transform screentoworld;
@@ -105,6 +154,7 @@ public:
 	/* update */
 	bool need_update;
 	bool need_device_update;
+	bool need_flags_update;
 	int previous_need_motion;
 
 	/* functions */
@@ -117,15 +167,18 @@ public:
 
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene);
 	void device_update_volume(Device *device, DeviceScene *dscene, Scene *scene);
-	void device_free(Device *device, DeviceScene *dscene);
+	void device_free(Device *device, DeviceScene *dscene, Scene *scene);
 
 	bool modified(const Camera& cam);
 	bool motion_modified(const Camera& cam);
 	void tag_update();
 
+	/* Public utility functions. */
 	BoundBox viewplane_bounds_get();
+
+private:
+	/* Private utility functions. */
 	float3 transform_raster_to_world(float raster_x, float raster_y);
-	Transform transform_from_viewplane(BoundBox2D &viewplane);
 };
 
 CCL_NAMESPACE_END

@@ -54,6 +54,7 @@ void ARMATURE_OT_bone_primitive_add(struct wmOperatorType *ot);
 
 void ARMATURE_OT_align(struct wmOperatorType *ot);
 void ARMATURE_OT_calculate_roll(struct wmOperatorType *ot);
+void ARMATURE_OT_roll_clear(struct wmOperatorType *ot);
 void ARMATURE_OT_switch_direction(struct wmOperatorType *ot);
 
 void ARMATURE_OT_subdivide(struct wmOperatorType *ot);
@@ -71,6 +72,7 @@ void ARMATURE_OT_select_similar(struct wmOperatorType *ot);
 void ARMATURE_OT_shortest_path_pick(struct wmOperatorType *ot);
 
 void ARMATURE_OT_delete(struct wmOperatorType *ot);
+void ARMATURE_OT_dissolve(struct wmOperatorType *ot);
 void ARMATURE_OT_duplicate(struct wmOperatorType *ot);
 void ARMATURE_OT_symmetrize(struct wmOperatorType *ot);
 void ARMATURE_OT_extrude(struct wmOperatorType *ot);
@@ -220,6 +222,7 @@ bool BIF_sk_selectStroke(struct bContext *C, const int mval[2], const bool exten
 
 /* duplicate method */
 void preEditBoneDuplicate(struct ListBase *editbones);
+void postEditBoneDuplicate(struct ListBase *editbones, struct Object *ob);
 struct EditBone *duplicateEditBone(struct EditBone *curBone, const char *name, struct ListBase *editbones, struct Object *ob);
 void updateDuplicateSubtarget(struct EditBone *dupBone, struct ListBase *editbones, struct Object *ob);
 
@@ -234,6 +237,7 @@ EditBone *add_points_bone(struct Object *obedit, float head[3], float tail[3]);
 void bone_free(struct bArmature *arm, struct EditBone *bone);
 
 void armature_tag_select_mirrored(struct bArmature *arm);
+void armature_select_mirrored_ex(struct bArmature *arm, const int flag);
 void armature_select_mirrored(struct bArmature *arm);
 void armature_tag_unselect(struct bArmature *arm);
 

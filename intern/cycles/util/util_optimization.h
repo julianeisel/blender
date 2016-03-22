@@ -23,7 +23,9 @@
 #if defined(__KERNEL_SSE2__)  || \
 	defined(__KERNEL_SSE3__)  || \
 	defined(__KERNEL_SSSE3__) || \
-	defined(__KERNEL_SSE41__)
+	defined(__KERNEL_SSE41__) || \
+	defined(__KERNEL_AVX__)   || \
+	defined(__KERNEL_AVX2__)
 	/* do nothing */
 #endif
 
@@ -45,7 +47,7 @@
 
 /* x86-64
  *
- * Compile a regular (includes SSE2), SSE3 and SSE 4.1 kernel. */
+ * Compile a regular (includes SSE2), SSE3, SSE 4.1, AVX and AVX2 kernel. */
 
 #if defined(__x86_64__) || defined(_M_X64)
 
@@ -101,39 +103,15 @@
 
 #ifdef _MSC_VER
 #include <intrin.h>
-#else
-
-#ifdef __KERNEL_SSE2__
-#include <xmmintrin.h> /* SSE 1 */
-#include <emmintrin.h> /* SSE 2 */
-#endif
-
-#ifdef __KERNEL_SSE3__
-#include <pmmintrin.h> /* SSE 3 */
-#endif
-
-#ifdef __KERNEL_SSSE3__
-#include <tmmintrin.h> /* SSSE 3 */
-#endif
-
-#ifdef __KERNEL_SSE41__
-#include <smmintrin.h> /* SSE 4.1 */
-#endif
-
-#ifdef __KERNEL_AVX__
-#include <immintrin.h> /* AVX */
-#endif
-
+#elif (defined(__x86_64__) || defined(__i386__))
+#include <x86intrin.h>
 #endif
 
 #else
 
 /* MinGW64 has conflicting declarations for these SSE headers in <windows.h>.
  * Since we can't avoid including <windows.h>, better only include that */
-#define NOGDI
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "util_windows.h"
 
 #endif
 

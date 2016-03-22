@@ -115,39 +115,7 @@ CCL_NAMESPACE_BEGIN
 #include "geom_bvh_subsurface.h"
 #endif
 
-/* Record all BVH intersection for shadows */
-
-#if defined(__SHADOW_RECORD_ALL__)
-#define BVH_FUNCTION_NAME bvh_intersect_shadow_all
-#define BVH_FUNCTION_FEATURES 0
-#include "geom_bvh_shadow.h"
-#endif
-
-#if defined(__SHADOW_RECORD_ALL__) && defined(__INSTANCING__)
-#define BVH_FUNCTION_NAME bvh_intersect_shadow_all_instancing
-#define BVH_FUNCTION_FEATURES BVH_INSTANCING
-#include "geom_bvh_shadow.h"
-#endif
-
-#if defined(__SHADOW_RECORD_ALL__) && defined(__HAIR__)
-#define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair
-#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR
-#include "geom_bvh_shadow.h"
-#endif
-
-#if defined(__SHADOW_RECORD_ALL__) && defined(__OBJECT_MOTION__)
-#define BVH_FUNCTION_NAME bvh_intersect_shadow_all_motion
-#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_MOTION
-#include "geom_bvh_shadow.h"
-#endif
-
-#if defined(__SHADOW_RECORD_ALL__) && defined(__HAIR__) && defined(__OBJECT_MOTION__)
-#define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair_motion
-#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR|BVH_MOTION
-#include "geom_bvh_shadow.h"
-#endif
-
-/* Camera inside Volume BVH intersection */
+/* Volume BVH traversal */
 
 #if defined(__VOLUME__)
 #define BVH_FUNCTION_NAME bvh_intersect_volume
@@ -179,13 +147,82 @@ CCL_NAMESPACE_BEGIN
 #include "geom_bvh_volume.h"
 #endif
 
+/* Record all intersections - Shadow BVH traversal */
+
+#if defined(__SHADOW_RECORD_ALL__)
+#define BVH_FUNCTION_NAME bvh_intersect_shadow_all
+#define BVH_FUNCTION_FEATURES 0
+#include "geom_bvh_shadow.h"
+#endif
+
+#if defined(__SHADOW_RECORD_ALL__) && defined(__INSTANCING__)
+#define BVH_FUNCTION_NAME bvh_intersect_shadow_all_instancing
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING
+#include "geom_bvh_shadow.h"
+#endif
+
+#if defined(__SHADOW_RECORD_ALL__) && defined(__HAIR__)
+#define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR
+#include "geom_bvh_shadow.h"
+#endif
+
+#if defined(__SHADOW_RECORD_ALL__) && defined(__OBJECT_MOTION__)
+#define BVH_FUNCTION_NAME bvh_intersect_shadow_all_motion
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_MOTION
+#include "geom_bvh_shadow.h"
+#endif
+
+#if defined(__SHADOW_RECORD_ALL__) && defined(__HAIR__) && defined(__OBJECT_MOTION__)
+#define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair_motion
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR|BVH_MOTION
+#include "geom_bvh_shadow.h"
+#endif
+
+/* Record all intersections - Volume BVH traversal  */
+
+#if defined(__VOLUME_RECORD_ALL__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all
+#define BVH_FUNCTION_FEATURES 0
+#include "geom_bvh_volume_all.h"
+#endif
+
+#if defined(__VOLUME_RECORD_ALL__) && defined(__INSTANCING__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all_instancing
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING
+#include "geom_bvh_volume_all.h"
+#endif
+
+#if defined(__VOLUME_RECORD_ALL__) && defined(__HAIR__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all_hair
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR|BVH_HAIR_MINIMUM_WIDTH
+#include "geom_bvh_volume_all.h"
+#endif
+
+#if defined(__VOLUME_RECORD_ALL__) && defined(__OBJECT_MOTION__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all_motion
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_MOTION
+#include "geom_bvh_volume_all.h"
+#endif
+
+#if defined(__VOLUME_RECORD_ALL__) && defined(__HAIR__) && defined(__OBJECT_MOTION__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all_hair_motion
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR|BVH_HAIR_MINIMUM_WIDTH|BVH_MOTION
+#include "geom_bvh_volume_all.h"
+#endif
+
 #undef BVH_FEATURE
 #undef BVH_NAME_JOIN
 #undef BVH_NAME_EVAL
 #undef BVH_FUNCTION_FULL_NAME
 
-ccl_device_intersect bool scene_intersect(KernelGlobals *kg, const Ray *ray, const uint visibility, Intersection *isect,
-					 uint *lcg_state, float difl, float extmax)
+ccl_device_intersect bool scene_intersect(KernelGlobals *kg,
+                                          const Ray *ray,
+                                          const uint visibility,
+                                          Intersection *isect,
+                                          uint *lcg_state,
+                                          float difl,
+                                          float extmax)
 {
 #ifdef __OBJECT_MOTION__
 	if(kernel_data.bvh.have_motion) {
@@ -223,38 +260,81 @@ ccl_device_intersect bool scene_intersect(KernelGlobals *kg, const Ray *ray, con
 }
 
 #ifdef __SUBSURFACE__
-ccl_device_intersect uint scene_intersect_subsurface(KernelGlobals *kg, const Ray *ray, Intersection *isect, int subsurface_object, uint *lcg_state, int max_hits)
+ccl_device_intersect void scene_intersect_subsurface(KernelGlobals *kg,
+                                                     const Ray *ray,
+                                                     SubsurfaceIntersection *ss_isect,
+                                                     int subsurface_object,
+                                                     uint *lcg_state,
+                                                     int max_hits)
 {
 #ifdef __OBJECT_MOTION__
 	if(kernel_data.bvh.have_motion) {
 #ifdef __HAIR__
-		if(kernel_data.bvh.have_curves)
-			return bvh_intersect_subsurface_hair_motion(kg, ray, isect, subsurface_object, lcg_state, max_hits);
+		if(kernel_data.bvh.have_curves) {
+			return bvh_intersect_subsurface_hair_motion(kg,
+			                                            ray,
+			                                            ss_isect,
+			                                            subsurface_object,
+			                                            lcg_state,
+			                                            max_hits);
+		}
 #endif /* __HAIR__ */
 
-		return bvh_intersect_subsurface_motion(kg, ray, isect, subsurface_object, lcg_state, max_hits);
+		return bvh_intersect_subsurface_motion(kg,
+		                                       ray,
+		                                       ss_isect,
+		                                       subsurface_object,
+		                                       lcg_state,
+		                                       max_hits);
 	}
 #endif /* __OBJECT_MOTION__ */
 
-#ifdef __HAIR__ 
-	if(kernel_data.bvh.have_curves)
-		return bvh_intersect_subsurface_hair(kg, ray, isect, subsurface_object, lcg_state, max_hits);
+#ifdef __HAIR__
+	if(kernel_data.bvh.have_curves) {
+		return bvh_intersect_subsurface_hair(kg,
+		                                     ray,
+		                                     ss_isect,
+		                                     subsurface_object,
+		                                     lcg_state,
+		                                     max_hits);
+	}
 #endif /* __HAIR__ */
 
 #ifdef __KERNEL_CPU__
 
 #ifdef __INSTANCING__
-	if(kernel_data.bvh.have_instancing)
-		return bvh_intersect_subsurface_instancing(kg, ray, isect, subsurface_object, lcg_state, max_hits);
+	if(kernel_data.bvh.have_instancing) {
+		return bvh_intersect_subsurface_instancing(kg,
+		                                           ray,
+		                                           ss_isect,
+		                                           subsurface_object,
+		                                           lcg_state,
+		                                           max_hits);
+	}
 #endif /* __INSTANCING__ */
 
-	return bvh_intersect_subsurface(kg, ray, isect, subsurface_object, lcg_state, max_hits);
+	return bvh_intersect_subsurface(kg,
+	                                ray,
+	                                ss_isect,
+	                                subsurface_object,
+	                                lcg_state,
+	                                max_hits);
 #else /* __KERNEL_CPU__ */
 
 #ifdef __INSTANCING__
-	return bvh_intersect_subsurface_instancing(kg, ray, isect, subsurface_object, lcg_state, max_hits);
+	return bvh_intersect_subsurface_instancing(kg,
+	                                           ray,
+	                                           ss_isect,
+	                                           subsurface_object,
+	                                           lcg_state,
+	                                           max_hits);
 #else
-	return bvh_intersect_subsurface(kg, ray, isect, subsurface_object, lcg_state, max_hits);
+	return bvh_intersect_subsurface(kg,
+	                                ray,
+	                                ss_isect,
+	                                subsurface_object,
+	                                lcg_state,
+	                                max_hits);
 #endif /* __INSTANCING__ */
 
 #endif /* __KERNEL_CPU__ */
@@ -330,6 +410,37 @@ ccl_device_intersect bool scene_intersect_volume(KernelGlobals *kg,
 }
 #endif
 
+#ifdef __VOLUME_RECORD_ALL__
+ccl_device_intersect uint scene_intersect_volume_all(KernelGlobals *kg,
+                                                     const Ray *ray,
+                                                     Intersection *isect,
+                                                     const uint max_hits)
+{
+#ifdef __OBJECT_MOTION__
+	if(kernel_data.bvh.have_motion) {
+#ifdef __HAIR__
+		if(kernel_data.bvh.have_curves)
+			return bvh_intersect_volume_all_hair_motion(kg, ray, isect, max_hits);
+#endif /* __HAIR__ */
+
+		return bvh_intersect_volume_all_motion(kg, ray, isect, max_hits);
+	}
+#endif /* __OBJECT_MOTION__ */
+
+#ifdef __HAIR__
+	if(kernel_data.bvh.have_curves)
+		return bvh_intersect_volume_all_hair(kg, ray, isect, max_hits);
+#endif /* __HAIR__ */
+
+#ifdef __INSTANCING__
+	if(kernel_data.bvh.have_instancing)
+		return bvh_intersect_volume_all_instancing(kg, ray, isect, max_hits);
+#endif /* __INSTANCING__ */
+
+	return bvh_intersect_volume_all(kg, ray, isect, max_hits);
+}
+#endif
+
 
 /* Ray offset to avoid self intersection.
  *
@@ -383,6 +494,22 @@ ccl_device_inline float3 ray_offset(float3 P, float3 Ng)
 	return P + epsilon_f*Ng;
 #endif
 }
+
+#if defined(__SHADOW_RECORD_ALL__) || defined (__VOLUME_RECORD_ALL__)
+/* ToDo: Move to another file? */
+ccl_device int intersections_compare(const void *a, const void *b)
+{
+	const Intersection *isect_a = (const Intersection*)a;
+	const Intersection *isect_b = (const Intersection*)b;
+
+	if(isect_a->t < isect_b->t)
+		return -1;
+	else if(isect_a->t > isect_b->t)
+		return 1;
+	else
+		return 0;
+}
+#endif
 
 CCL_NAMESPACE_END
 

@@ -41,11 +41,11 @@ extern "C" {
 /* these lines are grep'd, watch out for our not-so-awesome regex
  * and keep comment above the defines.
  * Use STRINGIFY() rather than defining with quotes */
-#define BLENDER_VERSION         274
-#define BLENDER_SUBVERSION      2
+#define BLENDER_VERSION         277
+#define BLENDER_SUBVERSION      0
 /* Several breakages with 270, e.g. constraint deg vs rad */
 #define BLENDER_MINVERSION      270
-#define BLENDER_MINSUBVERSION   5
+#define BLENDER_MINSUBVERSION   6
 
 /* used by packaging tools */
 /* can be left blank, otherwise a,b,c... etc with no quotes */
@@ -87,27 +87,35 @@ void BKE_userdef_free(void);
 void BKE_userdef_state(void);
 	
 /* set this callback when a UI is running */
-void set_blender_test_break_cb(void (*func)(void));
+void BKE_blender_callback_test_break_set(void (*func)(void));
 int blender_test_break(void);
 
 #define BKE_UNDO_STR_MAX 64
 
 /* global undo */
-extern void BKE_write_undo(struct bContext *C, const char *name);
-extern void BKE_undo_step(struct bContext *C, int step);
-extern void BKE_undo_name(struct bContext *C, const char *name);
-extern int BKE_undo_valid(const char *name);
-extern void BKE_reset_undo(void);
-extern void BKE_undo_number(struct bContext *C, int nr);
-extern const char *BKE_undo_get_name(int nr, int *active);
-extern bool BKE_undo_save_file(const char *filename);
-extern struct Main *BKE_undo_get_main(struct Scene **scene);
+extern void          BKE_undo_write(struct bContext *C, const char *name);
+extern void          BKE_undo_step(struct bContext *C, int step);
+extern void          BKE_undo_name(struct bContext *C, const char *name);
+extern bool          BKE_undo_is_valid(const char *name);
+extern void          BKE_undo_reset(void);
+extern void          BKE_undo_number(struct bContext *C, int nr);
+extern const char   *BKE_undo_get_name(int nr, bool *r_active);
+extern bool          BKE_undo_save_file(const char *filename);
+extern struct Main  *BKE_undo_get_main(struct Scene **r_scene);
 
-/* copybuffer */
-void BKE_copybuffer_begin(struct Main *bmain);
+/* partial blend file writing */
+void BKE_blendfile_write_partial_tag_ID(struct ID *id, bool set);
+void BKE_blendfile_write_partial_begin(struct Main *bmain_src);
+bool BKE_blendfile_write_partial(
+        struct Main *bmain_src, const char *filepath, const int write_flags, struct ReportList *reports);
+void BKE_blendfile_write_partial_end(struct Main *bmain_src);
+
+
+/* copybuffer (wrapper for BKE_blendfile_write_partial) */
+void BKE_copybuffer_begin(struct Main *bmain_src);
 void BKE_copybuffer_tag_ID(struct ID *id);
-int BKE_copybuffer_save(const char *filename, struct ReportList *reports);
-int BKE_copybuffer_paste(struct bContext *C, const char *libname, struct ReportList *reports);
+bool BKE_copybuffer_save(struct Main *bmain_src, const char *filename, struct ReportList *reports);
+bool BKE_copybuffer_paste(struct bContext *C, const char *libname, const short flag, struct ReportList *reports);
 
 #ifdef __cplusplus
 }

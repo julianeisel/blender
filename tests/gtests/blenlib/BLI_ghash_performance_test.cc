@@ -26,7 +26,7 @@ extern "C" {
 	double q, lf, var, pempty, poverloaded; \
 	int bigb; \
 	q = BLI_ghash_calc_quality_ex((_gh), &lf, &var, &pempty, &poverloaded, &bigb); \
-	printf("GHash stats (%d entries):\n\t" \
+	printf("GHash stats (%u entries):\n\t" \
 	       "Quality (the lower the better): %f\n\tVariance (the lower the better): %f\n\tLoad: %f\n\t" \
 	       "Empty buckets: %.2f%%\n\tOverloaded buckets: %.2f%% (biggest bucket: %d)\n", \
 	       BLI_ghash_size(_gh), q, var, lf, pempty * 100.0, poverloaded * 100.0, bigb); \
@@ -196,6 +196,21 @@ static void int_ghash_tests(GHash *ghash, const char *id, const unsigned int nbr
 		TIMEIT_END(int_lookup);
 	}
 
+	{
+		void *k, *v;
+
+		TIMEIT_START(int_pop);
+
+		GHashIterState pop_state = {0};
+
+		while (BLI_ghash_pop(ghash, &pop_state, &k, &v)) {
+			EXPECT_EQ(k, v);
+		}
+
+		TIMEIT_END(int_pop);
+	}
+	EXPECT_EQ(0, BLI_ghash_size(ghash));
+
 	BLI_ghash_free(ghash, NULL, NULL);
 
 	printf("========== ENDED %s ==========\n\n", id);
@@ -339,7 +354,8 @@ static void int4_ghash_tests(GHash *ghash, const char *id, const unsigned int nb
 {
 	printf("\n========== STARTING %s ==========\n", id);
 
-	unsigned int (*data)[4] = (unsigned int (*)[4])MEM_mallocN(sizeof(*data) * (size_t)nbr, __func__);
+	void *data_v = MEM_mallocN(sizeof(unsigned int[4]) * (size_t)nbr, __func__);
+	unsigned int (*data)[4] = (unsigned int (*)[4])data_v;
 	unsigned int (*dt)[4];
 	unsigned int i, j;
 

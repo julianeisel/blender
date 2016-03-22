@@ -87,6 +87,8 @@ class TIME_HT_header(Header):
                 subsub = row.row(align=True)
                 subsub.prop(toolsettings, "use_record_with_nla", toggle=True)
 
+        layout.prop(toolsettings, "keyframe_type", text="", icon_only=True)
+
         row = layout.row(align=True)
         row.prop_search(scene.keying_sets_all, "active", scene, "keying_sets_all", text="")
         row.operator("anim.keyframe_insert", text="", icon='KEY_HLT')
@@ -230,7 +232,7 @@ class TIME_MT_autokey(Menu):
 
 def marker_menu_generic(layout):
 
-    #layout.operator_context = 'EXEC_REGION_WIN'
+    # layout.operator_context = 'EXEC_REGION_WIN'
 
     layout.column()
     layout.operator("marker.add", "Add Marker")
@@ -253,6 +255,10 @@ def marker_menu_generic(layout):
 
     layout.operator("screen.marker_jump", text="Jump to Next Marker").next = True
     layout.operator("screen.marker_jump", text="Jump to Previous Marker").next = False
+
+    layout.separator()
+    ts = bpy.context.tool_settings
+    layout.prop(ts, "lock_markers")
 
 
 if __name__ == "__main__":  # only for live edit.

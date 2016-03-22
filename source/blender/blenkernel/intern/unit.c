@@ -48,7 +48,7 @@
 #define SEP_CHR		'#'
 #define SEP_STR		"#"
 
-#define EPS 0.00001
+#define EPS 0.001
 
 #define UN_SC_KM	1000.0f
 #define UN_SC_HM	100.0f
@@ -370,12 +370,7 @@ static size_t unit_as_string(char *str, int len_max, double value, int prec, bUn
 	value_conv = value / unit->scalar;
 
 	/* Convert to a string */
-	{
-		len = BLI_snprintf(str, len_max, "%.*f", prec, value_conv);
-
-		if (len >= len_max)
-			len = len_max;
-	}
+	len = BLI_snprintf_rlen(str, len_max, "%.*f", prec, value_conv);
 
 	/* Add unit prefix and strip zeros */
 
@@ -465,29 +460,34 @@ BLI_INLINE bool isalpha_or_utf8(const int ch)
 
 static const char *unit_find_str(const char *str, const char *substr)
 {
-	const char *str_found;
-
 	if (substr && substr[0] != '\0') {
-		str_found = strstr(str, substr);
-		if (str_found) {
-			/* previous char cannot be a letter */
-			if (str_found == str ||
-			    /* weak unicode support!, so "µm" won't match up be replaced by "m"
-			     * since non ascii utf8 values will NEVER return true */
-			    isalpha_or_utf8(*BLI_str_prev_char_utf8(str_found)) == 0)
-			{
-				/* next char cannot be alphanum */
-				int len_name = strlen(substr);
+		while (true) {
+			const char *str_found = strstr(str, substr);
 
-				if (!isalpha_or_utf8(*(str_found + len_name))) {
-					return str_found;
+			if (str_found) {
+				/* Previous char cannot be a letter. */
+				if (str_found == str ||
+				    /* weak unicode support!, so "µm" won't match up be replaced by "m"
+				     * since non ascii utf8 values will NEVER return true */
+				    isalpha_or_utf8(*BLI_str_prev_char_utf8(str_found)) == 0)
+				{
+					/* next char cannot be alphanum */
+					int len_name = strlen(substr);
+
+					if (!isalpha_or_utf8(*(str_found + len_name))) {
+						return str_found;
+					}
 				}
+				/* If str_found is not a valid unit, we have to check further in the string... */
+				for (str_found++; isalpha_or_utf8(*str_found); str_found++);
+				str = str_found;
+			}
+			else {
+				break;
 			}
 		}
-
 	}
 	return NULL;
-
 }
 
 /* Note that numbers are added within brackets
@@ -517,10 +517,8 @@ static bool ch_is_op(char op)
 		case '=':
 		case '%':
 			return true;
-			break;
 		default:
 			return false;
-			break;
 	}
 }
 
@@ -650,7 +648,7 @@ bool bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double sc
 	}
 
 	/* make lowercase */
-	BLI_ascii_strtolower(str, len_max);
+	BLI_str_tolower_ascii(str, len_max);
 
 	/* Try to find a default unit from current or previous string. */
 	default_unit = unit_detect_from_str(usys, str, str_prev);
@@ -735,11 +733,10 @@ void bUnit_ToUnitAltName(char *str, int len_max, const char *orig_str, int syste
 	bUnitCollection *usys = unit_get_system(system, type);
 
 	bUnitDef *unit;
-	bUnitDef *unit_def = unit_default(usys);
 
 	/* find and substitute all units */
 	for (unit = usys->units; unit->name; unit++) {
-		if (len_max > 0 && (unit->name_alt || unit == unit_def)) {
+		if (len_max > 0 && unit->name_alt) {
 			const char *found = unit_find_str(orig_str, unit->name_short);
 			if (found) {
 				int offset = (int)(found - orig_str);

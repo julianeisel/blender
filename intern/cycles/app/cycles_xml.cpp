@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <iterator>
 
+#include "background.h"
 #include "camera.h"
 #include "film.h"
 #include "graph.h"
@@ -55,6 +56,16 @@ struct XMLReadState {
 	string base;		/* base path to current file*/
 	float dicing_rate;	/* current dicing rate */
 	Mesh::DisplacementMethod displacement_method;
+
+	XMLReadState()
+	  : scene(NULL),
+	    smooth(false),
+	    shader(0),
+	    dicing_rate(0.0f),
+	    displacement_method(Mesh::DISPLACE_BUMP)
+	{
+		tfm = transform_identity();
+	}
 };
 
 /* Attribute Reading */
@@ -348,6 +359,10 @@ static void xml_read_camera(const XMLReadState& state, pugi::xml_node node)
 	xml_read_float(&cam->fisheye_fov, node, "fisheye_fov");
 	xml_read_float(&cam->fisheye_lens, node, "fisheye_lens");
 
+	xml_read_bool(&cam->use_spherical_stereo, node, "use_spherical_stereo");
+	xml_read_float(&cam->interocular_distance, node, "interocular_distance");
+	xml_read_float(&cam->convergence_distance, node, "convergence_distance");
+
 	xml_read_float(&cam->sensorwidth, node, "sensorwidth");
 	xml_read_float(&cam->sensorheight, node, "sensorheight");
 
@@ -381,6 +396,10 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 	for(pugi::xml_node node = graph_node.first_child(); node; node = node.next_sibling()) {
 		ShaderNode *snode = NULL;
 
+		/* ToDo: Add missing nodes
+		 * RGBCurvesNode, VectorCurvesNode, RGBRampNode and ConvertNode (RGB -> BW).
+		 */
+
 		if(string_iequals(node.name(), "image_texture")) {
 			ImageTextureNode *img = new ImageTextureNode();
 
@@ -390,6 +409,8 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 			xml_read_enum(&img->color_space, ImageTextureNode::color_space_enum, node, "color_space");
 			xml_read_enum(&img->projection, ImageTextureNode::projection_enum, node, "projection");
 			xml_read_float(&img->projection_blend, node, "projection_blend");
+
+			/* ToDo: Interpolation */
 
 			snode = img;
 		}
@@ -493,19 +514,21 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 			xml_read_int(&magic->depth, node, "depth");
 			snode = magic;
 		}
-		else if(string_iequals(node.name(), "noise_texture")) {
-			NoiseTextureNode *dist = new NoiseTextureNode();
-			snode = dist;
-		}
 		else if(string_iequals(node.name(), "wave_texture")) {
 			WaveTextureNode *wave = new WaveTextureNode();
 			xml_read_enum(&wave->type, WaveTextureNode::type_enum, node, "type");
+			xml_read_enum(&wave->profile, WaveTextureNode::profile_enum, node, "profile");
 			snode = wave;
 		}
 		else if(string_iequals(node.name(), "normal")) {
 			NormalNode *normal = new NormalNode();
 			xml_read_float3(&normal->direction, node, "direction");
 			snode = normal;
+		}
+		else if(string_iequals(node.name(), "bump")) {
+			BumpNode *bump = new BumpNode();
+			xml_read_bool(&bump->invert, node, "invert");
+			snode = bump;
 		}
 		else if(string_iequals(node.name(), "mapping")) {
 			snode = new MappingNode();
@@ -561,6 +584,9 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 		else if(string_iequals(node.name(), "background")) {
 			snode = new BackgroundNode();
 		}
+		else if(string_iequals(node.name(), "holdout")) {
+			snode = new HoldoutNode();
+		}
 		else if(string_iequals(node.name(), "absorption_volume")) {
 			snode = new AbsorptionVolumeNode();
 		}
@@ -569,7 +595,16 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 		}
 		else if(string_iequals(node.name(), "subsurface_scattering")) {
 			SubsurfaceScatteringNode *sss = new SubsurfaceScatteringNode();
-			//xml_read_enum(&sss->falloff, SubsurfaceScatteringNode::falloff_enum, node, "falloff");
+
+			string falloff;
+			xml_read_string(&falloff, node, "falloff");
+			if(falloff == "cubic")
+				sss->closure = CLOSURE_BSSRDF_CUBIC_ID;
+			else if(falloff == "gaussian")
+				sss->closure = CLOSURE_BSSRDF_GAUSSIAN_ID;
+			else /*if(falloff == "burley")*/
+				sss->closure = CLOSURE_BSSRDF_BURLEY_ID;
+
 			snode = sss;
 		}
 		else if(string_iequals(node.name(), "geometry")) {
@@ -613,6 +648,7 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 			snode = new InvertNode();
 		}
 		else if(string_iequals(node.name(), "mix")) {
+			/* ToDo: Tag Mix case for optimization */
 			MixNode *mix = new MixNode();
 			xml_read_enum(&mix->type, MixNode::type_enum, node, "type");
 			xml_read_bool(&mix->use_clamp, node, "use_clamp");
@@ -637,10 +673,10 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 			snode = new SeparateHSVNode();
 		}
 		else if(string_iequals(node.name(), "combine_xyz")) {
-			snode = new CombineHSVNode();
+			snode = new CombineXYZNode();
 		}
 		else if(string_iequals(node.name(), "separate_xyz")) {
-			snode = new SeparateHSVNode();
+			snode = new SeparateXYZNode();
 		}
 		else if(string_iequals(node.name(), "hsv")) {
 			snode = new HSVNode();
@@ -822,6 +858,15 @@ static void xml_read_shader(const XMLReadState& state, pugi::xml_node node)
 
 static void xml_read_background(const XMLReadState& state, pugi::xml_node node)
 {
+	/* Background Settings */
+	Background *bg = state.scene->background;
+
+	xml_read_float(&bg->ao_distance, node, "ao_distance");
+	xml_read_float(&bg->ao_factor, node, "ao_factor");
+
+	xml_read_bool(&bg->transparent, node, "transparent");
+
+	/* Background Shader */
 	Shader *shader = state.scene->shaders[state.scene->default_background];
 	
 	xml_read_bool(&shader->heterogeneous_volume, node, "heterogeneous_volume");
@@ -868,6 +913,7 @@ static void xml_read_mesh(const XMLReadState& state, pugi::xml_node node)
 
 	/* read vertices and polygons, RIB style */
 	vector<float3> P;
+	vector<float> UV;
 	vector<int> verts, nverts;
 
 	xml_read_float3_array(P, node, "P");
@@ -938,6 +984,31 @@ static void xml_read_mesh(const XMLReadState& state, pugi::xml_node node)
 			}
 
 			index_offset += nverts[i];
+		}
+
+		if(xml_read_float_array(UV, node, "UV")) {
+			ustring name = ustring("UVMap");
+			Attribute *attr = mesh->attributes.add(ATTR_STD_UV, name);
+			float3 *fdata = attr->data_float3();
+
+			/* loop over the triangles */
+			index_offset = 0;
+			for(size_t i = 0; i < nverts.size(); i++) {
+				for(int j = 0; j < nverts[i]-2; j++) {
+					int v0 = verts[index_offset];
+					int v1 = verts[index_offset + j + 1];
+					int v2 = verts[index_offset + j + 2];
+
+					assert(v0*2+1 < (int)UV.size());
+					assert(v1*2+1 < (int)UV.size());
+					assert(v2*2+1 < (int)UV.size());
+
+					fdata[0] = make_float3(UV[v0*2], UV[v0*2+1], 0.0);
+					fdata[1] = make_float3(UV[v1*2], UV[v1*2+1], 0.0);
+					fdata[2] = make_float3(UV[v2*2], UV[v2*2+1], 0.0);
+					fdata += 3;
+				}
+			}
 		}
 	}
 
@@ -1028,12 +1099,27 @@ static void xml_read_light(const XMLReadState& state, pugi::xml_node node)
 	xml_read_float(&light->sizev, node, "sizev");
 	xml_read_float3(&light->axisu, node, "axisu");
 	xml_read_float3(&light->axisv, node, "axisv");
-	
+
+	/* Portal? (Area light only) */
+	xml_read_bool(&light->is_portal, node, "is_portal");
+
 	/* Generic */
 	xml_read_float(&light->size, node, "size");
 	xml_read_float3(&light->dir, node, "dir");
 	xml_read_float3(&light->co, node, "P");
 	light->co = transform_point(&state.tfm, light->co);
+
+	/* Settings */
+	xml_read_bool(&light->cast_shadow, node, "cast_shadow");
+	xml_read_bool(&light->use_mis, node, "use_mis");
+	xml_read_int(&light->samples, node, "samples");
+	xml_read_int(&light->max_bounces, node, "max_bounces");
+
+	/* Ray Visibility */
+	xml_read_bool(&light->use_diffuse, node, "use_diffuse");
+	xml_read_bool(&light->use_glossy, node, "use_glossy");
+	xml_read_bool(&light->use_transmission, node, "use_transmission");
+	xml_read_bool(&light->use_scatter, node, "use_scatter");
 
 	state.scene->lights.push_back(light);
 }
@@ -1178,7 +1264,8 @@ static void xml_read_include(const XMLReadState& state, const string& src)
 		XMLReadState substate = state;
 		substate.base = path_dirname(path);
 
-		xml_read_scene(substate, doc);
+		pugi::xml_node cycles = doc.child("cycles");
+		xml_read_scene(substate, cycles);
 	}
 	else {
 		fprintf(stderr, "%s read error: %s\n", src.c_str(), parse_result.description());

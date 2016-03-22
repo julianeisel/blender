@@ -25,12 +25,13 @@
 
 set(INC 
 	..
-	../../blenfont
 	../../blenkernel
 	../../blenlib
 	../../blenloader
+	../../blentranslation
 	../../editors/include
 	../../gpu
+	../../imbuf
 	../../makesdna
 	../../makesrna
 	../../windowmanager
@@ -45,6 +46,7 @@ set(INC_SYS
 
 set(SRC
 	gpu.c
+	gpu_offscreen.c
 	bpy.c
 	bpy_app.c
 	bpy_app_build_options.c
@@ -52,13 +54,15 @@ set(SRC
 	bpy_app_handlers.c
 	bpy_app_ocio.c
 	bpy_app_oiio.c
+	bpy_app_openvdb.c
 	bpy_app_sdl.c
 	bpy_app_translations.c
 	bpy_driver.c
 	bpy_interface.c
 	bpy_interface_atexit.c
 	bpy_intern_string.c
-	bpy_library.c
+	bpy_library_load.c
+	bpy_library_write.c
 	bpy_operator.c
 	bpy_operator_wrap.c
 	bpy_path.c
@@ -67,8 +71,10 @@ set(SRC
 	bpy_rna_anim.c
 	bpy_rna_array.c
 	bpy_rna_callback.c
+	bpy_rna_id_collection.c
 	bpy_traceback.c
 	bpy_util.c
+	bpy_utils_previews.c
 	bpy_utils_units.c
 	stubs.c
 
@@ -80,6 +86,7 @@ set(SRC
 	bpy_app_handlers.h
 	bpy_app_ocio.h
 	bpy_app_oiio.h
+	bpy_app_openvdb.h
 	bpy_app_sdl.h
 	bpy_app_translations.h
 	bpy_driver.h
@@ -92,8 +99,10 @@ set(SRC
 	bpy_rna.h
 	bpy_rna_anim.h
 	bpy_rna_callback.h
+	bpy_rna_id_collection.h
 	bpy_traceback.h
 	bpy_util.h
+	bpy_utils_previews.h
 	bpy_utils_units.h
 	../BPY_extern.h
 )
@@ -191,10 +200,6 @@ if(WITH_IMAGE_OPENJPEG)
 	add_definitions(-DWITH_OPENJPEG)
 endif()
 
-if(WITH_IMAGE_REDCODE)
-	add_definitions(-DWITH_REDCODE)
-endif()
-
 if(WITH_IMAGE_TIFF)
 	add_definitions(-DWITH_TIFF)
 endif()
@@ -222,7 +227,7 @@ if(WITH_SDL_DYNLOAD)
 	list(APPEND INC
 		../../../../extern/sdlew/include
 	)
-    add_definitions(-DWITH_SDL_DYNLOAD)
+	add_definitions(-DWITH_SDL_DYNLOAD)
 endif()
 
 if(WITH_JACK)
@@ -259,6 +264,13 @@ endif()
 
 if(WITH_OPENCOLORIO)
 	add_definitions(-DWITH_OCIO)
+endif()
+
+if(WITH_OPENVDB)
+	add_definitions(-DWITH_OPENVDB)
+	list(APPEND INC
+		../../../../intern/openvdb
+	)
 endif()
 
 if(WITH_OPENIMAGEIO)

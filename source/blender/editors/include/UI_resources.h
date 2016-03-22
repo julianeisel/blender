@@ -200,8 +200,9 @@ enum {
 	TH_SEQ_EFFECT,
 	TH_SEQ_TRANSITION,
 	TH_SEQ_META,
+	TH_SEQ_TEXT,
 	TH_SEQ_PREVIEW,
-	
+
 	TH_EDGE_SHARP,
 	TH_EDITMESH_ACTIVE,
 	
@@ -294,7 +295,10 @@ enum {
 	TH_INFO_DEBUG_TEXT,
 	TH_VIEW_OVERLAY,
 	
-	TH_V3D_CLIPPING_BORDER
+	TH_V3D_CLIPPING_BORDER,
+
+	TH_METADATA_BG,
+	TH_METADATA_TEXT
 };
 /* XXX WARNING: previous is saved in file, so do not change order! */
 
@@ -330,6 +334,9 @@ void    UI_ThemeColorBlendShadeAlpha(int colorid1, int colorid2, float fac, int 
 // returns one value, not scaled
 float   UI_GetThemeValuef(int colorid);
 int     UI_GetThemeValue(int colorid);
+
+float   UI_GetThemeValueTypef(int colorid, int spacetype);
+int     UI_GetThemeValueType(int colorid, int spacetype);
 
 // get three color values, scaled to 0.0-1.0 range
 void    UI_GetThemeColor3fv(int colorid, float col[3]);

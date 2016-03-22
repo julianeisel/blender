@@ -18,7 +18,6 @@ set(SRC
 	attribute.cpp
 	background.cpp
 	bake.cpp
-	blackbody.cpp
 	buffers.cpp
 	camera.cpp
 	film.cpp
@@ -36,7 +35,6 @@ set(SRC
 	scene.cpp
 	session.cpp
 	shader.cpp
-	sky_model.cpp
 	sobol.cpp
 	svm.cpp
 	tables.cpp
@@ -47,7 +45,6 @@ set(SRC_HEADERS
 	attribute.h
 	bake.h
 	background.h
-	blackbody.h
 	buffers.h
 	camera.h
 	film.h
@@ -64,8 +61,6 @@ set(SRC_HEADERS
 	scene.h
 	session.h
 	shader.h
-	sky_model.h
-	sky_model_data.h
 	sobol.h
 	svm.h
 	tables.h

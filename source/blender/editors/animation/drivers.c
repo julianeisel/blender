@@ -42,6 +42,7 @@
 #include "DNA_texture_types.h"
 
 #include "BKE_animsys.h"
+#include "BKE_depsgraph.h"
 #include "BKE_fcurve.h"
 #include "BKE_context.h"
 #include "BKE_report.h"
@@ -84,7 +85,7 @@ FCurve *verify_driver_fcurve(ID *id, const char rna_path[], const int array_inde
 	/* init animdata if none available yet */
 	adt = BKE_animdata_from_id(id);
 	if ((adt == NULL) && (add))
-		adt = BKE_id_add_animdata(id);
+		adt = BKE_animdata_add_id(id);
 	if (adt == NULL) {
 		/* if still none (as not allowed to add, or ID doesn't have animdata for some reason) */
 		return NULL;
@@ -129,8 +130,8 @@ FCurve *verify_driver_fcurve(ID *id, const char rna_path[], const int array_inde
 				 * - These are configured to 0,0 and 1,1 to give a 1-1 mapping
 				 *   which can be easily tweaked from there.
 				 */
-				insert_vert_fcurve(fcu, 0.0f, 0.0f, INSERTKEY_FAST);
-				insert_vert_fcurve(fcu, 1.0f, 1.0f, INSERTKEY_FAST);
+				insert_vert_fcurve(fcu, 0.0f, 0.0f, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_FAST);
+				insert_vert_fcurve(fcu, 1.0f, 1.0f, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_FAST);
 				
 				/* configure this curve to extrapolate */
 				for (i = 0, bezt = fcu->bezt;  (i < fcu->totvert) && bezt;  i++, bezt++) {
@@ -450,7 +451,7 @@ static int add_driver_button_exec(bContext *C, wmOperator *op)
 	if (success) {
 		/* send updates */
 		UI_context_update_anim_flag(C);
-		
+		DAG_relations_tag_update(CTX_data_main(C));
 		WM_event_add_notifier(C, NC_ANIMATION | ND_FCURVES_ORDER, NULL); // XXX
 	}
 	
@@ -504,7 +505,7 @@ static int remove_driver_button_exec(bContext *C, wmOperator *op)
 	if (success) {
 		/* send updates */
 		UI_context_update_anim_flag(C);
-		
+		DAG_relations_tag_update(CTX_data_main(C));
 		WM_event_add_notifier(C, NC_ANIMATION | ND_FCURVES_ORDER, NULL);  // XXX
 	}
 	

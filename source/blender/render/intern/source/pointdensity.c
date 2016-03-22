@@ -39,12 +39,14 @@
 #include "BLI_noise.h"
 #include "BLI_kdopbvh.h"
 #include "BLI_utildefines.h"
+#include "BLI_task.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_DerivedMesh.h"
 #include "BKE_lattice.h"
 #include "BKE_main.h"
+#include "BKE_object.h"
 #include "BKE_particle.h"
 #include "BKE_scene.h"
 #include "BKE_texture.h"
@@ -58,12 +60,15 @@
 #include "texture.h"
 #include "pointdensity.h"
 
+#include "RE_render_ext.h"
+
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* defined in pipeline.c, is hardcopy of active dynamic allocated Render */
 /* only to be used here in this file, it's for speed */
 extern struct Render R;
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
+static ThreadMutex sample_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int point_data_used(PointDensity *pd)
 {
@@ -117,7 +122,8 @@ static void pointdensity_cache_psys(Scene *scene,
                                     ParticleSystem *psys,
                                     float viewmat[4][4],
                                     float winmat[4][4],
-                                    int winx, int winy)
+                                    int winx, int winy,
+                                    const bool use_render_params)
 {
 	DerivedMesh *dm;
 	ParticleKey state;
@@ -136,11 +142,22 @@ static void pointdensity_cache_psys(Scene *scene,
 	}
 
 	/* Just to create a valid rendering context for particles */
-	psys_render_set(ob, psys, viewmat, winmat, winx, winy, 0);
+	if (use_render_params) {
+		psys_render_set(ob, psys, viewmat, winmat, winx, winy, 0);
+	}
 
-	dm = mesh_create_derived_render(scene, ob, CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
+	if (use_render_params) {
+		dm = mesh_create_derived_render(scene,
+		                                ob,
+		                                CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
+	}
+	else {
+		dm = mesh_get_derived_final(scene,
+		                            ob,
+		                            CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
+	}
 
-	if ( !psys_check_enabled(ob, psys)) {
+	if (!psys_check_enabled(ob, psys)) {
 		psys_render_restore(ob, psys);
 		return;
 	}
@@ -148,6 +165,7 @@ static void pointdensity_cache_psys(Scene *scene,
 	sim.scene = scene;
 	sim.ob = ob;
 	sim.psys = psys;
+	sim.psmd = psys_get_modifier(ob, psys);
 
 	/* in case ob->imat isn't up-to-date */
 	invert_m4_m4(ob->imat, ob->obmat);
@@ -235,17 +253,32 @@ static void pointdensity_cache_psys(Scene *scene,
 		psys->lattice_deform_data = NULL;
 	}
 
-	psys_render_restore(ob, psys);
+	if (use_render_params) {
+		psys_render_restore(ob, psys);
+	}
 }
 
 
-static void pointdensity_cache_object(Scene *scene, PointDensity *pd, Object *ob)
+static void pointdensity_cache_object(Scene *scene,
+                                      PointDensity *pd,
+                                      Object *ob,
+                                      const bool use_render_params)
 {
 	int i;
 	DerivedMesh *dm;
 	MVert *mvert = NULL;
 
-	dm = mesh_create_derived_render(scene, ob, CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
+	if (use_render_params) {
+		dm = mesh_create_derived_render(scene,
+		                                ob,
+		                                CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
+	}
+	else {
+		dm = mesh_get_derived_final(scene,
+		                            ob,
+		                            CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
+
+	}
 	mvert = dm->getVertArray(dm);	/* local object space */
 
 	pd->totpoints = dm->getNumVerts(dm);
@@ -285,7 +318,8 @@ static void cache_pointdensity_ex(Scene *scene,
                                   PointDensity *pd,
                                   float viewmat[4][4],
                                   float winmat[4][4],
-                                  int winx, int winy)
+                                  int winx, int winy,
+                                  const bool use_render_params)
 {
 	if (pd == NULL) {
 		return;
@@ -309,18 +343,28 @@ static void cache_pointdensity_ex(Scene *scene,
 			return;
 		}
 
-		pointdensity_cache_psys(scene, pd, ob, psys, viewmat, winmat, winx, winy);
+		pointdensity_cache_psys(scene,
+		                        pd,
+		                        ob,
+		                        psys,
+		                        viewmat, winmat,
+		                        winx, winy,
+		                        use_render_params);
 	}
 	else if (pd->source == TEX_PD_OBJECT) {
 		Object *ob = pd->object;
 		if (ob && ob->type == OB_MESH)
-			pointdensity_cache_object(scene, pd, ob);
+			pointdensity_cache_object(scene, pd, ob, use_render_params);
 	}
 }
 
 void cache_pointdensity(Render *re, PointDensity *pd)
 {
-	cache_pointdensity_ex(re->scene, pd, re->viewmat, re->winmat, re->winx, re->winy);
+	cache_pointdensity_ex(re->scene,
+	                      pd,
+	                      re->viewmat, re->winmat,
+	                      re->winx, re->winy,
+	                      true);
 }
 
 void free_pointdensity(PointDensity *pd)
@@ -391,11 +435,13 @@ typedef struct PointDensityRangeData {
 	float velscale;
 } PointDensityRangeData;
 
-static void accum_density(void *userdata, int index, float squared_dist)
+static void accum_density(void *userdata, int index, const float co[3], float squared_dist)
 {
 	PointDensityRangeData *pdr = (PointDensityRangeData *)userdata;
 	const float dist = (pdr->squared_radius - squared_dist) / pdr->squared_radius * 0.5f;
 	float density = 0.0f;
+
+	UNUSED_VARS(co);
 
 	if (pdr->point_data_used & POINT_DATA_VEL) {
 		pdr->vec[0] += pdr->point_data[index * 3 + 0]; // * density;
@@ -456,14 +502,16 @@ static void init_pointdensityrangedata(PointDensity *pd, PointDensityRangeData *
 }
 
 
-int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
+static int pointdensity(PointDensity *pd,
+                        const float texvec[3],
+                        TexResult *texres,
+                        float *r_age,
+                        float r_vec[3])
 {
 	int retval = TEX_INT;
-	PointDensity *pd = tex->pd;
 	PointDensityRangeData pdr;
 	float density = 0.0f, age = 0.0f, time = 0.0f;
 	float vec[3] = {0.0f, 0.0f, 0.0f}, co[3];
-	float col[4];
 	float turb, noise_fac;
 	int num = 0;
 
@@ -525,10 +573,20 @@ int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 	}
 
 	texres->tin = density;
-	BRICONT;
+	if (r_age != NULL) {
+		*r_age = age;
+	}
+	if (r_vec != NULL) {
+		copy_v3_v3(r_vec, vec);
+	}
 
-	if (pd->color_source == TEX_PD_COLOR_CONSTANT)
-		return retval;
+	return retval;
+}
+
+static int pointdensity_color(PointDensity *pd, TexResult *texres, float age, const float vec[3])
+{
+	int retval = 0;
+	float col[4];
 
 	retval |= TEX_RGB;
 
@@ -559,8 +617,7 @@ int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 		}
 		case TEX_PD_COLOR_PARTVEL:
 			texres->talpha = true;
-			mul_v3_fl(vec, pd->speed_scale);
-			copy_v3_v3(&texres->tr, vec);
+			mul_v3_v3fl(&texres->tr, vec, pd->speed_scale);
 			texres->ta = texres->tin;
 			break;
 		case TEX_PD_COLOR_CONSTANT:
@@ -568,6 +625,23 @@ int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 			texres->tr = texres->tg = texres->tb = texres->ta = 1.0f;
 			break;
 	}
+	
+	return retval;
+}
+
+int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
+{
+	PointDensity *pd = tex->pd;
+	float age = 0.0f;
+	float vec[3] = {0.0f, 0.0f, 0.0f};
+	int retval = pointdensity(pd, texvec, texres, &age, vec);
+
+	BRICONT;
+
+	if (pd->color_source == TEX_PD_COLOR_CONSTANT)
+		return retval;
+
+	retval |= pointdensity_color(pd, texres, age, vec);
 	BRICONTRGB;
 
 	return retval;
@@ -577,4 +651,226 @@ int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 		texres->nor[0] = texres->nor[1] = texres->nor[2] = 0.0f;
 	}
 #endif
+}
+
+static void sample_dummy_point_density(int resolution, float *values)
+{
+	memset(values, 0, sizeof(float) * 4 * resolution * resolution * resolution);
+}
+
+static void particle_system_minmax(Scene *scene,
+                                   Object *object,
+                                   ParticleSystem *psys,
+                                   float radius,
+                                   const bool use_render_params,
+                                   float min[3], float max[3])
+{
+	const float size[3] = {radius, radius, radius};
+	const float cfra = BKE_scene_frame_get(scene);
+	ParticleSettings *part = psys->part;
+	ParticleSimulationData sim = {NULL};
+	ParticleData *pa = NULL;
+	int i;
+	int total_particles;
+	float mat[4][4], imat[4][4];
+
+	INIT_MINMAX(min, max);
+	if (part->type == PART_HAIR) {
+		/* TOOD(sergey): Not supported currently. */
+		return;
+	}
+
+	unit_m4(mat);
+	if (use_render_params) {
+		psys_render_set(object, psys, mat, mat, 1, 1, 0);
+	}
+
+	sim.scene = scene;
+	sim.ob = object;
+	sim.psys = psys;
+	sim.psmd = psys_get_modifier(object, psys);
+
+	invert_m4_m4(imat, object->obmat);
+	total_particles = psys->totpart + psys->totchild;
+	psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
+
+	for (i = 0, pa = psys->particles; i < total_particles; i++, pa++) {
+		float co_object[3], co_min[3], co_max[3];
+		ParticleKey state;
+		state.time = cfra;
+		if (!psys_get_particle_state(&sim, i, &state, 0)) {
+			continue;
+		}
+		mul_v3_m4v3(co_object, imat, state.co);
+		sub_v3_v3v3(co_min, co_object, size);
+		add_v3_v3v3(co_max, co_object, size);
+		minmax_v3v3_v3(min, max, co_min);
+		minmax_v3v3_v3(min, max, co_max);
+	}
+
+	if (psys->lattice_deform_data) {
+		end_latt_deform(psys->lattice_deform_data);
+		psys->lattice_deform_data = NULL;
+	}
+
+	if (use_render_params) {
+		psys_render_restore(object, psys);
+	}
+}
+
+void RE_point_density_cache(
+        Scene *scene,
+        PointDensity *pd,
+        const bool use_render_params)
+{
+	float mat[4][4];
+	/* Same matricies/resolution as dupli_render_particle_set(). */
+	unit_m4(mat);
+	BLI_mutex_lock(&sample_mutex);
+	cache_pointdensity_ex(scene, pd, mat, mat, 1, 1, use_render_params);
+	BLI_mutex_unlock(&sample_mutex);
+}
+
+void RE_point_density_minmax(
+        struct Scene *scene,
+        struct PointDensity *pd,
+        const bool use_render_params,
+        float r_min[3], float r_max[3])
+{
+	Object *object = pd->object;
+	if (object == NULL) {
+		zero_v3(r_min);
+		zero_v3(r_max);
+		return;
+	}
+	if (pd->source == TEX_PD_PSYS) {
+		ParticleSystem *psys;
+		if (pd->psys == 0) {
+			zero_v3(r_min);
+			zero_v3(r_max);
+			return;
+		}
+		psys = BLI_findlink(&object->particlesystem, pd->psys - 1);
+		if (psys == NULL) {
+			zero_v3(r_min);
+			zero_v3(r_max);
+			return;
+		}
+		particle_system_minmax(scene,
+		                       object,
+		                       psys,
+		                       pd->radius,
+		                       use_render_params,
+		                       r_min, r_max);
+	}
+	else {
+		float radius[3] = {pd->radius, pd->radius, pd->radius};
+		float *loc, *size;
+
+		if (BKE_object_obdata_texspace_get(pd->object, NULL, &loc, &size, NULL)) {
+			sub_v3_v3v3(r_min, loc, size);
+			add_v3_v3v3(r_max, loc, size);
+			/* Adjust texture space to include density points on the boundaries. */
+			sub_v3_v3(r_min, radius);
+			add_v3_v3(r_max, radius);
+		}
+		else {
+			zero_v3(r_min);
+			zero_v3(r_max);
+		}
+	}
+}
+
+typedef struct SampleCallbackData {
+	PointDensity *pd;
+	int resolution;
+	float *min, *dim;
+	float *values;
+} SampleCallbackData;
+
+static void point_density_sample_func(void *data_v, const int iter)
+{
+	SampleCallbackData *data = (SampleCallbackData *)data_v;
+
+	const int resolution = data->resolution;
+	const int resolution2 = resolution * resolution;
+	const float *min = data->min, *dim = data->dim;
+	PointDensity *pd = data->pd;
+	float *values = data->values;
+
+	size_t z = (size_t)iter;
+	for (size_t y = 0; y < resolution; ++y) {
+		for (size_t x = 0; x < resolution; ++x) {
+			size_t index = z * resolution2 + y * resolution + x;
+			float texvec[3];
+			float age, vec[3];
+			TexResult texres;
+
+			copy_v3_v3(texvec, min);
+			texvec[0] += dim[0] * (float)x / (float)resolution;
+			texvec[1] += dim[1] * (float)y / (float)resolution;
+			texvec[2] += dim[2] * (float)z / (float)resolution;
+
+			pointdensity(pd, texvec, &texres, &age, vec);
+			pointdensity_color(pd, &texres, age, vec);
+
+			copy_v3_v3(&values[index*4 + 0], &texres.tr);
+			values[index*4 + 3] = texres.tin;
+		}
+	}
+}
+
+/* NOTE 1: Requires RE_point_density_cache() to be called first.
+ * NOTE 2: Frees point density structure after sampling.
+ */
+void RE_point_density_sample(
+        Scene *scene,
+        PointDensity *pd,
+        const int resolution,
+        const bool use_render_params,
+        float *values)
+{
+	Object *object = pd->object;
+	float min[3], max[3], dim[3];
+
+	/* TODO(sergey): Implement some sort of assert() that point density
+	 * was cached already.
+	 */
+
+	if (object == NULL) {
+		sample_dummy_point_density(resolution, values);
+		return;
+	}
+
+	BLI_mutex_lock(&sample_mutex);
+	RE_point_density_minmax(scene,
+	                        pd,
+	                        use_render_params,
+	                        min,
+	                        max);
+	BLI_mutex_unlock(&sample_mutex);
+	sub_v3_v3v3(dim, max, min);
+	if (dim[0] <= 0.0f || dim[1] <= 0.0f || dim[2] <= 0.0f) {
+		sample_dummy_point_density(resolution, values);
+		return;
+	}
+
+	SampleCallbackData data;
+	data.pd = pd;
+	data.resolution = resolution;
+	data.min = min;
+	data.dim = dim;
+	data.values = values;
+	BLI_task_parallel_range(0,
+	                        resolution,
+	                        &data,
+	                        point_density_sample_func,
+	                        resolution > 32);
+
+	free_pointdensity(pd);
+}
+
+void RE_point_density_free(struct PointDensity *pd)
+{
+	free_pointdensity(pd);
 }

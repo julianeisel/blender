@@ -76,7 +76,7 @@ static PyObject *Vector_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 				return NULL;
 			}
 
-			fill_vn_fl(vec, size, 0.0f);
+			copy_vn_fl(vec, size, 0.0f);
 			break;
 		case 1:
 			if ((size = mathutils_array_parse_alloc(&vec, 2, PyTuple_GET_ITEM(args, 0), "mathutils.Vector()")) == -1) {
@@ -142,7 +142,7 @@ static PyObject *C_Vector_Fill(PyObject *cls, PyObject *args)
 		return NULL;
 	}
 
-	fill_vn_fl(vec, size, fill);
+	copy_vn_fl(vec, size, fill);
 
 	return Vector_CreatePyObject_alloc(vec, size, (PyTypeObject *)cls);
 }
@@ -339,7 +339,7 @@ static PyObject *Vector_zero(VectorObject *self)
 	if (BaseMath_Prepare_ForWrite(self) == -1)
 		return NULL;
 
-	fill_vn_fl(self->vec, self->size, 0.0f);
+	copy_vn_fl(self->vec, self->size, 0.0f);
 
 	if (BaseMath_WriteCallback(self) == -1)
 		return NULL;
@@ -426,7 +426,7 @@ static PyObject *Vector_resize(VectorObject *self, PyObject *value)
 
 	/* If the vector has increased in length, set all new elements to 0.0f */
 	if (size > self->size) {
-		fill_vn_fl(self->vec + self->size, size - self->size, 0.0f);
+		copy_vn_fl(self->vec + self->size, size - self->size, 0.0f);
 	}
 
 	self->size = size;
@@ -465,7 +465,7 @@ static PyObject *Vector_resized(VectorObject *self, PyObject *value)
 		return NULL;
 	}
 
-	fill_vn_fl(vec, size, 0.0f);
+	copy_vn_fl(vec, size, 0.0f);
 	memcpy(vec, self->vec, self->size * sizeof(float));
 
 	return Vector_CreatePyObject_alloc(vec, size, NULL);
@@ -1717,6 +1717,8 @@ static PyObject *Vector_mul(PyObject *v1, PyObject *v2)
 	}
 
 
+	/* Intentionally don't support (Quaternion) here, uses reverse order instead. */
+
 	/* make sure v1 is always the vector */
 	if (vec1 && vec2) {
 		if (vec1->size != vec2->size) {
@@ -1749,34 +1751,6 @@ static PyObject *Vector_mul(PyObject *v1, PyObject *v2)
 
 			return Vector_CreatePyObject(tvec, vec_size, Py_TYPE(vec1));
 		}
-		else if (QuaternionObject_Check(v2)) {
-			/* VEC * QUAT */
-/* ------ to be removed ------*/
-#if 1
-			PyErr_SetString(PyExc_ValueError,
-			                "(Vector * Quat) is now removed, reverse the "
-			                "order (promoted to an Error for Debug builds)");
-			return NULL;
-#else
-			QuaternionObject *quat2 = (QuaternionObject *)v2;
-			float tvec[3];
-
-			if (vec1->size != 3) {
-				PyErr_SetString(PyExc_ValueError,
-				                "Vector multiplication: "
-				                "only 3D vector rotations (with quats) currently supported");
-				return NULL;
-			}
-			if (BaseMath_ReadCallback(quat2) == -1) {
-				return NULL;
-			}
-
-			copy_v3_v3(tvec, vec1->vec);
-			mul_qt_v3(quat2->quat, tvec);
-			return Vector_CreatePyObject(tvec, 3, Py_TYPE(vec1));
-#endif
-/* ------ to be removed ------*/
-		}
 		else if (((scalar = PyFloat_AsDouble(v2)) == -1.0f && PyErr_Occurred()) == 0) { /* VEC * FLOAT */
 			return vector_mul_float(vec1, scalar);
 		}
@@ -1806,57 +1780,11 @@ static PyObject *Vector_imul(PyObject *v1, PyObject *v2)
 	if (BaseMath_ReadCallback_ForWrite(vec) == -1)
 		return NULL;
 
-	/* only support vec*=float and vec*=mat
+	/* Intentionally don't support (Quaternion, Matrix) here, uses reverse order instead. */
+
+	/* only support 'vec *= float'
 	 *  vec*=vec result is a float so that wont work */
-	if (MatrixObject_Check(v2)) {
-/* ------ to be removed ------*/
-#if 1
-		PyErr_SetString(PyExc_ValueError,
-		                "(Vector *= Matrix) is now removed, reverse the "
-		                "order (promoted to an Error for Debug builds) "
-		                "and uses the non in-place multiplication.");
-		return NULL;
-#else
-		float rvec[MAX_DIMENSIONS];
-		if (BaseMath_ReadCallback((MatrixObject *)v2) == -1)
-			return NULL;
-
-		if (column_vector_multiplication(rvec, vec, (MatrixObject *)v2) == -1)
-			return NULL;
-
-		memcpy(vec->vec, rvec, sizeof(float) * vec->size);
-#endif
-/* ------ to be removed ------*/
-	}
-	else if (QuaternionObject_Check(v2)) {
-		/* VEC *= QUAT */
-
-/* ------ to be removed ------*/
-#if 1
-		PyErr_SetString(PyExc_ValueError,
-		                "(Vector *= Quat) is now removed, reverse the "
-		                "order (promoted to an Error for Debug builds) "
-		                "and uses the non in-place multiplication.");
-		return NULL;
-#else
-		QuaternionObject *quat2 = (QuaternionObject *)v2;
-
-		if (vec->size != 3) {
-			PyErr_SetString(PyExc_ValueError,
-			                "Vector multiplication: "
-			                "only 3D vector rotations (with quats) currently supported");
-			return NULL;
-		}
-
-		if (BaseMath_ReadCallback(quat2) == -1) {
-			return NULL;
-		}
-
-		mul_qt_v3(quat2->quat, vec->vec);
-#endif
-/* ------ to be removed ------*/
-	}
-	else if (((scalar = PyFloat_AsDouble(v2)) == -1.0f && PyErr_Occurred()) == 0) { /* VEC *= FLOAT */
+	if (((scalar = PyFloat_AsDouble(v2)) == -1.0f && PyErr_Occurred()) == 0) { /* VEC *= FLOAT */
 		mul_vn_fl(vec->vec, vec->size, scalar);
 	}
 	else {
@@ -2236,7 +2164,7 @@ static int Vector_length_set(VectorObject *self, PyObject *value)
 		return -1;
 	}
 	if (param == 0.0) {
-		fill_vn_fl(self->vec, self->size, 0.0f);
+		copy_vn_fl(self->vec, self->size, 0.0f);
 		return 0;
 	}
 
@@ -2356,7 +2284,7 @@ static int Vector_swizzle_set(VectorObject *self, PyObject *value, void *closure
 
 		size_from = axis_from;
 	}
-	else if ((PyErr_Clear()), /* run but ignore the result */
+	else if (((void)PyErr_Clear()), /* run but ignore the result */
 	         (size_from = mathutils_array_parse(vec_assign, 2, 4, value,
 	                                            "mathutils.Vector.**** = swizzle assignment")) == -1)
 	{
@@ -3030,7 +2958,7 @@ PyObject *Vector_CreatePyObject(
 			memcpy(self->vec, vec, size * sizeof(float));
 		}
 		else { /* new empty */
-			fill_vn_fl(self->vec, size, 0.0f);
+			copy_vn_fl(self->vec, size, 0.0f);
 			if (size == 4) {  /* do the homogeneous thing */
 				self->vec[3] = 1.0f;
 			}

@@ -412,7 +412,8 @@ typedef enum eAnimChannel_Settings {
 	ACHANNEL_SETTING_EXPAND   = 3,
 	ACHANNEL_SETTING_VISIBLE  = 4,  /* only for Graph Editor */
 	ACHANNEL_SETTING_SOLO     = 5,  /* only for NLA Tracks */
-	ACHANNEL_SETTING_PINNED   = 6   /* only for NLA Actions */
+	ACHANNEL_SETTING_PINNED   = 6,  /* only for NLA Actions */
+	ACHANNEL_SETTING_MOD_OFF  = 7
 } eAnimChannel_Settings;
 
 
@@ -462,7 +463,7 @@ const bAnimChannelType *ANIM_channel_get_typeinfo(bAnimListElem *ale);
 void ANIM_channel_debug_print_info(bAnimListElem *ale, short indent_level);
 
 /* Draw the given channel */
-void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float ymaxc);
+void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float ymaxc, size_t channel_index);
 /* Draw the widgets for the given channel */
 void ANIM_channel_draw_widgets(const struct bContext *C, bAnimContext *ac, bAnimListElem *ale, struct uiBlock *block, float yminc, float ymaxc, size_t channel_index);
 
@@ -617,7 +618,7 @@ typedef enum eAnimUnitConv_Flags {
 short ANIM_get_normalization_flags(bAnimContext *ac);
 
 /* Get unit conversion factor for given ID + F-Curve */
-float ANIM_unit_mapping_get_factor(struct Scene *scene, struct ID *id, struct FCurve *fcu, short flag);
+float ANIM_unit_mapping_get_factor(struct Scene *scene, struct ID *id, struct FCurve *fcu, short flag, float *r_offset);
 
 /* ------------- Utility macros ----------------------- */
 
@@ -659,6 +660,7 @@ void ANIM_list_elem_update(struct Scene *scene, bAnimListElem *ale);
 /* data -> channels syncing */
 void ANIM_sync_animchannels_to_data(const struct bContext *C);
 
+void ANIM_center_frame(struct bContext *C, int smooth_viewtx);
 /* ************************************************* */
 /* OPERATORS */
 	
@@ -674,6 +676,16 @@ void ED_keymap_anim(struct wmKeyConfig *keyconf);
 void ED_operatormacros_graph(void);
 /* space_action */
 void ED_operatormacros_action(void);
+
+/* ************************************************ */
+/* Animation Editor Exports */
+/* XXX: Should we be doing these here, or at all? */
+
+/* Action Editor - Action Management */
+struct AnimData *ED_actedit_animdata_from_context(struct bContext *C);
+void ED_animedit_unlink_action(struct bContext *C, struct ID *id, 
+                               struct AnimData *adt, struct bAction *act,
+                               struct ReportList *reports, bool force_delete);
 
 /* ************************************************ */
 

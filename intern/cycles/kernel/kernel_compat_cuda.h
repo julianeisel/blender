@@ -22,6 +22,14 @@
 #define CCL_NAMESPACE_BEGIN
 #define CCL_NAMESPACE_END
 
+/* Selective nodes compilation. */
+#ifndef __NODES_MAX_GROUP__
+#  define __NODES_MAX_GROUP__ NODE_GROUP_LEVEL_MAX
+#endif
+#ifndef __NODES_FEATURES__
+#  define __NODES_FEATURES__ NODE_FEATURE_ALL
+#endif
+
 #include <cuda.h>
 #include <float.h>
 
@@ -33,6 +41,7 @@
 #define ccl_global
 #define ccl_constant
 #define ccl_may_alias
+#define ccl_addr_space
 
 /* No assert supported for CUDA */
 
@@ -53,6 +62,7 @@ typedef texture<int, 1> texture_int;
 typedef texture<uint4, 1> texture_uint4;
 typedef texture<uchar4, 1> texture_uchar4;
 typedef texture<float4, 2> texture_image_float4;
+typedef texture<float4, 3> texture_image3d_float4;
 typedef texture<uchar4, 2, cudaReadModeNormalizedFloat> texture_image_uchar4;
 
 /* Macros to handle different memory storage on different devices */
@@ -70,6 +80,7 @@ typedef texture<uchar4, 2, cudaReadModeNormalizedFloat> texture_image_uchar4;
 #define kernel_tex_fetch(t, index) t[(index)]
 #endif
 #define kernel_tex_image_interp(t, x, y) tex2D(t, x, y)
+#define kernel_tex_image_interp_3d(t, x, y, z) tex3D(t, x, y, z)
 
 #define kernel_data __data
 

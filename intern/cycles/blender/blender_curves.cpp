@@ -145,7 +145,7 @@ bool ObtainCacheParticleData(Mesh *mesh, BL::Mesh *b_mesh, BL::Object *b_ob, Par
 				int totchild = background ? b_psys.child_particles.length() : (int)((float)b_psys.child_particles.length() * (float)b_part.draw_percentage() / 100.0f);
 				int totcurves = totchild;
 				
-				if(b_part.child_type() == 0)
+				if(b_part.child_type() == 0 || totchild == 0)
 					totcurves += totparts;
 
 				if(totcurves == 0)
@@ -169,7 +169,7 @@ bool ObtainCacheParticleData(Mesh *mesh, BL::Mesh *b_mesh, BL::Object *b_ob, Par
 				CData->psys_closetip.push_back(get_boolean(cpsys, "use_closetip"));
 
 				int pa_no = 0;
-				if(!(b_part.child_type() == 0))
+				if(!(b_part.child_type() == 0) && totchild != 0)
 					pa_no = totparts;
 
 				int num_add = (totparts+totchild - pa_no);
@@ -233,14 +233,14 @@ bool ObtainCacheParticleUV(Mesh *mesh, BL::Mesh *b_mesh, BL::Object *b_ob, Parti
 				int totchild = background ? b_psys.child_particles.length() : (int)((float)b_psys.child_particles.length() * (float)b_part.draw_percentage() / 100.0f);
 				int totcurves = totchild;
 				
-				if(b_part.child_type() == 0)
+				if(b_part.child_type() == 0 || totchild == 0)
 					totcurves += totparts;
 
 				if(totcurves == 0)
 					continue;
 
 				int pa_no = 0;
-				if(!(b_part.child_type() == 0))
+				if(!(b_part.child_type() == 0) && totchild != 0)
 					pa_no = totparts;
 
 				int num_add = (totparts+totchild - pa_no);
@@ -287,14 +287,14 @@ bool ObtainCacheParticleVcol(Mesh *mesh, BL::Mesh *b_mesh, BL::Object *b_ob, Par
 				int totchild = background ? b_psys.child_particles.length() : (int)((float)b_psys.child_particles.length() * (float)b_part.draw_percentage() / 100.0f);
 				int totcurves = totchild;
 				
-				if(b_part.child_type() == 0)
+				if(b_part.child_type() == 0 || totchild == 0)
 					totcurves += totparts;
 
 				if(totcurves == 0)
 					continue;
 
 				int pa_no = 0;
-				if(!(b_part.child_type() == 0))
+				if(!(b_part.child_type() == 0) && totchild != 0)
 					pa_no = totparts;
 
 				int num_add = (totparts+totchild - pa_no);
@@ -621,7 +621,7 @@ void ExportCurveSegments(Scene *scene, Mesh *mesh, ParticleCurveData *CData)
 	}
 
 	/* check allocation */
-	if((mesh->curve_keys.size() !=  num_keys) || (mesh->curves.size() !=  num_curves)) {
+	if((mesh->curve_keys.size() != num_keys) || (mesh->curves.size() != num_curves)) {
 		VLOG(1) << "Allocation failed, clearing data";
 		mesh->curve_keys.clear();
 		mesh->curves.clear();
@@ -795,8 +795,16 @@ void BlenderSync::sync_curve_settings()
 	curve_system_manager->minimum_width = get_float(csscene, "minimum_width");
 	curve_system_manager->maximum_width = get_float(csscene, "maximum_width");
 
-	curve_system_manager->primitive = get_enum(csscene, "primitive");
-	curve_system_manager->curve_shape = get_enum(csscene, "shape");
+	curve_system_manager->primitive =
+	        (CurvePrimitiveType)get_enum(csscene,
+	                                     "primitive",
+	                                     CURVE_NUM_PRIMITIVE_TYPES,
+	                                     CURVE_LINE_SEGMENTS);
+	curve_system_manager->curve_shape =
+	        (CurveShapeType)get_enum(csscene,
+	                                 "shape",
+	                                 CURVE_NUM_SHAPE_TYPES,
+	                                 CURVE_THICK);
 	curve_system_manager->resolution = get_int(csscene, "resolution");
 	curve_system_manager->subdivisions = get_int(csscene, "subdivisions");
 	curve_system_manager->use_backfacing = !get_boolean(csscene, "cull_backfacing");
@@ -856,7 +864,11 @@ void BlenderSync::sync_curve_settings()
 		curve_system_manager->tag_update(scene);
 }
 
-void BlenderSync::sync_curves(Mesh *mesh, BL::Mesh b_mesh, BL::Object b_ob, bool motion, int time_index)
+void BlenderSync::sync_curves(Mesh *mesh,
+                              BL::Mesh& b_mesh,
+                              BL::Object& b_ob,
+                              bool motion,
+                              int time_index)
 {
 	if(!motion) {
 		/* Clear stored curve data */

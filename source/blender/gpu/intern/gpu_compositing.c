@@ -38,7 +38,6 @@
 #include "BLI_linklist.h"
 
 #include "BLI_rand.h"
-#include "BLI_listbase.h"
 
 #include "DNA_vec_types.h"
 #include "DNA_view3d_types.h"
@@ -47,10 +46,12 @@
 #include "DNA_camera_types.h"
 #include "DNA_gpu_types.h"
 
-#include "GPU_extensions.h"
 #include "GPU_compositing.h"
-
+#include "GPU_extensions.h"
+#include "GPU_framebuffer.h"
 #include "GPU_glew.h"
+#include "GPU_shader.h"
+#include "GPU_texture.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -77,7 +78,8 @@ struct GPUFX {
 	/* texture used for jittering for various effects */
 	GPUTexture *jitter_buffer;
 
-	/* all those buffers below have to coexist. Fortunately they are all quarter sized (1/16th of memory) of original framebuffer */
+	/* all those buffers below have to coexist.
+	 * Fortunately they are all quarter sized (1/16th of memory) of original framebuffer */
 	int dof_downsampled_w;
 	int dof_downsampled_h;
 
@@ -179,14 +181,13 @@ GPUFX *GPU_fx_compositor_create(void)
 {
 	GPUFX *fx = MEM_callocN(sizeof(GPUFX), "GPUFX compositor");
 
-	if (GLEW_ARB_vertex_buffer_object) {
-		glGenBuffersARB(1, &fx->vbuffer);
-		glBindBufferARB(GL_ARRAY_BUFFER_ARB, fx->vbuffer);
-		glBufferDataARB(GL_ARRAY_BUFFER_ARB, 16 * sizeof(float), NULL, GL_STATIC_DRAW);
-		glBufferSubDataARB(GL_ARRAY_BUFFER_ARB, 0, 8 * sizeof(float), fullscreencos);
-		glBufferSubDataARB(GL_ARRAY_BUFFER_ARB, 8 * sizeof(float), 8 * sizeof(float), fullscreenuvs);
-		glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
-	}
+	glGenBuffers(1, &fx->vbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, fx->vbuffer);
+	glBufferData(GL_ARRAY_BUFFER, 16 * sizeof(float), NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, 8 * sizeof(float), fullscreencos);
+	glBufferSubData(GL_ARRAY_BUFFER, 8 * sizeof(float), 8 * sizeof(float), fullscreenuvs);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
 	return fx;
 }
 
@@ -275,14 +276,13 @@ static void cleanup_fx_gl_data(GPUFX *fx, bool do_fbo)
 void GPU_fx_compositor_destroy(GPUFX *fx)
 {
 	cleanup_fx_gl_data(fx, true);
-	if (GLEW_ARB_vertex_buffer_object)
-		glDeleteBuffersARB(1, &fx->vbuffer);
+	glDeleteBuffers(1, &fx->vbuffer);
 	MEM_freeN(fx);
 }
 
 static GPUTexture * create_jitter_texture(void)
 {
-	float jitter [64 * 64][2];
+	float jitter[64 * 64][2];
 	int i;
 
 	for (i = 0; i < 64 * 64; i++) {
@@ -305,6 +305,9 @@ bool GPU_fx_compositor_initialize_passes(
 	char fx_flag;
 
 	fx->effects = 0;
+
+	if (!GLEW_EXT_framebuffer_object)
+		return false;
 
 	if (!fx_settings) {
 		cleanup_fx_gl_data(fx, true);
@@ -329,7 +332,8 @@ bool GPU_fx_compositor_initialize_passes(
 	/* scissor is missing when drawing offscreen, in that case, dimensions match exactly. In opposite case
 	 * add one to match viewport dimensions */
 	if (scissor_rect) {
-		w++, h++;
+		w++;
+		h++;
 	}
 
 	fx->num_passes = 0;
@@ -340,15 +344,17 @@ bool GPU_fx_compositor_initialize_passes(
 	if (fx_flag & GPU_FX_FLAG_SSAO)
 		num_passes++;
 
-	if (!fx->gbuffer)
+	if (!fx->gbuffer) {
 		fx->gbuffer = GPU_framebuffer_create();
+
+		if (!fx->gbuffer) {
+			return false;
+		}
+	}
 
 	/* try creating the jitter texture */
 	if (!fx->jitter_buffer)
 		fx->jitter_buffer = create_jitter_texture();
-
-	if (!fx->gbuffer)
-		return false;
 
 	/* check if color buffers need recreation */
 	if (!fx->color_buffer || !fx->depth_buffer || w != fx->gbuffer_dim[0] || h != fx->gbuffer_dim[1]) {
@@ -391,7 +397,7 @@ bool GPU_fx_compositor_initialize_passes(
 	/* create textures for dof effect */
 	if (fx_flag & GPU_FX_FLAG_DOF) {
 		bool dof_high_quality = (fx_settings->dof->high_quality != 0) &&
-								GPU_geometry_shader_support() && GPU_instanced_drawing_support();
+		                        GPU_geometry_shader_support() && GPU_instanced_drawing_support();
 
 		/* cleanup buffers if quality setting has changed (no need to keep more buffers around than necessary ) */
 		if (dof_high_quality != fx->dof_high_quality)
@@ -402,7 +408,8 @@ bool GPU_fx_compositor_initialize_passes(
 			fx->dof_downsampled_h = h / 2;
 
 			if (!fx->dof_half_downsampled_near || !fx->dof_nearfar_coc || !fx->dof_near_blur ||
-			    !fx->dof_far_blur || !fx->dof_half_downsampled_far) {
+			    !fx->dof_far_blur || !fx->dof_half_downsampled_far)
+			{
 
 				if (!(fx->dof_half_downsampled_near = GPU_texture_create_2D(
 				      fx->dof_downsampled_w, fx->dof_downsampled_h, NULL, GPU_HDR_NONE, err_out)))
@@ -520,7 +527,7 @@ bool GPU_fx_compositor_initialize_passes(
 		glPushAttrib(GL_SCISSOR_BIT);
 		glEnable(GL_SCISSOR_TEST);
 		glScissor(scissor_rect->xmin - rect->xmin, scissor_rect->ymin - rect->ymin,
-				  w_sc, h_sc);
+		          w_sc, h_sc);
 		fx->restore_stencil = true;
 	}
 	else {
@@ -560,7 +567,9 @@ void GPU_fx_compositor_setup_XRay_pass(GPUFX *fx, bool do_xray)
 	char err_out[256];
 
 	if (do_xray) {
-		if (!fx->depth_buffer_xray && !(fx->depth_buffer_xray = GPU_texture_create_depth(fx->gbuffer_dim[0], fx->gbuffer_dim[1], err_out))) {
+		if (!fx->depth_buffer_xray &&
+		    !(fx->depth_buffer_xray = GPU_texture_create_depth(fx->gbuffer_dim[0], fx->gbuffer_dim[1], err_out)))
+		{
 			printf("%.256s\n", err_out);
 			cleanup_fx_gl_data(fx, true);
 			return;
@@ -600,7 +609,7 @@ void GPU_fx_compositor_XRay_resolve(GPUFX *fx)
 	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
 	/* set up quad buffer */
-	glBindBufferARB(GL_ARRAY_BUFFER_ARB, fx->vbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, fx->vbuffer);
 	glVertexPointer(2, GL_FLOAT, 0, NULL);
 	glTexCoordPointer(2, GL_FLOAT, 0, ((GLubyte *)NULL + 8 * sizeof(float)));
 	glEnableClientState(GL_VERTEX_ARRAY);
@@ -631,7 +640,7 @@ void GPU_fx_compositor_XRay_resolve(GPUFX *fx)
 
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-	glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
@@ -639,7 +648,9 @@ void GPU_fx_compositor_XRay_resolve(GPUFX *fx)
 }
 
 
-bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, struct Scene *scene, struct GPUOffScreen *ofs)
+bool GPU_fx_do_composite_pass(
+        GPUFX *fx, float projmat[4][4], bool is_persp,
+        struct Scene *scene, struct GPUOffScreen *ofs)
 {
 	GPUTexture *src, *target;
 	int numslots = 0;
@@ -670,7 +681,7 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 	target = fx->color_buffer_sec;
 
 	/* set up quad buffer */
-	glBindBufferARB(GL_ARRAY_BUFFER_ARB, fx->vbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, fx->vbuffer);
 	glVertexPointer(2, GL_FLOAT, 0, NULL);
 	glTexCoordPointer(2, GL_FLOAT, 0, ((GLubyte *)NULL + 8 * sizeof(float)));
 	glEnableClientState(GL_VERTEX_ARRAY);
@@ -717,14 +728,14 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 			int ssao_uniform, ssao_color_uniform, viewvecs_uniform, ssao_sample_params_uniform;
 			int ssao_jitter_uniform, ssao_concentric_tex;
 			float ssao_params[4] = {fx_ssao->distance_max, fx_ssao->factor, fx_ssao->attenuation, 0.0f};
-			float sample_params[4];
+			float sample_params[3];
 
 			sample_params[0] = fx->ssao_sample_count_cache;
 			/* multiplier so we tile the random texture on screen */
-			sample_params[2] = fx->gbuffer_dim[0] / 64.0;
-			sample_params[3] = fx->gbuffer_dim[1] / 64.0;
+			sample_params[1] = fx->gbuffer_dim[0] / 64.0;
+			sample_params[2] = fx->gbuffer_dim[1] / 64.0;
 
-			ssao_params[3] = (passes_left == 1) ? dfdyfac[0] : dfdyfac[1];
+			ssao_params[3] = (passes_left == 1 && !ofs) ? dfdyfac[0] : dfdyfac[1];
 
 			ssao_uniform = GPU_shader_get_uniform(ssao_shader, "ssao_params");
 			ssao_color_uniform = GPU_shader_get_uniform(ssao_shader, "ssao_color");
@@ -740,7 +751,7 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 			GPU_shader_uniform_vector(ssao_shader, ssao_uniform, 4, 1, ssao_params);
 			GPU_shader_uniform_vector(ssao_shader, ssao_color_uniform, 4, 1, fx_ssao->color);
 			GPU_shader_uniform_vector(ssao_shader, viewvecs_uniform, 4, 3, viewvecs[0]);
-			GPU_shader_uniform_vector(ssao_shader, ssao_sample_params_uniform, 4, 1, sample_params);
+			GPU_shader_uniform_vector(ssao_shader, ssao_sample_params_uniform, 3, 1, sample_params);
 
 			GPU_texture_bind(src, numslots++);
 			GPU_shader_uniform_texture(ssao_shader, color_uniform, src);
@@ -796,7 +807,8 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 		/* we want radius here for the aperture number  */
 		float aperture = 0.5f * scale_camera * fx_dof->focal_length / fx_dof->fstop;
 
-		dof_params[0] = aperture * fabsf(scale_camera * fx_dof->focal_length / ((fx_dof->focus_distance / scale) - scale_camera * fx_dof->focal_length));
+		dof_params[0] = aperture * fabsf(scale_camera * fx_dof->focal_length /
+		                                 ((fx_dof->focus_distance / scale) - scale_camera * fx_dof->focal_length));
 		dof_params[1] = fx_dof->focus_distance / scale;
 		dof_params[2] = fx->gbuffer_dim[0] / (scale_camera * fx_dof->sensor);
 		dof_params[3] = fx_dof->num_blades;
@@ -817,7 +829,7 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
 				GPU_shader_unbind();
-				glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
 				return false;
 			}
 
@@ -912,6 +924,7 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 				glDisable(GL_DEPTH_TEST);
 				glEnable(GL_BLEND);
 				glBlendFunc(GL_ONE, GL_ONE);
+				glPointSize(1.0f);
 				/* have to clear the buffer unfortunately */
 				glClearColor(0.0, 0.0, 0.0, 0.0);
 				glClear(GL_COLOR_BUFFER_BIT);
@@ -1013,9 +1026,12 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 		else {
 			GPUShader *dof_shader_pass1, *dof_shader_pass2, *dof_shader_pass3, *dof_shader_pass4, *dof_shader_pass5;
 
-			/* DOF effect has many passes but most of them are performed on a texture whose dimensions are 4 times less than the original
-			 * (16 times lower than original screen resolution). Technique used is not very exact but should be fast enough and is based
-			 * on "Practical Post-Process Depth of Field" see http://http.developer.nvidia.com/GPUGems3/gpugems3_ch28.html */
+			/* DOF effect has many passes but most of them are performed
+			 * on a texture whose dimensions are 4 times less than the original
+			 * (16 times lower than original screen resolution).
+			 * Technique used is not very exact but should be fast enough and is based
+			 * on "Practical Post-Process Depth of Field"
+			 * see http://http.developer.nvidia.com/GPUGems3/gpugems3_ch28.html */
 			dof_shader_pass1 = GPU_shader_get_builtin_fx_shader(GPU_SHADER_FX_DEPTH_OF_FIELD_PASS_ONE, is_persp);
 			dof_shader_pass2 = GPU_shader_get_builtin_fx_shader(GPU_SHADER_FX_DEPTH_OF_FIELD_PASS_TWO, is_persp);
 			dof_shader_pass3 = GPU_shader_get_builtin_fx_shader(GPU_SHADER_FX_DEPTH_OF_FIELD_PASS_THREE, is_persp);
@@ -1030,7 +1046,7 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
 				GPU_shader_unbind();
-				glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
 				return false;
 			}
 
@@ -1079,12 +1095,12 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 			{
 				int invrendertargetdim_uniform, color_uniform, depth_uniform, dof_uniform;
 				int viewvecs_uniform;
-				float invrendertargetdim[2] = {1.0f / GPU_texture_opengl_width(fx->dof_near_coc_blurred_buffer),
-				                               1.0f / GPU_texture_opengl_height(fx->dof_near_coc_blurred_buffer)};
+				float invrendertargetdim[2] = {1.0f / GPU_texture_width(fx->dof_near_coc_blurred_buffer),
+				                               1.0f / GPU_texture_height(fx->dof_near_coc_blurred_buffer)};
 				float tmp = invrendertargetdim[0];
 				invrendertargetdim[0] = 0.0f;
 
-				dof_params[2] = GPU_texture_opengl_width(fx->dof_near_coc_blurred_buffer) / (scale_camera * fx_dof->sensor);
+				dof_params[2] = GPU_texture_width(fx->dof_near_coc_blurred_buffer) / (scale_camera * fx_dof->sensor);
 
 				dof_uniform = GPU_shader_get_uniform(dof_shader_pass2, "dof_params");
 				invrendertargetdim_uniform = GPU_shader_get_uniform(dof_shader_pass2, "invrendertargetdim");
@@ -1171,8 +1187,8 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 			{
 				int near_coc_downsampled;
 				int invrendertargetdim_uniform;
-				float invrendertargetdim[2] = {1.0f / GPU_texture_opengl_width(fx->dof_near_coc_blurred_buffer),
-				                               1.0f / GPU_texture_opengl_height(fx->dof_near_coc_blurred_buffer)};
+				float invrendertargetdim[2] = {1.0f / GPU_texture_width(fx->dof_near_coc_blurred_buffer),
+				                               1.0f / GPU_texture_height(fx->dof_near_coc_blurred_buffer)};
 
 				near_coc_downsampled = GPU_shader_get_uniform(dof_shader_pass4, "colorbuffer");
 				invrendertargetdim_uniform = GPU_shader_get_uniform(dof_shader_pass4, "invrendertargetdim");
@@ -1259,7 +1275,7 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	GPU_shader_unbind();
 

@@ -50,6 +50,7 @@
 #include "BKE_lattice.h"
 
 #include "BKE_deform.h"
+#include "BKE_editmesh.h"
 #include "BKE_mesh.h"  /* for OMP limits. */
 #include "BKE_subsurf.h"
 
@@ -95,6 +96,11 @@ static void shrinkwrap_calc_nearest_vertex(ShrinkwrapCalcData *calc)
 		float *co = calc->vertexCos[i];
 		float tmp_co[3];
 		float weight = defvert_array_find_weight_safe(calc->dvert, i, calc->vgroup);
+
+		if (calc->invert_vgroup) {
+			weight = 1.0f - weight;
+		}
+
 		if (weight == 0.0f) {
 			continue;
 		}
@@ -278,9 +284,19 @@ static void shrinkwrap_calc_normal_projection(ShrinkwrapCalcData *calc, bool for
 		BLI_SPACE_TRANSFORM_SETUP(&local2aux, calc->ob, calc->smd->auxTarget);
 	}
 
+	/* use editmesh to avoid array allocation */
+	if (calc->smd->target && calc->target->type == DM_TYPE_EDITBMESH) {
+		treeData.em_evil = BKE_editmesh_from_object(calc->smd->target);
+		treeData.em_evil_all = true;
+	}
+	if (calc->smd->auxTarget && auxMesh->type == DM_TYPE_EDITBMESH) {
+		auxData.em_evil = BKE_editmesh_from_object(calc->smd->auxTarget);
+		auxData.em_evil_all = true;
+	}
+
 	/* After sucessufuly build the trees, start projection vertexs */
-	if (bvhtree_from_mesh_faces(&treeData, calc->target, 0.0, 4, 6) &&
-	    (auxMesh == NULL || bvhtree_from_mesh_faces(&auxData, auxMesh, 0.0, 4, 6)))
+	if (bvhtree_from_mesh_looptri(&treeData, calc->target, 0.0, 4, 6) &&
+	    (auxMesh == NULL || bvhtree_from_mesh_looptri(&auxData, auxMesh, 0.0, 4, 6)))
 	{
 
 #ifndef __APPLE__
@@ -289,7 +305,11 @@ static void shrinkwrap_calc_normal_projection(ShrinkwrapCalcData *calc, bool for
 		for (i = 0; i < calc->numVerts; ++i) {
 			float *co = calc->vertexCos[i];
 			float tmp_co[3], tmp_no[3];
-			const float weight = defvert_array_find_weight_safe(calc->dvert, i, calc->vgroup);
+			float weight = defvert_array_find_weight_safe(calc->dvert, i, calc->vgroup);
+
+			if (calc->invert_vgroup) {
+				weight = 1.0f - weight;
+			}
 
 			if (weight == 0.0f) {
 				continue;
@@ -315,7 +335,7 @@ static void shrinkwrap_calc_normal_projection(ShrinkwrapCalcData *calc, bool for
 
 
 			hit.index = -1;
-			hit.dist = 10000.0f; /* TODO: we should use FLT_MAX here, but sweepsphere code isn't prepared for that */
+			hit.dist = BVH_RAYCAST_DIST_MAX; /* TODO: we should use FLT_MAX here, but sweepsphere code isn't prepared for that */
 
 			/* Project over positive direction of axis */
 			if (calc->smd->shrinkOpts & MOD_SHRINKWRAP_PROJECT_ALLOW_POS_DIR) {
@@ -381,7 +401,7 @@ static void shrinkwrap_calc_nearest_surface_point(ShrinkwrapCalcData *calc)
 	BVHTreeNearest nearest  = NULL_BVHTreeNearest;
 
 	/* Create a bvh-tree of the given target */
-	bvhtree_from_mesh_faces(&treeData, calc->target, 0.0, 2, 6);
+	bvhtree_from_mesh_looptri(&treeData, calc->target, 0.0, 2, 6);
 	if (treeData.tree == NULL) {
 		OUT_OF_MEMORY();
 		return;
@@ -400,6 +420,11 @@ static void shrinkwrap_calc_nearest_surface_point(ShrinkwrapCalcData *calc)
 		float *co = calc->vertexCos[i];
 		float tmp_co[3];
 		float weight = defvert_array_find_weight_safe(calc->dvert, i, calc->vgroup);
+
+		if (calc->invert_vgroup) {
+			weight = 1.0f - weight;
+		}
+
 		if (weight == 0.0f) continue;
 
 		/* Convert the vertex to tree coordinates */
@@ -469,6 +494,7 @@ void shrinkwrapModifier_deform(ShrinkwrapModifierData *smd, Object *ob, DerivedM
 	calc.ob = ob;
 	calc.numVerts = numVerts;
 	calc.vertexCos = vertexCos;
+	calc.invert_vgroup = (smd->shrinkOpts & MOD_SHRINKWRAP_INVERT_VGROUP) != 0;
 
 	/* DeformVertex */
 	calc.vgroup = defgroup_name_index(calc.ob, calc.smd->vgroup_name);

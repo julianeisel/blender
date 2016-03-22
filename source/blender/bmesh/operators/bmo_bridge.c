@@ -54,7 +54,8 @@ static void bm_bridge_splice_loops(BMesh *bm, LinkData *el_a, LinkData *el_b, co
 		interp_v3_v3v3(v_b->co, v_a->co, v_b->co, merge_factor);
 		BLI_assert(v_a != v_b);
 		BMO_slot_map_elem_insert(&op_weld, slot_targetmap, v_a, v_b);
-	} while ((el_b = el_b->next),
+	} while ((void)
+	         (el_b = el_b->next),
 	         (el_a = el_a->next));
 
 	BMO_op_exec(bm, &op_weld);
@@ -87,14 +88,16 @@ static void bm_vert_loop_pair(BMesh *bm, BMVert *v1, BMVert *v2, BMLoop **l1, BM
 }
 
 /* el_b can have any offset */
-static float bm_edgeloop_offset_length(LinkData *el_a, LinkData *el_b,
-                                       LinkData *el_b_first, const float len_max)
+static float bm_edgeloop_offset_length(
+        LinkData *el_a, LinkData *el_b,
+        LinkData *el_b_first, const float len_max)
 {
 	float len = 0.0f;
 	BLI_assert(el_a->prev == NULL);  /* must be first */
 	do {
 		len += len_v3v3(((BMVert *)el_a->data)->co, ((BMVert *)el_b->data)->co);
-	} while ((el_b = el_b->next ? el_b->next : el_b_first),
+	} while ((void)
+	         (el_b = el_b->next ? el_b->next : el_b_first),
 	         (el_a = el_a->next) && (len < len_max));
 	return len;
 }
@@ -137,10 +140,11 @@ static bool bm_edge_test_cb(BMEdge *e, void *bm_v)
 	return BMO_elem_flag_test((BMesh *)bm_v, e, EDGE_MARK);
 }
 
-static void bridge_loop_pair(BMesh *bm,
-                             struct BMEdgeLoopStore *el_store_a,
-                             struct BMEdgeLoopStore *el_store_b,
-                             const bool use_merge, const float merge_factor, const int twist_offset)
+static void bridge_loop_pair(
+        BMesh *bm,
+        struct BMEdgeLoopStore *el_store_a,
+        struct BMEdgeLoopStore *el_store_b,
+        const bool use_merge, const float merge_factor, const int twist_offset)
 {
 	const float eps = 0.00001f;
 	LinkData *el_a_first, *el_b_first;
@@ -282,7 +286,7 @@ static void bridge_loop_pair(BMesh *bm,
 
 	if (el_store_a_len > el_store_b_len) {
 		el_store_b = BM_edgeloop_copy(el_store_b);
-		BM_edgeloop_expand(bm, el_store_b, el_store_a_len);
+		BM_edgeloop_expand(bm, el_store_b, el_store_a_len, false, NULL);
 		el_store_b_free = true;
 	}
 
@@ -365,10 +369,10 @@ static void bridge_loop_pair(BMesh *bm,
 					f = BM_face_create_verts(bm, v_arr, 4, NULL, BM_CREATE_NOP, true);
 
 					l_iter = BM_FACE_FIRST_LOOP(f);
-					if (l_b)      BM_elem_attrs_copy(bm, bm, l_b,      l_iter); l_iter = l_iter->next;
-					if (l_b_next) BM_elem_attrs_copy(bm, bm, l_b_next, l_iter); l_iter = l_iter->next;
-					if (l_a_next) BM_elem_attrs_copy(bm, bm, l_a_next, l_iter); l_iter = l_iter->next;
-					if (l_a)      BM_elem_attrs_copy(bm, bm, l_a,      l_iter);
+					if (l_b)      { BM_elem_attrs_copy(bm, bm, l_b,      l_iter); } l_iter = l_iter->next;
+					if (l_b_next) { BM_elem_attrs_copy(bm, bm, l_b_next, l_iter); } l_iter = l_iter->next;
+					if (l_a_next) { BM_elem_attrs_copy(bm, bm, l_a_next, l_iter); } l_iter = l_iter->next;
+					if (l_a)      { BM_elem_attrs_copy(bm, bm, l_a,      l_iter); }
 				}
 			}
 			else {
@@ -378,9 +382,9 @@ static void bridge_loop_pair(BMesh *bm,
 					f = BM_face_create_verts(bm, v_arr, 3, NULL, BM_CREATE_NOP, true);
 
 					l_iter = BM_FACE_FIRST_LOOP(f);
-					if (l_b)      BM_elem_attrs_copy(bm, bm, l_b,      l_iter); l_iter = l_iter->next;
-					if (l_a_next) BM_elem_attrs_copy(bm, bm, l_a_next, l_iter); l_iter = l_iter->next;
-					if (l_a)      BM_elem_attrs_copy(bm, bm, l_a,      l_iter);
+					if (l_b)      { BM_elem_attrs_copy(bm, bm, l_b,      l_iter); } l_iter = l_iter->next;
+					if (l_a_next) { BM_elem_attrs_copy(bm, bm, l_a_next, l_iter); } l_iter = l_iter->next;
+					if (l_a)      { BM_elem_attrs_copy(bm, bm, l_a,      l_iter); }
 				}
 			}
 

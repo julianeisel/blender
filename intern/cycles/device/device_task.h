@@ -46,8 +46,9 @@ public:
 	int offset, stride;
 
 	device_ptr shader_input;
-	device_ptr shader_output;
+	device_ptr shader_output, shader_output_luma;
 	int shader_eval_type;
+	int shader_filter;
 	int shader_x, shader_w;
 
 	DeviceTask(Type type = PATH_TRACE);
@@ -65,6 +66,7 @@ public:
 
 	bool need_finish_queue;
 	bool integrator_branched;
+	int2 requested_tile_size;
 protected:
 	double last_update_time;
 };

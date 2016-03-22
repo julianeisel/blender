@@ -66,6 +66,8 @@ node_tree_group_type = {
 
 # generic node group items generator for shader, compositor and texture node groups
 def node_group_items(context):
+    if context is None:
+        return
     space = context.space_data
     if not space:
         return
@@ -116,7 +118,7 @@ def line_style_shader_nodes_poll(context):
 def world_shader_nodes_poll(context):
     snode = context.space_data
     return (snode.tree_type == 'ShaderNodeTree' and
-                snode.shader_type == 'WORLD')
+            snode.shader_type == 'WORLD')
 
 
 # only show nodes working in object node trees
@@ -139,6 +141,7 @@ shader_node_categories = [
         NodeItem("ShaderNodeTexture"),
         NodeItem("ShaderNodeGeometry"),
         NodeItem("ShaderNodeExtendedMaterial"),
+        NodeItem("ShaderNodeParticleInfo"),
         NodeItem("NodeGroupInput", poll=group_input_output_item_poll),
         ]),
     ShaderOldNodeCategory("SH_OUTPUT", "Output", items=[
@@ -156,6 +159,7 @@ shader_node_categories = [
         NodeItem("ShaderNodeNormal"),
         NodeItem("ShaderNodeMapping"),
         NodeItem("ShaderNodeVectorCurve"),
+        NodeItem("ShaderNodeVectorTransform"),
         ]),
     ShaderOldNodeCategory("SH_CONVERTOR", "Converter", items=[
         NodeItem("ShaderNodeValToRGB"),
@@ -234,6 +238,7 @@ shader_node_categories = [
         NodeItem("ShaderNodeTexMagic"),
         NodeItem("ShaderNodeTexChecker"),
         NodeItem("ShaderNodeTexBrick"),
+        NodeItem("ShaderNodeTexPointDensity"),
         ]),
     ShaderNewNodeCategory("SH_NEW_OP_COLOR", "Color", items=[
         NodeItem("ShaderNodeMixRGB"),
@@ -328,6 +333,7 @@ compositor_node_categories = [
         NodeItem("CompositorNodeCombYUVA"),
         NodeItem("CompositorNodeSepYCCA"),
         NodeItem("CompositorNodeCombYCCA"),
+        NodeItem("CompositorNodeSwitchView"),
         ]),
     CompositorNodeCategory("CMP_OP_FILTER", "Filter", items=[
         NodeItem("CompositorNodeBlur"),

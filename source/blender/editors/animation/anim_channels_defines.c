@@ -36,7 +36,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
@@ -160,14 +160,16 @@ static bool acf_show_channel_colors(bAnimContext *ac)
 			{
 				SpaceAction *saction = (SpaceAction *)ac->sl;
 				showGroupColors = !(saction->flag & SACTION_NODRAWGCOLORS);
-			}
+
 				break;
+			}
 			case SPACE_IPO:
 			{
 				SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 				showGroupColors = !(sipo->flag & SIPO_NODRAWGCOLORS);
-			}
+
 				break;
+			}
 		}
 	}
 	
@@ -865,7 +867,11 @@ static int acf_group_setting_flag(bAnimContext *ac, eAnimChannel_Settings settin
 			
 		case ACHANNEL_SETTING_MUTE: /* muted */
 			return AGRP_MUTED;
-			
+
+		case ACHANNEL_SETTING_MOD_OFF: /* muted */
+			*neg = 1;
+			return AGRP_MODIFIERS_OFF;
+
 		case ACHANNEL_SETTING_PROTECT: /* protected */
 			return AGRP_PROTECTED;
 			
@@ -946,6 +952,7 @@ static bool acf_fcurve_setting_valid(bAnimContext *ac, bAnimListElem *ale, eAnim
 		/* unsupported */
 		case ACHANNEL_SETTING_SOLO:   /* Solo Flag is only for NLA */
 		case ACHANNEL_SETTING_EXPAND: /* F-Curves are not containers */
+		case ACHANNEL_SETTING_PINNED: /* This is only for NLA Actions */
 			return false;
 		
 		/* conditionally available */
@@ -983,6 +990,10 @@ static int acf_fcurve_setting_flag(bAnimContext *UNUSED(ac), eAnimChannel_Settin
 		case ACHANNEL_SETTING_VISIBLE: /* visibility - graph editor */
 			return FCURVE_VISIBLE;
 			
+		case ACHANNEL_SETTING_MOD_OFF:
+			*neg = 1;
+			return FCURVE_MOD_OFF;
+
 		default: /* unsupported */
 			return 0;
 	}
@@ -2801,7 +2812,6 @@ static bool acf_gpl_setting_valid(bAnimContext *UNUSED(ac), bAnimListElem *UNUSE
 	switch (setting) {
 		/* unsupported */
 		case ACHANNEL_SETTING_EXPAND: /* gpencil layers are more like F-Curves than groups */
-		case ACHANNEL_SETTING_VISIBLE: /* graph editor only */
 		case ACHANNEL_SETTING_SOLO: /* nla editor only */
 			return false;
 		
@@ -2821,7 +2831,11 @@ static int acf_gpl_setting_flag(bAnimContext *UNUSED(ac), eAnimChannel_Settings 
 		case ACHANNEL_SETTING_SELECT: /* selected */
 			return GP_LAYER_SELECT;
 			
-		case ACHANNEL_SETTING_MUTE: /* muted */
+		case ACHANNEL_SETTING_MUTE: /* animation muting - similar to frame lock... */
+			return GP_LAYER_FRAMELOCK;
+			
+		case ACHANNEL_SETTING_VISIBLE: /* visiblity of the layers (NOT muting) */
+			*neg = true;
 			return GP_LAYER_HIDE;
 			
 		case ACHANNEL_SETTING_PROTECT: /* protected */
@@ -3573,11 +3587,27 @@ void ANIM_channel_setting_set(bAnimContext *ac, bAnimListElem *ale, eAnimChannel
 #define ICON_WIDTH      (0.85f * U.widget_unit)
 // width of sliders
 #define SLIDER_WIDTH    (4 * U.widget_unit)
-// width of rename textboxes
-#define RENAME_TEXT_WIDTH (5 * U.widget_unit)
+// min-width of rename textboxes
+#define RENAME_TEXT_MIN_WIDTH (U.widget_unit)
+
+
+/* Helper - Check if a channel needs renaming */
+static bool achannel_is_being_renamed(const bAnimContext *ac, const bAnimChannelType *acf, size_t channel_index)
+{
+	if (acf->name_prop && ac->ads) {
+		/* if rename index matches, this channel is being renamed */
+		if (ac->ads->renameIndex == channel_index + 1) {
+			return true;
+		}
+	}
+	
+	/* not being renamed */
+	return false;
+}
+
 
 /* Draw the given channel */
-void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float ymaxc)
+void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float ymaxc, size_t channel_index)
 {
 	const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 	View2D *v2d = &ac->ar->v2d;
@@ -3664,8 +3694,8 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 	}
 
 	/* step 5) draw name ............................................... */
-	/* TODO: when renaming, we might not want to draw this, especially if name happens to be longer than channel */
-	if (acf->name) {
+	/* Don't draw this if renaming... */	
+	if (acf->name && !achannel_is_being_renamed(ac, acf, channel_index)) {
 		const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
 		char name[ANIM_CHAN_NAME_SIZE]; /* hopefully this will be enough! */
 		
@@ -3689,7 +3719,6 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 			glLineWidth(2.0);
 			fdrawline((float)(offset), yminc,
 			          (float)(v2d->cur.xmax), yminc);
-			glLineWidth(1.0);
 		}
 	}
 
@@ -3731,9 +3760,13 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 			/* protect... */
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_PROTECT))
 				offset += ICON_WIDTH;
+				
 			/* mute... */
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_MUTE))
 				offset += ICON_WIDTH;
+			if (ale->type == ANIMTYPE_GPLAYER)
+				offset += ICON_WIDTH;
+				
 			/* pinned... */
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_PINNED))
 				offset += ICON_WIDTH;
@@ -3841,6 +3874,7 @@ static void achannel_setting_slider_cb(bContext *C, void *id_poin, void *fcu_poi
 	
 	ReportList *reports = CTX_wm_reports(C);
 	Scene *scene = CTX_data_scene(C);
+	ToolSettings *ts = scene->toolsettings;
 	PointerRNA id_ptr, ptr;
 	PropertyRNA *prop;
 	short flag = 0;
@@ -3863,7 +3897,7 @@ static void achannel_setting_slider_cb(bContext *C, void *id_poin, void *fcu_poi
 			flag |= INSERTKEY_REPLACE;
 		
 		/* insert a keyframe for this F-Curve */
-		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, flag);
+		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, ts->keyframe_type, flag);
 		
 		if (done)
 			WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
@@ -3879,6 +3913,7 @@ static void achannel_setting_slider_shapekey_cb(bContext *C, void *key_poin, voi
 	
 	ReportList *reports = CTX_wm_reports(C);
 	Scene *scene = CTX_data_scene(C);
+	ToolSettings *ts = scene->toolsettings;
 	PointerRNA id_ptr, ptr;
 	PropertyRNA *prop;
 	short flag = 0;
@@ -3906,7 +3941,7 @@ static void achannel_setting_slider_shapekey_cb(bContext *C, void *key_poin, voi
 			flag |= INSERTKEY_REPLACE;
 		
 		/* insert a keyframe for this F-Curve */
-		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, flag);
+		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, ts->keyframe_type, flag);
 		
 		if (done)
 			WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
@@ -3929,6 +3964,7 @@ static void achannel_setting_slider_nla_curve_cb(bContext *C, void *UNUSED(id_po
 	
 	ReportList *reports = CTX_wm_reports(C);
 	Scene *scene = CTX_data_scene(C);
+	ToolSettings *ts = scene->toolsettings;
 	short flag = 0;
 	bool done = false;
 	float cfra;
@@ -3948,7 +3984,7 @@ static void achannel_setting_slider_nla_curve_cb(bContext *C, void *UNUSED(id_po
 			flag |= INSERTKEY_REPLACE;
 		
 		/* insert a keyframe for this F-Curve */
-		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, flag);
+		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, ts->keyframe_type, flag);
 		
 		if (done)
 			WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
@@ -3961,6 +3997,7 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 {
 	short ptrsize, butType;
 	bool negflag;
+	bool usetoggle = true;
 	int flag, icon;
 	void *ptr;
 	const char *tooltip;
@@ -3979,10 +4016,18 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 			
 			if (ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE))
 				tooltip = TIP_("F-Curve is visible in Graph Editor for editing");
+			else if (ale->type == ANIMTYPE_GPLAYER)
+				tooltip = TIP_("Grease Pencil layer is visible in the viewport");
 			else
 				tooltip = TIP_("Channels are visible in Graph Editor for editing");
 			break;
-			
+
+		case ACHANNEL_SETTING_MOD_OFF:  /* modifiers disabled */
+			icon = ICON_MODIFIER;
+			usetoggle = false;
+			tooltip = TIP_("F-Curve modifiers are disabled");
+			break;
+
 		case ACHANNEL_SETTING_EXPAND: /* expanded triangle */
 			//icon = ((enabled) ? ICON_TRIA_DOWN : ICON_TRIA_RIGHT);
 			icon = ICON_TRIA_RIGHT;
@@ -4018,6 +4063,9 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 			else if ((ac) && (ac->spacetype == SPACE_NLA) && (ale->type != ANIMTYPE_NLATRACK)) {
 				tooltip = TIP_("Temporarily disable NLA stack evaluation (i.e. only the active action is evaluated)");
 			}
+			else if (ale->type == ANIMTYPE_GPLAYER) {
+				tooltip = TIP_("Lock current frame displayed by layer (i.e. disable animation playback)");
+			}
 			else {
 				tooltip = TIP_("Do channels contribute to result (toggle channel muting)");
 			}
@@ -4043,11 +4091,18 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 	}
 	
 	/* type of button */
-	if (negflag)
-		butType = UI_BTYPE_ICON_TOGGLE_N;
-	else
-		butType = UI_BTYPE_ICON_TOGGLE;
-	
+	if (usetoggle) {
+		if (negflag)
+			butType = UI_BTYPE_ICON_TOGGLE_N;
+		else
+			butType = UI_BTYPE_ICON_TOGGLE;
+	}
+	else {
+		if (negflag)
+			butType = UI_BTYPE_TOGGLE_N;
+		else
+			butType = UI_BTYPE_TOGGLE;
+	}
 	/* draw button for setting */
 	if (ptr && flag) {
 		switch (ptrsize) {
@@ -4075,6 +4130,7 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 				case ACHANNEL_SETTING_PROTECT: /* General - protection flags */
 				case ACHANNEL_SETTING_MUTE: /* General - muting flags */
 				case ACHANNEL_SETTING_PINNED: /* NLA Actions - 'map/nomap' */
+				case ACHANNEL_SETTING_MOD_OFF:
 					UI_but_funcN_set(but, achannel_setting_flush_widget_cb, MEM_dupallocN(ale), SET_INT_IN_POINTER(setting));
 					break;
 					
@@ -4100,6 +4156,7 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 	View2D *v2d = &ac->ar->v2d;
 	float y, ymid /*, ytext*/;
 	short offset;
+	const bool is_being_renamed = achannel_is_being_renamed(ac, acf, channel_index);
 	
 	/* sanity checks - don't draw anything */
 	if (ELEM(NULL, acf, ale, block))
@@ -4175,36 +4232,42 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 	}
 	
 	/* step 4) draw text - check if renaming widget is in use... */
-	if (acf->name_prop && ac->ads) {
-		float channel_height = ymaxc - yminc;
+	if (is_being_renamed) {
+		PointerRNA ptr = {{NULL}};
+		PropertyRNA *prop = NULL;
 		
-		/* if rename index matches, add widget for this */
-		if (ac->ads->renameIndex == channel_index + 1) {
-			PointerRNA ptr = {{NULL}};
-			PropertyRNA *prop = NULL;
+		/* draw renaming widget if we can get RNA pointer for it 
+		 * NOTE: property may only be available in some cases, even if we have 
+		 *       a callback available (e.g. broken F-Curve rename)
+		 */
+		if (acf->name_prop(ale, &ptr, &prop)) {
+			const short margin_x = 3 * iroundf(UI_DPI_FAC);
+			const short channel_height = iroundf(ymaxc - yminc);
+			const short width = ac->ar->winx - offset - (margin_x * 2);
+			uiBut *but;
 			
-			/* draw renaming widget if we can get RNA pointer for it 
-			 * NOTE: property may only be available in some cases, even if we have 
-			 *       a callback available (e.g. broken F-Curve rename)
-			 */
-			if (acf->name_prop(ale, &ptr, &prop)) {
-				uiBut *but;
+			UI_block_emboss_set(block, UI_EMBOSS);
+			
+			but = uiDefButR(block, UI_BTYPE_TEXT, 1, "", offset + margin_x, yminc,
+			                MAX2(width, RENAME_TEXT_MIN_WIDTH), channel_height,
+			                &ptr, RNA_property_identifier(prop), -1, 0, 0, -1, -1, NULL);
+			
+			/* copy what outliner does here, see outliner_buttons */
+			if (UI_but_active_only(C, ac->ar, block, but) == false) {
+				ac->ads->renameIndex = 0;
 				
-				UI_block_emboss_set(block, UI_EMBOSS);
-				
-				but = uiDefButR(block, UI_BTYPE_TEXT, 1, "", offset + 3, yminc, RENAME_TEXT_WIDTH, channel_height,
-				                &ptr, RNA_property_identifier(prop), -1, 0, 0, -1, -1, NULL);
-				
-				/* copy what outliner does here, see outliner_buttons */
-				if (UI_but_active_only(C, ac->ar, block, but) == false) {
-					ac->ads->renameIndex = 0;
-					
-					/* send notifiers */
-					WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_RENAME, NULL);
-				}
-				
-				UI_block_emboss_set(block, UI_EMBOSS_NONE);
+				/* send notifiers */
+				WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_RENAME, NULL);
 			}
+			
+			UI_block_emboss_set(block, UI_EMBOSS_NONE);
+		}
+		else {
+			/* Cannot get property/cannot or rename for some reason, so clear rename index
+			 * so that this doesn't hang around, and the name can be drawn normally - T47492
+			 */
+			ac->ads->renameIndex = 0;
+			WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, NULL);
 		}
 	}
 	
@@ -4213,7 +4276,7 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 	offset = 0;
 	
 	// TODO: when drawing sliders, make those draw instead of these toggles if not enough space
-	if (v2d) {
+	if (v2d && !is_being_renamed) {
 		short draw_sliders = 0;
 		
 		/* check if we need to show the sliders */
@@ -4245,6 +4308,17 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_MUTE)) {
 				offset += ICON_WIDTH;
 				draw_setting_widget(ac, ale, acf, block, (int)v2d->cur.xmax - offset, ymid, ACHANNEL_SETTING_MUTE);
+			}
+			if (ale->type == ANIMTYPE_GPLAYER) {
+				/* Not technically "mute" (in terms of anim channels, but this sets layer visibility instead) */
+				offset += ICON_WIDTH;
+				draw_setting_widget(ac, ale, acf, block, (int)v2d->cur.xmax - offset, ymid, ACHANNEL_SETTING_VISIBLE);
+			}
+			
+			/* modifiers disable */
+			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_MOD_OFF)) {
+				offset += ICON_WIDTH * 1.2f; /* hack: extra spacing, to avoid touching the mute toggle */
+				draw_setting_widget(ac, ale, acf, block, (int)v2d->cur.xmax - offset, ymid, ACHANNEL_SETTING_MOD_OFF);
 			}
 			
 			/* ----------- */
