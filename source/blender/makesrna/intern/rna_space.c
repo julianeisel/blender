@@ -2089,6 +2089,7 @@ static void rna_def_space_outliner(BlenderRNA *brna)
 		{SO_USERDEF, "USER_PREFERENCES", 0, "User Preferences", "Display user preference data"},
 		{SO_ID_ORPHANS, "ORPHAN_DATA", 0, "Orphan Data",
 		                "Display data-blocks which are unused and/or will be lost when the file is reloaded"},
+		{SO_LAYERS, "LAYERS", 0, "Layers", "Display the layer tree of the current scene"},
 		{0, NULL, 0, NULL, NULL}
 	};
 	

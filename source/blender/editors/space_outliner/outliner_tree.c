@@ -905,8 +905,8 @@ static TreeElement *outliner_add_element(SpaceOops *soops, ListBase *lb, void *i
 		id = TREESTORE(parent)->id;
 	}
 
-	/* One exception */
-	if (type == TSE_ID_BASE) {
+	/* Exceptions */
+	if (ELEM(type, TSE_ID_BASE, TSE_OBJECT_LAYER)) {
 		/* pass */
 	}
 	else if (id == NULL) {
@@ -941,6 +941,9 @@ static TreeElement *outliner_add_element(SpaceOops *soops, ListBase *lb, void *i
 		/* pass */
 	}
 	else if (type == TSE_GP_LAYER) {
+		/* pass */
+	}
+	else if (type == TSE_OBJECT_LAYER) {
 		/* pass */
 	}
 	else if (type == TSE_ID_BASE) {
@@ -1366,6 +1369,24 @@ static void outliner_add_orphaned_datablocks(Main *mainvar, SpaceOops *soops)
 			}
 		}
 	}
+}
+
+static void outliner_add_layers_recursive(
+        SpaceOops *soops, ListBase *tree, ListBase *layerlist,
+        TreeElement *parent_ten)
+{
+	for (LayerTreeItem *litem = layerlist->first; litem; litem = litem->next) {
+		TreeElement *ten = outliner_add_element(soops, tree, NULL, parent_ten, TSE_OBJECT_LAYER, 0);
+		ten->name = litem->name;
+		ten->directdata = litem;
+
+		outliner_add_layers_recursive(soops, &ten->subtree, &litem->childs, ten);
+	}
+}
+
+static void outliner_add_layers(SpaceOops *soops, LayerTree *ltree)
+{
+	outliner_add_layers_recursive(soops, &soops->tree, &ltree->items, NULL);
 }
 
 /* ======================================================= */
@@ -1839,6 +1860,9 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SpaceOops *soops)
 	}
 	else if (soops->outlinevis == SO_ID_ORPHANS) {
 		outliner_add_orphaned_datablocks(mainvar, soops);
+	}
+	else if (soops->outlinevis == SO_LAYERS) {
+		outliner_add_layers(soops, scene->object_layers);
 	}
 	else {
 		ten = outliner_add_element(soops, &soops->tree, OBACT, NULL, 0, 0);
