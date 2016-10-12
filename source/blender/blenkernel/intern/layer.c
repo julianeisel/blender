@@ -326,6 +326,7 @@ void BKE_layeritem_remove(LayerTreeItem *litem, const bool remove_children)
 	LayerTree *ltree = litem->tree; /* store before deleting litem */
 	layeritem_remove_ex(litem, remove_children);
 	ltree->items_all = MEM_reallocN(ltree->items_all, sizeof(*ltree->items_all) * ltree->tot_items);
+	ltree->active_layer = ltree->items_all[0];
 }
 
 /* XXX newidx isn't always the index the items are inserted at. */
