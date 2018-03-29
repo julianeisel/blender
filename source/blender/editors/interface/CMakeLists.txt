@@ -31,6 +31,9 @@ set(INC
 	../../makesrna
 	../../python
 	../../windowmanager
+	../../../../intern/bwidgets
+	../../../../intern/bwidgets/generics
+	../../../../intern/bwidgets/widgets
 	../../../../intern/guardedalloc
 	../../../../intern/glew-mx
 )
@@ -43,6 +46,8 @@ set(SRC
 	interface.c
 	interface_align.c
 	interface_anim.c
+	interface_bwidgets.cc
+	interface_bwidgets_draw.cc
 	interface_draw.c
 	interface_eyedropper.c
 	interface_eyedropper_color.c

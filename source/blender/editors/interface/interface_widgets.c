@@ -4018,7 +4018,7 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 				break;
 				
 			case UI_BTYPE_BUT:
-				wt = widget_type(UI_WTYPE_EXEC);
+//				wt = widget_type(UI_WTYPE_EXEC);
 				break;
 
 			case UI_BTYPE_NUM:
@@ -4191,13 +4191,14 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 				break;
 		}
 	}
-	
+
+	const int roundboxalign = widget_roundbox_set(but, rect);
+
 	if (wt) {
 		//rcti disablerect = *rect; /* rect gets clipped smaller for text */
-		int roundboxalign, state;
+		int state;
 		bool disabled = false;
 		
-		roundboxalign = widget_roundbox_set(but, rect);
 
 		/* Mask out flags re-used for local state. */
 		state = but->flag & ~UI_STATE_FLAGS_ALL;
@@ -4238,6 +4239,9 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 //		if (state & (UI_BUT_DISABLED | UI_BUT_INACTIVE))
 //			if (but->dt != UI_EMBOSS_PULLDOWN)
 //				widget_disabled(&disablerect);
+	}
+	else {
+		ui_widget_draw(but, rect, roundboxalign);
 	}
 }
 

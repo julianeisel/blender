@@ -1407,7 +1407,9 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 	ui_fontscale(&style.grouplabel.points, block->aspect);
 	ui_fontscale(&style.widgetlabel.points, block->aspect);
 	ui_fontscale(&style.widget.points, block->aspect);
-	
+
+	ui_widgets_init();
+
 	/* scale block min/max to rect */
 	ui_but_to_pixelrect(&rect, ar, block, NULL);
 	

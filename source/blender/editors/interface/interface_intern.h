@@ -53,6 +53,10 @@ struct Scene;
 struct ID;
 struct ImBuf;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ****************** general defines ************** */
 
 #define RNA_NO_INDEX    -1
@@ -712,6 +716,14 @@ bool ui_link_bezier_points(const rcti *rect, float coord_array[][2], int resol);
 void ui_draw_link_bezier(const rcti *rect, const float color[4]);
 
 extern void ui_draw_but(const struct bContext *C, ARegion *ar, struct uiStyle *style, uiBut *but, rcti *rect);
+
+/* interface_bwidgets.cc */
+void ui_widgets_init(void);
+void ui_widget_draw(
+        const uiBut *but,
+        const rcti *rect,
+        const int roundboxalign);
+
 /* theme color init */
 struct ThemeUI;
 void ui_widget_color_init(struct ThemeUI *tui);
@@ -791,5 +803,9 @@ typedef struct uiRNACollectionSearch {
 	bool *but_changed; /* pointer to uiBut.changed */
 } uiRNACollectionSearch;
 void ui_rna_collection_search_cb(const struct bContext *C, void *arg, const char *str, uiSearchItems *items);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* __INTERFACE_INTERN_H__ */
