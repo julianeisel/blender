@@ -1910,7 +1910,6 @@ void ED_region_panels(const bContext *C, ARegion *ar, const char *context, int c
 	View2DScrollers *scrollers;
 	int x, y, xco, yco, w, em, triangle;
 	bool is_context_new = 0;
-	int redo;
 	int scroll;
 
 	bool use_category_tabs = (ELEM(ar->regiontype, RGN_TYPE_TOOLS, RGN_TYPE_UI));  /* XXX, should use some better check? */
@@ -1988,11 +1987,12 @@ void ED_region_panels(const bContext *C, ARegion *ar, const char *context, int c
 	}
 
 
+#ifndef USE_OVERLAP_SCROLLERS
 	/* sortof hack - but we cannot predict the height of panels, until it's being generated */
 	/* the layout engine works with fixed width (from v2d->cur), which is being set at end of the loop */
 	/* in case scroller settings (hide flags) differ from previous, the whole loop gets done again */
-	for (redo = 2; redo > 0; redo--) {
-		
+	for (int redo = 2; redo > 0; redo--) {
+#endif
 		if (vertical) {
 			w = BLI_rctf_size_x(&v2d->cur);
 			em = (ar->type->prefsizex) ? 10 : 20; /* works out to 10*UI_UNIT_X or 20*UI_UNIT_X */
@@ -2119,10 +2119,12 @@ void ED_region_panels(const bContext *C, ARegion *ar, const char *context, int c
 			break;
 #endif
 		}
+#ifndef USE_OVERLAP_SCROLLERS
 		else {
 			break;
 		}
 	}
+#endif
 
 	/* clear */
 	if (ar->overlap) {
