@@ -710,6 +710,38 @@ AZone *is_in_area_actionzone(ScrArea *sa, const int xy[2])
 				ED_area_tag_redraw(sa);
 				break;
 			}
+			else if (az->type == AZONE_REGION_SCROLL) {
+				ARegion *ar = az->ar;
+				View2D *v2d = &ar->v2d;
+				const short isect_value = UI_view2d_mouse_in_scrollers(ar, v2d, xy[0], xy[1]);
+
+				if (isect_value == 'h') {
+					if (az->direction == AZ_SCROLL_HOR) {
+						az->alpha = v2d->alpha_hor = 255;
+					}
+				}
+				else if (isect_value == 'v') {
+					if (az->direction == AZ_SCROLL_VERT) {
+						az->alpha = v2d->alpha_vert = 255;
+					}
+				}
+				else {
+					const int local_xy[2] = {xy[0] - ar->winrct.xmin, xy[1] - ar->winrct.ymin};
+
+					if (az->direction == AZ_SCROLL_HOR) {
+						const float alpha = 1.0f - (BLI_rcti_length_y(&v2d->hor, local_xy[1]) / (float)U.widget_unit);
+						az->alpha = v2d->alpha_hor = alpha * 255;
+					}
+					else if (az->direction == AZ_SCROLL_VERT) {
+						const float alpha = 1.0f - (BLI_rcti_length_x(&v2d->vert, local_xy[0]) / (float)U.widget_unit);
+						az->alpha = v2d->alpha_vert = alpha * 255;
+					}
+					ED_area_tag_redraw(sa);
+				}
+
+				/* Click should never do anything, so return NULL */
+				return NULL;
+			}
 		}
 	}
 	
@@ -771,6 +803,9 @@ static int actionzone_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 		actionzone_apply(C, op, sad->az->type);
 		actionzone_exit(op);
 		return OPERATOR_FINISHED;
+	}
+	else if (ELEM(sad->az->type, AZONE_REGION_SCROLL)) {
+		return OPERATOR_PASS_THROUGH;
 	}
 	else {
 		/* add modal handler */

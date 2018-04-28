@@ -64,6 +64,9 @@ typedef struct View2D {
 	int tab_num;					/* number of tabs stored */
 	int tab_cur;					/* current tab */
 
+	char alpha_vert, alpha_hor;		/* alpha of vertical and horizontal scrollbars (range is [0, 255]) */
+	short bla[3];
+
 	/* animated smooth view */
 	struct SmoothView2DStore *sms;
 	struct wmTimer *smooth_timer;

@@ -203,6 +203,24 @@ void ED_area_azones_update(ScrArea *sa, const int mouse_xy[2])
 				break;
 			}
 		}
+		else if (az->type == AZONE_REGION_SCROLL) {
+			/* only if mouse is not hovering the azone */
+			if (BLI_rcti_isect_pt_v(&az->rect, mouse_xy) == false) {
+				View2D *v2d = &az->ar->v2d;
+
+				if (az->direction == AZ_SCROLL_VERT) {
+					az->alpha = v2d->alpha_vert = 0;
+					changed = true;
+				}
+				else if (az->direction == AZ_SCROLL_HOR) {
+					az->alpha = v2d->alpha_hor = 0;
+					changed = true;
+				}
+				else {
+					BLI_assert(0);
+				}
+			}
+		}
 	}
 
 	if (changed) {
@@ -463,6 +481,12 @@ static void region_draw_azones(ScrArea *sa, ARegion *ar)
 				if (az->alpha != 0.0f) {
 					area_azone_tag_update(sa);
 				}
+			}
+			else if (az->type == AZONE_REGION_SCROLL) {
+				if (az->alpha != 0.0f) {
+					area_azone_tag_update(sa);
+				}
+				/* Don't draw this azone. */
 			}
 		}
 	}
@@ -1022,7 +1046,7 @@ static void region_azone_tria(ScrArea *sa, AZone *az, ARegion *ar)
 }	
 
 
-static void region_azone_initialize(ScrArea *sa, ARegion *ar, AZEdge edge, const bool is_fullscreen)
+static void region_azone_edge_initialize(ScrArea *sa, ARegion *ar, AZEdge edge, const bool is_fullscreen)
 {
 	AZone *az = NULL;
 	const bool is_hidden = (ar->flag & (RGN_FLAG_HIDDEN | RGN_FLAG_TOO_SMALL)) == 0;
@@ -1053,21 +1077,68 @@ static void region_azone_initialize(ScrArea *sa, ARegion *ar, AZEdge edge, const
 	
 }
 
+#define AZONEPAD_SCROLL   (U.widget_unit)
+static void region_azone_scrollbar_initialize(ScrArea *sa, ARegion *ar, AZScrollDirection direction)
+{
+	rcti scroller_vert = (direction == AZ_SCROLL_VERT) ? ar->v2d.vert : ar->v2d.hor;
+	AZone *az = MEM_callocN(sizeof(*az), __func__);
+
+	BLI_addtail(&sa->actionzones, az);
+	az->type = AZONE_REGION_SCROLL;
+	az->ar = ar;
+	az->direction = direction;
+
+	if (direction == AZ_SCROLL_VERT) {
+		az->ar->v2d.alpha_vert = 0;
+	}
+	else if (direction == AZ_SCROLL_HOR) {
+		az->ar->v2d.alpha_hor = 0;
+	}
+
+	BLI_rcti_translate(&scroller_vert, ar->winrct.xmin, ar->winrct.ymin);
+	az->x1 = scroller_vert.xmin - AZONEPAD_SCROLL;
+	az->y1 = scroller_vert.ymin - AZONEPAD_SCROLL;
+	az->x2 = scroller_vert.xmax + AZONEPAD_SCROLL;
+	az->y2 = scroller_vert.ymax + AZONEPAD_SCROLL;
+
+	BLI_rcti_init(&az->rect, az->x1, az->x2, az->y1, az->y2);
+}
+
+static void region_azones_scrollbars_initialize(ScrArea *sa, ARegion *ar)
+{
+	const View2D *v2d = &ar->v2d;
+
+	if ((v2d->scroll & V2D_SCROLL_VERTICAL)   && ((v2d->scroll & V2D_SCROLL_SCALE_VERTICAL)   == 0)) {
+		region_azone_scrollbar_initialize(sa, ar, AZ_SCROLL_VERT);
+	}
+	if ((v2d->scroll & V2D_SCROLL_HORIZONTAL) && ((v2d->scroll & V2D_SCROLL_SCALE_HORIZONTAL) == 0)) {
+		region_azone_scrollbar_initialize(sa, ar, AZ_SCROLL_HOR);
+	}
+}
+
 
 /* *************************************************************** */
 
-static void region_azone_add(ScrArea *sa, ARegion *ar, const int alignment, const bool is_fullscreen)
+static void region_azones_add(const bScreen *screen, ScrArea *sa, ARegion *ar, const int alignment)
 {
+	const bool is_fullscreen = screen->state == SCREENFULL;
+
 	/* edge code (t b l r) is along which area edge azone will be drawn */
-	
+
 	if (alignment == RGN_ALIGN_TOP)
-		region_azone_initialize(sa, ar, AE_BOTTOM_TO_TOPLEFT, is_fullscreen);
+		region_azone_edge_initialize(sa, ar, AE_BOTTOM_TO_TOPLEFT, is_fullscreen);
 	else if (alignment == RGN_ALIGN_BOTTOM)
-		region_azone_initialize(sa, ar, AE_TOP_TO_BOTTOMRIGHT, is_fullscreen);
+		region_azone_edge_initialize(sa, ar, AE_TOP_TO_BOTTOMRIGHT, is_fullscreen);
 	else if (alignment == RGN_ALIGN_RIGHT)
-		region_azone_initialize(sa, ar, AE_LEFT_TO_TOPRIGHT, is_fullscreen);
+		region_azone_edge_initialize(sa, ar, AE_LEFT_TO_TOPRIGHT, is_fullscreen);
 	else if (alignment == RGN_ALIGN_LEFT)
-		region_azone_initialize(sa, ar, AE_RIGHT_TO_TOPLEFT, is_fullscreen);
+		region_azone_edge_initialize(sa, ar, AE_RIGHT_TO_TOPLEFT, is_fullscreen);
+
+	if (is_fullscreen) {
+		fullscreen_azone_initialize(sa, ar);
+	}
+
+	region_azones_scrollbars_initialize(sa, ar);
 }
 
 /* dir is direction to check, not the splitting edge direction! */
@@ -1394,14 +1465,7 @@ static void region_rect_recursive(wmWindow *win, ScrArea *sa, ARegion *ar, rcti 
 	}
 	else if (add_azones) {
 		const bScreen *screen = WM_window_get_active_screen(win);
-
-		if (ELEM(screen->state, SCREENNORMAL, SCREENMAXIMIZED)) {
-			region_azone_add(sa, ar, alignment, false);
-		}
-		else {
-			region_azone_add(sa, ar, alignment, true);
-			fullscreen_azone_initialize(sa, ar);
-		}
+		region_azones_add(screen, sa, ar, alignment);
 	}
 
 	region_rect_recursive(win, sa, ar->next, remainder, quad, add_azones);
