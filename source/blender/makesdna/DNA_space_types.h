@@ -70,6 +70,7 @@ struct BLI_mempool;
 /* TODO 2.8: We don't write the topbar to files currently. Uncomment this
  * define to enable writing (should become the default in a bit). */
 //#define WITH_TOPBAR_WRITING
+//#define WITH_STATUSBAR_WRITING
 
 
 /* SpaceLink (Base) ==================================== */
@@ -1356,6 +1357,20 @@ typedef struct SpaceTopBar {
 	int pad;
 } SpaceTopBar;
 
+/* Status Bar ======================================= */
+
+/* These two lines with # tell makesdna this struct can be excluded.
+ * Should be: #ifndef WITH_STATUSBAR_WRITING */
+#
+#
+typedef struct SpaceStatusBar {
+	SpaceLink *next, *prev;
+	ListBase regionbase;        /* storage of regions for inactive spaces */
+	int spacetype;
+
+	int pad;
+} SpaceStatusBar;
+
 
 /* **************** SPACE DEFINES ********************* */
 
@@ -1387,8 +1402,9 @@ typedef enum eSpace_Type {
 	SPACE_USERPREF = 19,
 	SPACE_CLIP     = 20,
 	SPACE_TOPBAR   = 21,
+	SPACE_STATUSBAR = 22,
 
-	SPACEICONMAX = SPACE_TOPBAR
+	SPACEICONMAX = SPACE_STATUSBAR
 } eSpace_Type;
 
 /* use for function args */
