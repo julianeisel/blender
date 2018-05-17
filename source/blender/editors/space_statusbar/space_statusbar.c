@@ -36,10 +36,14 @@
 #include "ED_screen.h"
 #include "ED_space_api.h"
 
+#include "RNA_access.h"
+
+#include "UI_interface.h"
 #include "UI_view2d.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
+#include "WM_message.h"
 
 
 /* ******************** default callbacks for statusbar space ********************  */
@@ -52,10 +56,24 @@ static SpaceLink *statusbar_new(const ScrArea *UNUSED(area), const Scene *UNUSED
 	sstatusbar = MEM_callocN(sizeof(*sstatusbar), "init statusbar");
 	sstatusbar->spacetype = SPACE_STATUSBAR;
 
-	/* main regions */
-	ar = MEM_callocN(sizeof(*ar), "header region for statusbar");
+	/* header regions */
+	/* *** NOTE: ***
+	 * Python layout code (space_statusbar.py) depends on the list order of
+	 * these! Not nice at all, but the only way to identify the correct header
+	 * to draw to is using alignment + list position. It can't use alignment
+	 * only since code below has to set two right aligned regions - XXX. */
+	ar = MEM_callocN(sizeof(*ar), "right aligned header for statusbar");
 	BLI_addtail(&sstatusbar->regionbase, ar);
 	ar->regiontype = RGN_TYPE_HEADER;
+	ar->alignment = RGN_ALIGN_RIGHT;
+	ar = MEM_callocN(sizeof(*ar), "center header for statusbar");
+	BLI_addtail(&sstatusbar->regionbase, ar);
+	ar->regiontype = RGN_TYPE_HEADER;
+	ar->alignment = RGN_ALIGN_RIGHT; /* Right aligned too, so region layout code scales it correctly. */
+	ar = MEM_callocN(sizeof(*ar), "left aligned header for statusbar");
+	BLI_addtail(&sstatusbar->regionbase, ar);
+	ar->regiontype = RGN_TYPE_HEADER;
+	ar->alignment = RGN_ALIGN_NONE;
 
 	return (SpaceLink *)sstatusbar;
 }
@@ -85,14 +103,12 @@ static SpaceLink *statusbar_duplicate(SpaceLink *sl)
 
 
 /* add handlers, stuff you only do once or on area/region changes */
-static void statusbar_header_region_init(wmWindowManager *wm, ARegion *region)
+static void statusbar_header_region_init(wmWindowManager *UNUSED(wm), ARegion *region)
 {
-	wmKeyMap *keymap;
-
-	UI_view2d_region_reinit(&region->v2d, V2D_COMMONVIEW_HEADER, region->winx, region->winy);
-
-	keymap = WM_keymap_find(wm->defaultconf, "View2D Buttons List", 0, 0);
-	WM_event_add_keymap_handler(&region->handlers, keymap);
+	if (ELEM(region->alignment, RGN_ALIGN_RIGHT)) {
+		region->flag |= RGN_FLAG_DYNAMIC_SIZE;
+	}
+	ED_region_header_init(region);
 }
 
 static void statusbar_operatortypes(void)
@@ -105,14 +121,50 @@ static void statusbar_keymap(struct wmKeyConfig *UNUSED(keyconf))
 
 }
 
-static void statusbar_header_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar,
-                                           wmNotifier *wmn, const Scene *UNUSED(scene))
+static void statusbar_header_region_listener(
+        bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar,
+        wmNotifier *wmn, const Scene *UNUSED(scene))
 {
 	/* context changes */
 	switch (wmn->category) {
+		case NC_SCREEN:
+			if (ELEM(wmn->data, ND_LAYER, ND_SCREENCAST, ND_ANIMPLAY)) {
+				ED_region_tag_redraw(ar);
+			}
+			break;
+		case NC_WM:
+			if (wmn->data == ND_JOB)
+				ED_region_tag_redraw(ar);
+			break;
+		case NC_SCENE:
+			if (wmn->data == ND_RENDER_RESULT)
+				ED_region_tag_redraw(ar);
+			break;
+		case NC_SPACE:
+			if (wmn->data == ND_SPACE_INFO)
+				ED_region_tag_redraw(ar);
+			break;
+		case NC_ID:
+			if (wmn->action == NA_RENAME)
+				ED_region_tag_redraw(ar);
+			break;
 	}
-	/* TODO */
-	ED_region_tag_redraw(ar);
+}
+
+static void statusbar_header_region_message_subscribe(
+        const bContext *UNUSED(C),
+        WorkSpace *UNUSED(workspace), Scene *UNUSED(scene),
+        bScreen *UNUSED(screen), ScrArea *UNUSED(sa), ARegion *ar,
+        struct wmMsgBus *mbus)
+{
+	wmMsgSubscribeValue msg_sub_value_region_tag_redraw = {
+		.owner = ar,
+		.user_data = ar,
+		.notify = ED_region_do_msg_notify_tag_redraw,
+	};
+
+	WM_msg_subscribe_rna_anon_prop(mbus, Window, view_layer, &msg_sub_value_region_tag_redraw);
+	WM_msg_subscribe_rna_anon_prop(mbus, ViewLayer, name, &msg_sub_value_region_tag_redraw);
 }
 
 /* only called once, from space/spacetypes.c */
@@ -134,11 +186,14 @@ void ED_spacetype_statusbar(void)
 	/* regions: header window */
 	art = MEM_callocN(sizeof(*art), "spacetype statusbar header region");
 	art->regionid = RGN_TYPE_HEADER;
+	art->prefsizey = HEADERY;
+	art->prefsizex = UI_UNIT_X * 5; /* Mainly to avoid glitches */
+	art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_HEADER;
 	art->init = statusbar_header_region_init;
 	art->layout = ED_region_header_layout;
 	art->draw = ED_region_header_draw;
 	art->listener = statusbar_header_region_listener;
-	art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_HEADER;
+	art->message_subscribe = statusbar_header_region_message_subscribe;
 	BLI_addhead(&st->regiontypes, art);
 
 	BKE_spacetype_register(st);
