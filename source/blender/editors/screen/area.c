@@ -1240,7 +1240,7 @@ static void region_rect_recursive(wmWindow *win, ScrArea *sa, ARegion *ar, rcti 
 	region_rect_recursive(win, sa, ar->next, remainder, overlap_remainder, quad);
 }
 
-static void area_calc_totrct(ScrArea *sa, int window_size_x, int window_size_y)
+static void area_calc_totrct(ScrArea *sa, const rcti *window_rect)
 {
 	short px = (short)U.pixelsize;
 
@@ -1250,16 +1250,16 @@ static void area_calc_totrct(ScrArea *sa, int window_size_x, int window_size_y)
 	sa->totrct.ymax = sa->v2->vec.y;
 
 	/* scale down totrct by 1 pixel on all sides not matching window borders */
-	if (sa->totrct.xmin > 0) {
+	if (sa->totrct.xmin > window_rect->xmin) {
 		sa->totrct.xmin += px;
 	}
-	if (sa->totrct.xmax < (window_size_x - 1)) {
+	if (sa->totrct.xmax < (window_rect->xmax - 1)) {
 		sa->totrct.xmax -= px;
 	}
-	if (sa->totrct.ymin > 0) {
+	if (sa->totrct.ymin > window_rect->ymin) {
 		sa->totrct.ymin += px;
 	}
-	if (sa->totrct.ymax < (window_size_y - 1)) {
+	if (sa->totrct.ymax < (window_rect->ymax - 1)) {
 		sa->totrct.ymax -= px;
 	}
 	/* Although the following asserts are correct they lead to a very unstable Blender.
@@ -1354,15 +1354,15 @@ static void ed_default_handlers(wmWindowManager *wm, ScrArea *sa, ListBase *hand
 
 void ED_area_update_region_sizes(wmWindowManager *wm, wmWindow *win, ScrArea *area)
 {
+	rcti rect, overlap_rect;
+	rcti window_rect;
+
 	if (!(area->flag & AREA_FLAG_REGION_SIZE_UPDATE)) {
 		return;
 	}
 
-	const int size_x = WM_window_pixels_x(win);
-	const int size_y = WM_window_pixels_y(win);
-	rcti rect, overlap_rect;
-
-	area_calc_totrct(area, size_x, size_y);
+	WM_window_rect_calc(win, &window_rect);
+	area_calc_totrct(area, &window_rect);
 
 	/* region rect sizes */
 	rect = area->totrct;
@@ -1385,14 +1385,11 @@ void ED_area_update_region_sizes(wmWindowManager *wm, wmWindow *win, ScrArea *ar
 void ED_area_initialize(wmWindowManager *wm, wmWindow *win, ScrArea *sa)
 {
 	const bScreen *screen = WM_window_get_active_screen(win);
-	const int window_size_x = WM_window_pixels_x(win);
-	const int window_size_y = WM_window_pixels_y(win);
 	ARegion *ar;
 	rcti rect, overlap_rect;
+	rcti window_rect;
 
-	if (ED_area_is_global(sa) && (sa->global->flag & GLOBAL_AREA_IS_HIDDEN)) {
-		return;
-	}
+	WM_window_rect_calc(win, &window_rect);
 
 	/* set typedefinitions */
 	sa->type = BKE_spacetype_from_id(sa->spacetype);
@@ -1406,7 +1403,7 @@ void ED_area_initialize(wmWindowManager *wm, wmWindow *win, ScrArea *sa)
 		ar->type = BKE_regiontype_from_id(sa->type, ar->regiontype);
 
 	/* area sizes */
-	area_calc_totrct(sa, window_size_x, window_size_y);
+	area_calc_totrct(sa, &window_rect);
 
 	/* region rect sizes */
 	rect = sa->totrct;
