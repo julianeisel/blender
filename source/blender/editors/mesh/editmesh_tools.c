@@ -131,7 +131,7 @@ static int edbm_subdivide_exec(bContext *C, wmOperator *op)
 		EDBM_update_generic(em, true, true);
 	}
 
-	MEM_SAFE_FREE(objects);
+	MEM_freeN(objects);
 
 	return OPERATOR_FINISHED;
 }
@@ -379,8 +379,9 @@ void EMBM_project_snap_verts(bContext *C, ARegion *ar, BMEditMesh *em)
 				        &(const struct SnapObjectParams){
 				            .snap_select = SNAP_NOT_ACTIVE,
 				            .use_object_edit_cage = false,
+				            .use_occlusion_test = true,
 				        },
-				        mval, NULL, true,
+				        mval, NULL,
 				        co_proj, NULL))
 				{
 					mul_v3_m4v3(eve->co, obedit->imat, co_proj);
@@ -477,7 +478,7 @@ static int edbm_delete_exec(bContext *C, wmOperator *op)
 		EDBM_update_generic(em, true, true);
 	}
 
-	MEM_SAFE_FREE(objects);
+	MEM_freeN(objects);
 
 	return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
@@ -602,7 +603,7 @@ static int edbm_delete_loose_exec(bContext *C, wmOperator *op)
 
 	edbm_report_delete_info(op->reports, totelem_old, totelem_new);
 
-	MEM_SAFE_FREE(objects);
+	MEM_freeN(objects);
 
 	return OPERATOR_FINISHED;
 }
@@ -898,7 +899,7 @@ static int edbm_add_edge_face_exec(bContext *C, wmOperator *op)
 
 		/* cancel if nothing was done */
 		if ((totedge_orig == em->bm->totedge) &&
-			(totface_orig == em->bm->totface))
+		    (totface_orig == em->bm->totface))
 		{
 			EDBM_op_finish(em, &bmop, op, true);
 			continue;
@@ -907,8 +908,8 @@ static int edbm_add_edge_face_exec(bContext *C, wmOperator *op)
 		/* normally we would want to leave the new geometry selected,
 		 * but being able to press F many times to add geometry is too useful! */
 		if (ele_desel &&
-			(BMO_slot_buffer_count(bmop.slots_out, "faces.out") == 1) &&
-			(ele_desel_face = BMO_slot_buffer_get_first(bmop.slots_out, "faces.out")))
+		    (BMO_slot_buffer_count(bmop.slots_out, "faces.out") == 1) &&
+		    (ele_desel_face = BMO_slot_buffer_get_first(bmop.slots_out, "faces.out")))
 		{
 			edbm_add_edge_face_exec__tricky_finalize_sel(em->bm, ele_desel, ele_desel_face);
 		}
@@ -1460,7 +1461,7 @@ static int edbm_vert_connect_path_exec(bContext *C, wmOperator *op)
 
 		/* when there is only 2 vertices, we can ignore selection order */
 		if (is_pair) {
-			if(!edbm_connect_vert_pair(em, op)) {
+			if (!edbm_connect_vert_pair(em, op)) {
 				failed_connect_len++;
 			}
 			continue;

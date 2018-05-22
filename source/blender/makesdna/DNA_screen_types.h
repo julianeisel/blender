@@ -254,6 +254,12 @@ typedef enum GlobalAreaAlign {
 	GLOBAL_AREA_ALIGN_BOTTOM,
 } GlobalAreaAlign;
 
+typedef struct ScrArea_Runtime {
+	struct bToolRef *tool;
+	char          is_tool_set;
+	char _pad0[7];
+} ScrArea_Runtime;
+
 typedef struct ScrArea {
 	struct ScrArea *next, *prev;
 	
@@ -294,6 +300,8 @@ typedef struct ScrArea {
 	ListBase handlers;   /* wmEventHandler */
 
 	ListBase actionzones;	/* AZone */
+
+	ScrArea_Runtime runtime;
 } ScrArea;
 
 typedef struct ARegion {
@@ -474,5 +482,6 @@ enum {
 #define RGN_DRAW_PARTIAL	2
 #define RGN_DRAWING			4
 #define RGN_DRAW_REFRESH_UI	8  /* re-create uiBlock's where possible */
+#define RGN_DRAW_NO_REBUILD	16
 #endif
 

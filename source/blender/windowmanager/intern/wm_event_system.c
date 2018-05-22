@@ -788,7 +788,7 @@ void WM_reportf(ReportType type, const char *format, ...)
 /* (caller_owns_reports == true) when called from python */
 static void wm_operator_reports(bContext *C, wmOperator *op, int retval, bool caller_owns_reports)
 {
-	if (caller_owns_reports == false) { /* popup */
+	if (G.background == 0 && caller_owns_reports == false) { /* popup */
 		if (op->reports->list.first) {
 			/* FIXME, temp setting window, see other call to UI_popup_menu_reports for why */
 			wmWindow *win_prev = CTX_wm_window(C);
@@ -1958,7 +1958,7 @@ static int wm_handler_operator_call(bContext *C, ListBase *handlers, wmEventHand
 					/* set cursor back to the default for the region */
 					wmWindow *win = CTX_wm_window(C);
 					WM_cursor_grab_disable(win, NULL);
-					ED_region_cursor_set(win, CTX_wm_area(C), CTX_wm_region(C));
+					ED_region_cursor_set(win, area, region);
 
 					BLI_remlink(handlers, handler);
 					wm_event_free_handler(handler);
@@ -2262,6 +2262,9 @@ static int wm_handlers_do_intern(bContext *C, wmEvent *event, ListBase *handlers
 							if (action & WM_HANDLER_BREAK) {
 								/* not always_pass here, it denotes removed handler */
 								CLOG_INFO(WM_LOG_HANDLERS, 2, "handled! '%s'", kmi->idname);
+								if (handler->keymap_callback != NULL) {
+									handler->keymap_callback(keymap, kmi, handler->keymap_callback_user_data);
+								}
 								break;
 							}
 							else {
@@ -2388,12 +2391,12 @@ static int wm_handlers_do_intern(bContext *C, wmEvent *event, ListBase *handlers
 							continue;
 						}
 
-						const wmKeyMap *keymap = WM_keymap_active(wm, mgroup->type->keymap);
+						wmKeyMap *keymap = WM_keymap_active(wm, mgroup->type->keymap);
 						wmKeyMapItem *kmi;
 
 						PRINT("%s:   checking '%s' ...", __func__, keymap->idname);
 
-						if (!keymap->poll || keymap->poll(C)) {
+						if (WM_keymap_poll(C, keymap)) {
 							PRINT("pass\n");
 							for (kmi = keymap->items.first; kmi; kmi = kmi->next) {
 								if (wm_eventmatch(event, kmi)) {
@@ -2414,6 +2417,10 @@ static int wm_handlers_do_intern(bContext *C, wmEvent *event, ListBase *handlers
 									CTX_wm_manipulator_group_set(C, NULL);
 
 									if (action & WM_HANDLER_BREAK) {
+										if (handler->keymap_callback != NULL) {
+											handler->keymap_callback(keymap, kmi, handler->keymap_callback_user_data);
+										}
+
 										if (G.debug & (G_DEBUG_EVENTS | G_DEBUG_HANDLERS)) {
 											printf("%s:       handled - and pass on! '%s'\n",
 											       __func__, kmi->idname);
@@ -2818,7 +2825,7 @@ void wm_event_do_handlers(bContext *C)
 				/* Note: setting subwin active should be done here, after modal handlers have been done */
 				if (event->type == MOUSEMOVE) {
 					/* state variables in screen, cursors. Also used in wm_draw.c, fails for modal handlers though */
-					ED_screen_set_active_region(C, &event->x);
+					ED_screen_set_active_region(C, win, &event->x);
 					/* for regions having custom cursors */
 					wm_paintcursor_test(C, event);
 				}
@@ -2874,12 +2881,10 @@ void wm_event_do_handlers(bContext *C)
 									 */
 									wmEventHandler sneaky_handler = {NULL};
 									if (ar->regiontype == RGN_TYPE_WINDOW) {
-										WorkSpace *workspace = WM_window_get_active_workspace(win);
-										if (workspace->tool.keymap[0] &&
-										    workspace->tool.spacetype == sa->spacetype)
-										{
+										bToolRef_Runtime *tref_rt = sa->runtime.tool ? sa->runtime.tool->runtime : NULL;
+										if (tref_rt && tref_rt->keymap[0]) {
 											wmKeyMap *km = WM_keymap_find_all(
-											        C, workspace->tool.keymap, sa->spacetype, RGN_TYPE_WINDOW);
+											        C, tref_rt->keymap, sa->spacetype, RGN_TYPE_WINDOW);
 											if (km != NULL) {
 												sneaky_handler.keymap = km;
 												/* Handle widgets first. */
@@ -3166,6 +3171,15 @@ void WM_event_remove_keymap_handler(ListBase *handlers, wmKeyMap *keymap)
 			break;
 		}
 	}
+}
+
+void WM_event_set_keymap_handler_callback(
+        wmEventHandler *handler,
+        void (keymap_tag)(wmKeyMap *keymap, wmKeyMapItem *kmi, void *user_data),
+        void *user_data)
+{
+	handler->keymap_callback = keymap_tag;
+	handler->keymap_callback_user_data = user_data;
 }
 
 wmEventHandler *WM_event_add_ui_handler(

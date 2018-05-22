@@ -125,6 +125,7 @@ void BKE_object_mat3_to_rot(struct Object *ob, float mat[3][3], bool use_compat)
 void BKE_object_to_mat3(struct Object *ob, float mat[3][3]);
 void BKE_object_to_mat4(struct Object *ob, float mat[4][4]);
 void BKE_object_apply_mat4(struct Object *ob, float mat[4][4], const bool use_compat, const bool use_parent);
+void BKE_object_apply_mat4_ex(struct Object *ob, float mat[4][4], struct Object *parent, float parentinv[4][4], const bool use_compat);
 void BKE_object_matrix_local_get(struct Object *ob, float mat[4][4]);
 
 bool BKE_object_pose_context_check(const struct Object *ob);
@@ -308,8 +309,8 @@ typedef enum eObjectSet {
 
 struct LinkNode *BKE_object_relational_superset(
         struct ViewLayer *view_layer, eObjectSet objectSet, eObRelationTypes includeFilter);
-struct LinkNode *BKE_object_groups(struct Object *ob);
-void             BKE_object_groups_clear(struct Object *object);
+struct LinkNode *BKE_object_groups(struct Main *bmain, struct Object *ob);
+void             BKE_object_groups_clear(struct Main *bmain, struct Object *object);
 
 struct KDTree *BKE_object_as_kdtree(struct Object *ob, int *r_tot);
 

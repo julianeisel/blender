@@ -327,7 +327,7 @@ static bool view3d_ruler_item_mousemove(
 			            .snap_select = SNAP_ALL,
 			            .use_object_edit_cage = true,
 			        },
-			        mval_fl, &dist_px, true,
+			        mval_fl, &dist_px,
 			        co, ray_normal))
 			{
 				negate_v3(ray_normal);
@@ -344,19 +344,17 @@ static bool view3d_ruler_item_mousemove(
 			}
 		}
 		else if (do_snap) {
-			// Scene *scene = CTX_data_scene(C);
-			View3D *v3d = ruler_info->sa->spacedata.first;
 			const float mval_fl[2] = {UNPACK2(mval)};
-			bool use_depth = (v3d->drawtype >= OB_SOLID);
 
 			if (ED_transform_snap_object_project_view3d_mixed(
 			        ruler_info->snap_context,
-			        (SCE_SELECT_VERTEX | SCE_SELECT_EDGE) | (use_depth ? SCE_SELECT_FACE : 0),
+			        (SCE_SELECT_VERTEX | SCE_SELECT_EDGE | SCE_SELECT_FACE),
 			        &(const struct SnapObjectParams){
 			            .snap_select = SNAP_ALL,
 			            .use_object_edit_cage = true,
+			            .use_occlusion_test = true,
 			        },
-			        mval_fl, &dist_px, use_depth,
+			        mval_fl, &dist_px,
 			        co, NULL))
 			{
 				ruler_info->snap_flag |= RULER_SNAP_OK;
@@ -980,8 +978,10 @@ void VIEW3D_WT_ruler_item(wmManipulatorType *wt)
 
 static bool WIDGETGROUP_ruler_poll(const bContext *C, wmManipulatorGroupType *wgt)
 {
-	WorkSpace *workspace = CTX_wm_workspace(C);
-	if (!STREQ(wgt->idname, workspace->tool.manipulator_group)) {
+	bToolRef_Runtime *tref_rt = WM_toolsystem_runtime_from_context((bContext *)C);
+	if ((tref_rt == NULL) ||
+	    !STREQ(wgt->idname, tref_rt->manipulator_group))
+	{
 		WM_manipulator_group_type_unlink_delayed_ptr(wgt);
 		return false;
 	}
@@ -1028,8 +1028,9 @@ void VIEW3D_WGT_ruler(wmManipulatorGroupType *wgt)
 
 static int view3d_ruler_poll(bContext *C)
 {
-	WorkSpace *workspace = CTX_wm_workspace(C);
-	if (!STREQ(view3d_wgt_ruler_id, workspace->tool.manipulator_group) ||
+	bToolRef_Runtime *tref_rt = WM_toolsystem_runtime_from_context((bContext *)C);
+	if ((tref_rt == NULL) ||
+	    !STREQ(view3d_wgt_ruler_id, tref_rt->manipulator_group) ||
 	    CTX_wm_region_view3d(C) == NULL)
 	{
 		return false;

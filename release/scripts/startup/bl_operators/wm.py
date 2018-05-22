@@ -2335,14 +2335,57 @@ class WM_OT_tool_set_by_name(Operator):
             name="Text",
             description="Display name of the tool",
             )
+    space_type = EnumProperty(
+            name="Type",
+            items=tuple(
+                (e.identifier, e.name, "", e. value)
+                for e in bpy.types.Space.bl_rna.properties["type"].enum_items
+            ),
+            default='EMPTY',
+            )
 
     def execute(self, context):
         from bl_ui.space_toolsystem_common import activate_by_name
-        if activate_by_name(context, self.name):
+        space_type = self.space_type
+        if space_type == 'EMPTY':
+            space_type = context.space_data.type
+        if activate_by_name(context, space_type, self.name):
             return {'FINISHED'}
         else:
             self.report({'WARNING'}, f"Tool {self.name!r} not found.")
             return {'CANCELLED'}
+
+
+class WM_OT_toolbar(Operator):
+    bl_idname = "wm.toolbar"
+    bl_label = "Toolbar"
+
+    def execute(self, context):
+        from bl_ui.space_toolsystem_common import (
+            ToolSelectPanelHelper,
+            keymap_from_context,
+        )
+        space_type = context.space_data.type
+
+        cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+        if cls is None:
+            # self.report({'WARNING'}, f"Toolbar not found for {space_type!r}")
+            # Passthrough to running search directly.
+            bpy.ops.wm.search_menu('INVOKE_DEFAULT')
+            return {'CANCELLED'}
+
+        wm = context.window_manager
+        keymap = keymap_from_context(context, space_type)
+
+        def draw_menu(popover, context):
+            layout = popover.layout
+            cls.draw_cls(layout, context, detect_layout=False)
+
+            layout.operator_context = 'INVOKE_DEFAULT'
+            layout.operator("wm.search_menu")
+
+        wm.popover(draw_menu, keymap=keymap)
+        return {'FINISHED'}
 
 
 classes = (
@@ -2400,4 +2443,5 @@ classes = (
     WM_OT_owner_enable,
     WM_OT_url_open,
     WM_OT_tool_set_by_name,
+    WM_OT_toolbar,
 )
