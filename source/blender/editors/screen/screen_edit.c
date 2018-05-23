@@ -799,6 +799,7 @@ void ED_screen_refresh(wmWindowManager *wm, wmWindow *win)
 
 	/* exception for bg mode, we only need the screen context */
 	if (!G.background) {
+		rcti window_rect, screen_rect;
 
 		/* header size depends on DPI, let's verify */
 		WM_window_set_dpi(win);
