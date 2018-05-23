@@ -2134,10 +2134,17 @@ int WM_window_pixels_y(const wmWindow *win)
 	return (int)(f * (float)win->sizey);
 }
 
+/**
+ * Get boundaries usable by all window contents, including global areas.
+ */
 void WM_window_rect_calc(const wmWindow *win, rcti *r_rect)
 {
 	BLI_rcti_init(r_rect, 0, WM_window_pixels_x(win), 0, WM_window_pixels_y(win));
 }
+/**
+ * Get boundaries usable by screen-layouts, excluding global areas.
+ * \note Depends on U.dpi_fac. Should that be outdated, call #WM_window_set_dpi first.
+ */
 void WM_window_screen_rect_calc(const wmWindow *win, rcti *r_rect)
 {
 	rcti rect;
