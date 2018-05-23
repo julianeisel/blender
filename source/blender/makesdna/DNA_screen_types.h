@@ -227,7 +227,7 @@ typedef struct uiPreview {           /* some preview UI data need to be saved in
 } uiPreview;
 
 /* These two lines with # tell makesdna this struct can be excluded.
- * Should be: #ifndef WITH_TOPBAR_WRITING */
+ * Should be: #ifndef WITH_GLOBAL_AREA_WRITING */
 #
 #
 typedef struct ScrGlobalAreaData {
@@ -243,6 +243,7 @@ typedef struct ScrGlobalAreaData {
 	short align; /* GlobalAreaAlign */
 
 	short flag; /* GlobalAreaFlag */
+	short pad;
 } ScrGlobalAreaData;
 
 enum GlobalAreaFlag {

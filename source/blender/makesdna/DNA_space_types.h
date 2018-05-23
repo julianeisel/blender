@@ -67,10 +67,9 @@ struct MovieClipScopes;
 struct Mask;
 struct BLI_mempool;
 
-/* TODO 2.8: We don't write the topbar to files currently. Uncomment this
+/* TODO 2.8: We don't write the global areas to files currently. Uncomment
  * define to enable writing (should become the default in a bit). */
-//#define WITH_TOPBAR_WRITING
-//#define WITH_STATUSBAR_WRITING
+//#define WITH_GLOBAL_AREA_WRITING
 
 
 /* SpaceLink (Base) ==================================== */
@@ -1328,7 +1327,7 @@ typedef enum eSpaceClip_GPencil_Source {
 /* Top Bar ======================================= */
 
 /* These two lines with # tell makesdna this struct can be excluded.
- * Should be: #ifndef WITH_TOPBAR_WRITING */
+ * Should be: #ifndef WITH_GLOBAL_AREA_WRITING */
 #
 #
 typedef struct SpaceTopBar {
@@ -1342,7 +1341,7 @@ typedef struct SpaceTopBar {
 /* Status Bar ======================================= */
 
 /* These two lines with # tell makesdna this struct can be excluded.
- * Should be: #ifndef WITH_STATUSBAR_WRITING */
+ * Should be: #ifndef WITH_GLOBAL_AREA_WRITING */
 #
 #
 typedef struct SpaceStatusBar {
