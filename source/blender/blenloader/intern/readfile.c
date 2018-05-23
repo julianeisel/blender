@@ -2941,6 +2941,7 @@ static void direct_link_workspace(FileData *fd, WorkSpace *workspace, const Main
 
 	for (bToolRef *tref = workspace->tools.first; tref; tref = tref->next) {
 		tref->runtime = NULL;
+		tref->properties = newdataadr(fd, tref->properties);
 	}
 }
 
@@ -5679,16 +5680,14 @@ static void direct_link_collection(FileData *fd, Collection *collection)
 
 #ifdef USE_COLLECTION_COMPAT_28
 	/* This runs before the very first doversion. */
+	collection->collection = newdataadr(fd, collection->collection);
 	if (collection->collection != NULL) {
-		collection->collection = newdataadr(fd, collection->collection);
 		direct_link_scene_collection(fd, collection->collection);
 	}
 
+	collection->view_layer = newdataadr(fd, collection->view_layer);
 	if (collection->view_layer != NULL) {
-		collection->view_layer = newdataadr(fd, collection->view_layer);
-		if (collection->view_layer != NULL) {
-			direct_link_view_layer(fd, collection->view_layer);
-		}
+		direct_link_view_layer(fd, collection->view_layer);
 	}
 #endif
 }
@@ -6072,14 +6071,6 @@ static void direct_link_workspace_link_scene_data(
 				BLI_assert(BLI_findindex(&scene->view_layers, layer) != -1);
 				/* relation->parent is set in lib_link_workspaces */
 				relation->value = layer;
-			}
-		}
-
-		if (workspace->view_layer) { /* this was temporariliy used during 2.8 project. Keep files compatible */
-			ViewLayer *layer = newdataadr(fd, workspace->view_layer);
-			/* only set when layer is from the scene we read */
-			if (layer && (BLI_findindex(&scene->view_layers, layer) != -1)) {
-				workspace->view_layer = layer;
 			}
 		}
 	}
