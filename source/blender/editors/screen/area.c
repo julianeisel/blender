@@ -1410,6 +1410,9 @@ void ED_area_initialize(wmWindowManager *wm, wmWindow *win, ScrArea *sa)
 	rcti rect, overlap_rect;
 	rcti window_rect;
 
+	if (ED_area_is_global(sa) && (sa->global->flag & GLOBAL_AREA_IS_HIDDEN)) {
+		return;
+	}
 	WM_window_rect_calc(win, &window_rect);
 
 	/* set typedefinitions */

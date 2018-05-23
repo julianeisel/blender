@@ -2734,7 +2734,8 @@ static int screen_maximize_area_poll(bContext *C)
 	const bScreen *screen = CTX_wm_screen(C);
 	const ScrArea *area = CTX_wm_area(C);
 	return ED_operator_areaactive(C) &&
-	       ((screen->state != SCREENNORMAL) || (area->spacetype != SPACE_TOPBAR));
+	        /* Don't allow maximizing global areas but allow minimizing from them. */
+	       ((screen->state != SCREENNORMAL) || !ED_area_is_global(area));
 }
 
 static void SCREEN_OT_screen_full_area(wmOperatorType *ot)

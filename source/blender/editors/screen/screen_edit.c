@@ -929,7 +929,11 @@ void ED_screen_exit(bContext *C, wmWindow *window, bScreen *screen)
 	for (ARegion *ar = screen->regionbase.first; ar; ar = ar->next) {
 		ED_region_exit(C, ar);
 	}
-	ED_screen_areas_iter(window, screen, sa) {
+	for (ScrArea *sa = screen->areabase.first; sa; sa = sa->next) {
+		ED_area_exit(C, sa);
+	}
+	/* Don't use ED_screen_areas_iter here, it skips hidden areas. */
+	for (ScrArea *sa = window->global_areas.areabase.first; sa; sa = sa->next) {
 		ED_area_exit(C, sa);
 	}
 
