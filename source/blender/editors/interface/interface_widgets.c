@@ -2016,7 +2016,7 @@ static void widget_draw_text(uiFontStyle *fstyle, uiWidgetColors *wcol, uiBut *b
 	}
 }
 
-static BIFIconID widget_icon_id(uiBut *but)
+BIFIconID ui_but_widget_icon_id(const uiBut *but)
 {
 	if (!(but->flag & UI_HAS_ICON)) {
 		return ICON_NONE;
@@ -2054,7 +2054,7 @@ static void widget_draw_text_icon(uiFontStyle *fstyle, uiWidgetColors *wcol, uiB
 
 	/* Big previews with optional text label below */
 	if (but->flag & UI_BUT_ICON_PREVIEW && ui_block_is_menu(but->block)) {
-		const BIFIconID icon = widget_icon_id(but);
+		const BIFIconID icon = ui_but_widget_icon_id(but);
 		int icon_size = BLI_rcti_size_y(rect);
 		int text_size = 0;
 
@@ -2091,7 +2091,7 @@ static void widget_draw_text_icon(uiFontStyle *fstyle, uiWidgetColors *wcol, uiB
 		}
 #endif
 
-		const BIFIconID icon = widget_icon_id(but);
+		const BIFIconID icon = ui_but_widget_icon_id(but);
 		int icon_size_init = is_tool ? ICON_DEFAULT_HEIGHT_TOOLBAR : ICON_DEFAULT_HEIGHT;
 		const float icon_size = icon_size_init / (but->block->aspect / UI_DPI_FAC);
 		const float icon_padding = 2 * UI_DPI_FAC;
@@ -4133,6 +4133,9 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 					wt->wcol_theme = &tui->wcol_menu_back;
 					wt->state = widget_state;
 				}
+				else {
+					wt = NULL;
+				}
 				break;
 
 			case UI_BTYPE_SEPR:
@@ -4395,7 +4398,7 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 //				widget_disabled(&disablerect);
 	}
 	else {
-		ui_widget_draw(but, rect, roundboxalign);
+		ui_widget_draw(but, rect, (const uchar *)tui->wcol_text.text, roundboxalign);
 	}
 }
 

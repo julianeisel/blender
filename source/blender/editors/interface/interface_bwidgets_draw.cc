@@ -36,8 +36,10 @@ extern "C" {
 
 #include "GPU_immediate.h"
 #include "GPU_matrix.h"
+#include "GPU_state.h"
 
 #include "UI_interface.h"
+#include "UI_interface_icons.h"
 
 #include "interface_intern.h"
 
@@ -196,8 +198,20 @@ void GawainPaintEngine::drawText(
 }
 
 void GawainPaintEngine::drawIcon(
-        const bWidgets::bwIconInterface&,
-        const bwRectanglePixel&)
+        const bwIconInterface& iicon,
+        const bwRectanglePixel& rect)
 {
-	
+	const Icon& icon = static_cast<const Icon&>(iicon);
+	const float xs = (rect.xmin + rect.xmax - rect.height()) / 2.0f;
+	const float ys = (rect.ymin + rect.ymax - rect.height()) / 2.0f;
+	char col[] = {
+		(char)(icon.mono_color[0] * 255),
+		(char)(icon.mono_color[1] * 255),
+		(char)(icon.mono_color[2] * 255),
+		(char)(icon.mono_color[3] * 255)
+	};
+
+	GPU_blend(true);
+	UI_icon_draw_aspect(xs, ys, static_cast<int>(icon.iconid), icon.aspect, 1.0f, col);
+	GPU_blend(false);
 }

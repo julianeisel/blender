@@ -28,6 +28,7 @@
 #ifndef __INTERFACE_BWIDGETS_INTERN_H__
 #define __INTERFACE_BWIDGETS_INTERN_H__
 
+#include "bwIconInterface.h"
 #include "bwPaintEngine.h"
 
 /**
@@ -50,6 +51,24 @@ public:
 	void drawIcon(
 	        const bWidgets::bwIconInterface&,
 	        const bWidgets::bwRectanglePixel&) override;
+};
+
+class Icon : public bWidgets::bwIconInterface
+{
+public:
+	Icon(BIFIconID icon_id, bWidgets::bwColor col, float aspect) :
+	    iconid(icon_id), mono_color(col), aspect(aspect)
+	{
+		
+	}
+
+	bool isValid() const override
+	{
+		return iconid != ICON_NONE;
+	}
+	BIFIconID iconid;
+	bWidgets::bwColor mono_color;
+	float aspect;
 };
 
 #endif /* __INTERFACE_BWIDGETS_INTERN_H__ */

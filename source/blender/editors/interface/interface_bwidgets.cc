@@ -25,6 +25,7 @@
  *  \ingroup edinterface
  */
 
+#include "bwLabel.h"
 #include "bwPainter.h"
 #include "bwPolygon.h"
 #include "bwPushButton.h"
@@ -36,6 +37,8 @@ extern "C" {
 
 #include "BLI_rect.h"
 #include "BLI_utildefines.h"
+
+#include "DNA_userdef_types.h"
 
 #include "UI_interface.h"
 
@@ -82,11 +85,13 @@ static unsigned int ui_widget_convert_roundbox(int blender_roundbox)
 	return bwidgets_roundbox;
 }
 
-static bwAbstractButton *ui_widget_convert_button(
+static bwWidget* ui_widget_create_from_button_type(
         const eButType button_type,
         const char *text)
 {
 	switch (button_type) {
+		case UI_BTYPE_LABEL:
+			return new bwLabel(text);
 		case UI_BTYPE_BUT:
 			return new bwPushButton(text);
 		default:
@@ -108,32 +113,55 @@ static bwWidget::WidgetState ui_widget_convert_state(
 	return bwWidget::STATE_NORMAL;
 }
 
-static void ui_widget_draw_push_button(
+static bwPtr<bwWidget> ui_widget_convert_label_button(
+        const uiBut *but,
+        const rcti *rect,
+        const Icon& icon)
+{
+	bwLabel* label = static_cast<bwLabel*>(ui_widget_create_from_button_type(but->type, but->drawstr));
+
+	label->rectangle.set(rect->xmin, BLI_rcti_size_x(rect), rect->ymin, BLI_rcti_size_y(rect));
+	label->setIcon(icon);
+
+	return bwPtr<bwWidget>(label);
+}
+static bwPtr<bwWidget> ui_widget_convert_push_button(
         const uiBut *but,
         const rcti *rect,
         const int roundboxalign)
 {
-	bwAbstractButton *button = ui_widget_convert_button(but->type, but->drawstr);
+	auto button = static_cast<bwPushButton*>(ui_widget_create_from_button_type(but->type, but->drawstr));
 
 	button->rectangle.set(rect->xmin, BLI_rcti_size_x(rect), rect->ymin, BLI_rcti_size_y(rect));
 	button->rounded_corners = ui_widget_convert_roundbox(roundboxalign);
 	button->state           = ui_widget_convert_state(*but);
 
-	button->draw(*G_style);
-
-	delete button;
+	return bwPtr<bwWidget>(button);
 }
 
 void ui_widget_draw(
         const uiBut *but,
         const rcti *rect,
+        const uchar *icon_color,
         const int roundboxalign)
 {
+	bwPtr<bwWidget> widget;
+	bwColor icon_col(static_cast<uint>(icon_color[0]), icon_color[1], icon_color[2], icon_color[3]);
+	const float aspect = but->block->aspect / UI_DPI_FAC;
+	Icon icon(ui_but_widget_icon_id(but), icon_col, aspect); // Widget will reference this, keep alive until widget is destroyed.
+
 	switch (but->type) {
+		case UI_BTYPE_LABEL:
+			widget = ui_widget_convert_label_button(but, rect, icon);
+			break;
 		case UI_BTYPE_BUT:
-			ui_widget_draw_push_button(but, rect, roundboxalign);
+			widget = ui_widget_convert_push_button(but, rect, roundboxalign);
 			break;
 		default:
 			break;
+	}
+
+	if (widget) {
+		widget->draw(*G_style);
 	}
 }
