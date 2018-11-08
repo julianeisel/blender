@@ -3,6 +3,7 @@
 #include <array>
 
 #include "bwStyle.h"
+#include "bwUtil.h"
 
 
 namespace bWidgets {
@@ -14,7 +15,7 @@ class bwStyleManager
 {
 public:
 	static bwStyleManager& getStyleManager();
-	static bwStyle* createStyleFromTypeID(bwStyle::StyleTypeID type_id);
+	static bwPtr<bwStyle> createStyleFromTypeID(bwStyle::StyleTypeID type_id);
 
 	void registerDefaultStyleTypes();
 
@@ -22,7 +23,7 @@ public:
 	const StyleTypeArray& getBuiltinStyleTypes() const;
 
 private:
-	bwStyleManager();
+	bwStyleManager() = default;
 	bwStyleManager(bwStyleManager const&) = delete;
 	void operator=(bwStyleManager const&) = delete;
 

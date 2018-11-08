@@ -25,5 +25,10 @@ set(SRC
 	bwWidget.h
 )
 
+set(LIB
+	bf_intern_bwidgets
+)
+
 add_library(bw_widgets ${SRC})
 include_directories(${INC})
+target_link_libraries(bw_widgets ${LIB})

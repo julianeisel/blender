@@ -60,7 +60,7 @@ public:
 
 private:
 	bwStyleProperty(
-	        const std::string& identifier,
+	        std::string identifier,
 	        enum PropertyType type);
 
 	const std::string identifier;
@@ -79,6 +79,9 @@ private:
 class bwStyleProperties
 {
 public:
+	// Store properties as pointer, they are actually created as bwStylePropertyInternal instances.
+	using PropertyList = std::vector<bwPtr<bwStyleProperty>>;
+
 	bwStyleProperty& addBool(const std::string& name, bool& reference);
 	bwStyleProperty& addBool(const std::string& name);
 	bwStyleProperty& addInteger(const std::string& name, int& reference);
@@ -91,15 +94,16 @@ public:
 	        const std::string& name,
 	        const bwStyleProperty::PropertyType prop_type);
 
-	bwStyleProperty* lookup(const std::string& name) const;
+	bwOptional<std::reference_wrapper<const bwStyleProperty>> lookup(const std::string& name) const;
 
-	using iterator = std::vector<bwPointer<bwStyleProperty>>::iterator;
-	using const_iterator = std::vector<bwPointer<bwStyleProperty>>::const_iterator;
+	using iterator = PropertyList::iterator;
+	iterator begin();
+	iterator end();
+	using const_iterator = PropertyList::const_iterator;
 	const_iterator begin() const;
 	const_iterator end() const;
 
 private:
-	using PropertyList = std::vector<bwPointer<bwStyleProperty>>;
 	PropertyList properties{};
 };
 

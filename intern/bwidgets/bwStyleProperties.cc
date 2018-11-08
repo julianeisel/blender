@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "bwColor.h"
+
 #include "bwStyleProperties.h"
 
 using namespace bWidgets;
@@ -53,10 +54,10 @@ static bool property_value_is_copyable(
 			        (src_type == bwStyleProperty::TYPE_FLOAT));
 		case bwStyleProperty::TYPE_COLOR:
 			return (src_type == bwStyleProperty::TYPE_COLOR);
-		default:
-			assert(0);
-			return false;
 	}
+
+	assert(0);
+	return false;
 }
 
 template<typename _Type>
@@ -72,25 +73,25 @@ const _Type bwStylePropertyInternal<_Type>::getValue() const
 
 void bwStyleProperty::setValue(bool value)
 {
-	bwStylePropertyInternal<bool>& property = static_cast<bwStylePropertyInternal<bool>&>(*this);
+	auto& property = static_cast<bwStylePropertyInternal<bool>&>(*this);
 	assert(type == TYPE_BOOL);
 	property.setValue(value);
 }
 void bwStyleProperty::setValue(int value)
 {
-	bwStylePropertyInternal<int>& property = static_cast<bwStylePropertyInternal<int>&>(*this);
+	auto& property = static_cast<bwStylePropertyInternal<int>&>(*this);
 	assert(type == TYPE_INTEGER);
 	property.setValue(value);
 }
 void bwStyleProperty::setValue(float value)
 {
-	bwStylePropertyInternal<float>& property = static_cast<bwStylePropertyInternal<float>&>(*this);
+	auto& property = static_cast<bwStylePropertyInternal<float>&>(*this);
 	assert(type == TYPE_FLOAT);
 	property.setValue(value);
 }
 void bwStyleProperty::setValue(const bwColor& value)
 {
-	bwStylePropertyInternal<bwColor>& property = static_cast<bwStylePropertyInternal<bwColor>&>(*this);
+	auto& property = static_cast<bwStylePropertyInternal<bwColor>&>(*this);
 	assert(type == TYPE_COLOR);
 	property.setValue(value);
 }
@@ -133,25 +134,25 @@ void bwStyleProperty::setValueToDefault()
 	switch (type) {
 		case bwStyleProperty::TYPE_BOOL:
 		{
-			bwStylePropertyInternal<bool>& property = static_cast<bwStylePropertyInternal<bool>&>(*this);
+			auto& property = static_cast<bwStylePropertyInternal<bool>&>(*this);
 			property.setValue(property.default_value);
 			break;
 		}
 		case bwStyleProperty::TYPE_INTEGER:
 		{
-			bwStylePropertyInternal<int>& property = static_cast<bwStylePropertyInternal<int>&>(*this);
+			auto& property = static_cast<bwStylePropertyInternal<int>&>(*this);
 			property.setValue(property.default_value);
 			break;
 		}
 		case bwStyleProperty::TYPE_FLOAT:
 		{
-			bwStylePropertyInternal<float>& property = static_cast<bwStylePropertyInternal<float>&>(*this);
+			auto& property = static_cast<bwStylePropertyInternal<float>&>(*this);
 			property.setValue(property.default_value);
 			break;
 		}
 		case bwStyleProperty::TYPE_COLOR:
 		{
-			bwStylePropertyInternal<bwColor>& property = static_cast<bwStylePropertyInternal<bwColor>&>(*this);
+			auto& property = static_cast<bwStylePropertyInternal<bwColor>&>(*this);
 			property.setValue(property.default_value);
 			break;
 		}
@@ -163,25 +164,25 @@ void bwStyleProperty::setValueToDefault()
 
 void bwStyleProperty::setDefaultValue(bool value)
 {
-	bwStylePropertyInternal<bool>& property = static_cast<bwStylePropertyInternal<bool>&>(*this);
+	auto& property = static_cast<bwStylePropertyInternal<bool>&>(*this);
 	assert(type == TYPE_BOOL);
 	property.default_value = value;
 }
 void bwStyleProperty::setDefaultValue(int value)
 {
-	bwStylePropertyInternal<int>& property = static_cast<bwStylePropertyInternal<int>&>(*this);
+	auto& property = static_cast<bwStylePropertyInternal<int>&>(*this);
 	assert(type == TYPE_INTEGER);
 	property.default_value = value;
 }
 void bwStyleProperty::setDefaultValue(float value)
 {
-	bwStylePropertyInternal<float>& property = static_cast<bwStylePropertyInternal<float>&>(*this);
+	auto& property = static_cast<bwStylePropertyInternal<float>&>(*this);
 	assert(type == TYPE_FLOAT);
 	property.default_value = value;
 }
 void bwStyleProperty::setDefaultValue(const bwColor& value)
 {
-	bwStylePropertyInternal<bwColor>& property = static_cast<bwStylePropertyInternal<bwColor>&>(*this);
+	auto& property = static_cast<bwStylePropertyInternal<bwColor>&>(*this);
 	assert(type == TYPE_COLOR);
 	property.default_value = value;
 }
@@ -249,9 +250,9 @@ template<> struct PropDataType<bwStyleProperty::TYPE_COLOR>
  */
 
 bwStyleProperty::bwStyleProperty(
-        const std::string& identifier,
+        std::string identifier,
         enum PropertyType type) :
-    identifier(identifier), type(type)
+    identifier(std::move(identifier)), type(type)
 {
 	
 }
@@ -280,7 +281,7 @@ static bwStyleProperty& properties_add_property(
         const std::string& name,
         _Type& reference)
 {
-	properties.push_back(bwPointer_new<bwStylePropertyInternal<_Type>>(name, reference));
+	properties.push_back(bwPtr_new<bwStylePropertyInternal<_Type>>(name, reference));
 	return *properties.back();
 }
 template<typename _Type>
@@ -288,7 +289,7 @@ static bwStyleProperty& properties_add_property(
         bwStyleProperties::PropertyList& properties,
         const std::string& name)
 {
-	properties.push_back(bwPointer_new<bwStylePropertyInternal<_Type>>(name));
+	properties.push_back(bwPtr_new<bwStylePropertyInternal<_Type>>(name));
 	return *properties.back();
 }
 
@@ -330,7 +331,7 @@ bwStyleProperty& bwStyleProperties::addProperty(
         const bwStyleProperty::PropertyType prop_type)
 {
 //	properties_add_property<PropDataType<prop_type>::type>(properties, name);
-//	properties.push_back(bwPointer_new<bwStylePropertyInternal<prop_type>(name));
+//	properties.push_back(bwPtr_new<bwStylePropertyInternal<prop_type>(name));
 	switch (prop_type) {
 		case bwStyleProperty::TYPE_BOOL:
 			return properties_add_property<bool>(properties, name);
@@ -340,10 +341,10 @@ bwStyleProperty& bwStyleProperties::addProperty(
 			return properties_add_property<float>(properties, name);
 		case bwStyleProperty::TYPE_COLOR:
 			return properties_add_property<bwColor>(properties, name);
-		default:
-			assert(0);
-			return properties_add_property<int>(properties, name);
 	}
+
+	assert(0);
+	return properties_add_property<int>(properties, name);
 }
 
 /** \} */
@@ -362,17 +363,25 @@ bwStyleProperty::PropertyType bwStyleProperty::getType() const
 
 // --------------------------------------------------------------------
 
-bwStyleProperty* bwStyleProperties::lookup(const std::string& name) const
+bwOptional<std::reference_wrapper<const bwStyleProperty>> bwStyleProperties::lookup(const std::string& name) const
 {
-	for (const bwPointer<bwStyleProperty>& property : properties) {
+	for (const auto& property : properties) {
 		if (property->getIdentifier() == name) {
-			return property.get();
+			return *property;
 		}
 	}
 
-	return nullptr;
+	return nullopt;
 }
 
+bwStyleProperties::iterator bwStyleProperties::begin()
+{
+	return properties.begin();
+}
+bwStyleProperties::iterator bwStyleProperties::end()
+{
+	return properties.end();
+}
 bwStyleProperties::const_iterator bwStyleProperties::begin() const
 {
 	return properties.begin();

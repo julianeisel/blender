@@ -1,6 +1,5 @@
 #pragma once
 
-#include "bwColor.h"
 #include "bwWidget.h"
 #include "bwWidgetBaseStyle.h"
 
@@ -25,15 +24,15 @@ public:
 	void endTextEditing();
 
 	void setText(const std::string& value);
-	const std::string& getText() const;
+	const std::string* getLabel() const override;
 
 	bwRectanglePixel selection_rectangle;
 
 protected:
 	std::string text;
 
-	bool is_text_editing;
-	bool is_dragging;
+	bool is_text_editing = false;
+	bool is_dragging = false;
 
 public: bwWidgetBaseStyle base_style; // XXX public for setWidgetStyle. Should only be temporarily needed.
 };

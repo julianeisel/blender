@@ -50,16 +50,16 @@ extern "C" {
 using namespace bWidgets;
 
 
-static bwPointer<bwStyle> G_style = nullptr;
+static bwPtr<bwStyle> G_style = nullptr;
 
 void ui_widgets_init(void)
 {
 	bwStyleManager &style_manager = bwStyleManager::getStyleManager();
 
 	style_manager.registerDefaultStyleTypes();
-	G_style = bwPointer<bwStyle>(style_manager.createStyleFromTypeID(bwStyle::STYLE_CLASSIC));
+	G_style = bwPtr<bwStyle>(style_manager.createStyleFromTypeID(bwStyle::STYLE_CLASSIC));
 
-	bwPainter::paint_engine = bwPointer_new<GawainPaintEngine>();
+	bwPainter::paint_engine = bwPtr_new<GawainPaintEngine>();
 }
 
 static unsigned int ui_widget_convert_roundbox(int blender_roundbox)

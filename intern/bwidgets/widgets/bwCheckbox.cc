@@ -28,7 +28,7 @@ void bwCheckbox::draw(bwStyle& style)
 
 	painter.drawRoundboxWidgetBase(base_style, style, checkbox_rect, gradient, base_style.corner_radius);
 
-	if (state == STATE_SUNKEN) {
+	if (isChecked()) {
 		painter.active_drawtype = bwPainter::DRAW_TYPE_OUTLINE;
 		painter.setActiveColor(base_style.decorationColor());
 		painter.drawCheckMark(checkbox_rect);
@@ -56,10 +56,15 @@ void bwCheckbox::mouseReleaseEvent(
 	
 }
 
+bool bwCheckbox::isChecked() const
+{
+	return state == STATE_SUNKEN;
+}
+
 bwRectanglePixel bwCheckbox::getCheckboxRectangle() const
 {
 	bwRectanglePixel checkbox_rect{rectangle};
-	const unsigned int delta = 1 + checkbox_rect.height() / 8;
+	const int delta = 1 + checkbox_rect.height() / 8;
 
 	checkbox_rect.xmax = checkbox_rect.xmin + checkbox_rect.height();
 	checkbox_rect.resize(-delta);

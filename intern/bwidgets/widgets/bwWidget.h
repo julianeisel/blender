@@ -2,7 +2,6 @@
 
 #include <typeinfo>
 
-#include "bwPoint.h"
 #include "bwDistance.h"
 #include "bwFunctorInterface.h"
 #include "bwRectangle.h"
@@ -49,7 +48,7 @@ public:
 	};
 
 	bwWidget(
-	        const WidgetType type, const std::string& identifier,
+	        const WidgetType type, std::string identifier,
 	        const unsigned int width_hint = 0, const unsigned int height_hint = 0);
 	virtual ~bwWidget() = default;
 
@@ -74,6 +73,7 @@ public:
 	virtual void mouseLeave();
 
 	const std::string& getIdentifier() const;
+	virtual const std::string* getLabel() const;
 
 	/**
 	 * Final rectangle defining the widget bounding-box.

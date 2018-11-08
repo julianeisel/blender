@@ -2,6 +2,7 @@ set(INC
 	.
 	generics
 	styles
+	utils
 	widgets
 )
 
@@ -17,6 +18,7 @@ set(SRC
 	styles/bwStyleFlatDark.cc
 	styles/bwStyleFlatLight.cc
 
+	bwIconInterface.h
 	bwPaintEngine.h
 	bwPainter.h
 	bwStyle.h
@@ -40,7 +42,9 @@ set(INC_SYS
 )
 
 blender_add_lib(bf_intern_bwidgets "${SRC}" "${INC}" "${INC_SYS}")
+include_directories(${INC})
 target_link_libraries(bf_intern_bwidgets ${LIB})
 
 add_subdirectory(generics)
+add_subdirectory(utils)
 add_subdirectory(widgets)

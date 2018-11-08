@@ -4,17 +4,11 @@
 #include "bwStyleFlatGrey.h"
 #include "bwStyleFlatLight.h"
 #include "bwStyleFlatDark.h"
-#include "bwStyleCSS.h"
 
 #include "bwStyleManager.h"
 
 using namespace bWidgets;
 
-
-bwStyleManager::bwStyleManager()
-{
-	
-}
 
 bwStyleManager& bwStyleManager::getStyleManager()
 {
@@ -22,22 +16,21 @@ bwStyleManager& bwStyleManager::getStyleManager()
 	return instance;
 }
 
-bwStyle* bwStyleManager::createStyleFromTypeID(bwStyle::StyleTypeID type)
+bwPtr<bwStyle> bwStyleManager::createStyleFromTypeID(bwStyle::StyleTypeID type)
 {
 	switch (type) {
 		case bwStyle::STYLE_CLASSIC:
-			return new bwStyleClassic();
+			return bwPtr_new<bwStyleClassic>();
 		case bwStyle::STYLE_CLASSIC_CSS:
-			return new bwStyleCSS();
+			return bwPtr_new<bwStyleCSS>();
 		case bwStyle::STYLE_FLAT_GREY:
-			return new bwStyleFlat();
+			return bwPtr_new<bwStyleFlat>();
 		case bwStyle::STYLE_FLAT_DARK:
-			return new bwStyleFlatDark();
+			return bwPtr_new<bwStyleFlatDark>();
 		case bwStyle::STYLE_FLAT_LIGHT:
-			return new bwStyleFlatLight();
+			return bwPtr_new<bwStyleFlatLight>();
 		default:
 			assert(0);
-			return nullptr;
 	}
 }
 

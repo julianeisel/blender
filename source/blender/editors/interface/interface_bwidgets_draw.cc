@@ -47,6 +47,7 @@ extern "C" {
 
 #include "bwPainter.h"
 #include "bwPolygon.h"
+#include "bwPoint.h"
 
 #include "interface_bwidgets_intern.h"
 
@@ -192,4 +193,11 @@ void GawainPaintEngine::drawText(
 	b_rect.xmin += UI_TEXT_MARGIN_X * U.widget_unit;
 
 	UI_fontstyle_draw(&style->widget, &b_rect, text.c_str(), col);
+}
+
+void GawainPaintEngine::drawIcon(
+        const bWidgets::bwIconInterface&,
+        const bwRectanglePixel&)
+{
+	
 }

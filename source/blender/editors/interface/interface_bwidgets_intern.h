@@ -47,6 +47,9 @@ public:
 	        const std::string& text,
 	        const bWidgets::bwRectanglePixel& rect,
 	        const bWidgets::TextAlignment alignment) override;
+	void drawIcon(
+	        const bWidgets::bwIconInterface&,
+	        const bWidgets::bwRectanglePixel&) override;
 };
 
 #endif /* __INTERFACE_BWIDGETS_INTERN_H__ */

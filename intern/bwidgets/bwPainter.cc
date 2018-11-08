@@ -7,7 +7,6 @@
 #include "bwPolygon.h"
 #include "bwRange.h"
 #include "bwStyle.h"
-#include "bwUtil.h"
 #include "bwWidgetBaseStyle.h"
 
 #include "bwPainter.h"
@@ -15,7 +14,7 @@
 using namespace bWidgets;
 
 
-bwPointer<bwPaintEngine> bwPainter::paint_engine = nullptr;
+bwPtr<bwPaintEngine> bwPainter::paint_engine = nullptr;
 
 bwPainter::bwPainter() :
     active_drawtype(DRAW_TYPE_FILLED),
@@ -24,9 +23,9 @@ bwPainter::bwPainter() :
 	
 }
 
-static bool painter_check_paint_engine(const bwPainter& painter)
+static bool painter_check_paint_engine()
 {
-	if (painter.paint_engine == nullptr) {
+	if (bwPainter::paint_engine == nullptr) {
 		std::cout << PRETTY_FUNCTION << "-- Error: No paint-engine set!" << std::endl;
 		return false;
 	}
@@ -37,7 +36,7 @@ static bool painter_check_paint_engine(const bwPainter& painter)
 void bwPainter::drawPolygon(
         const bwPolygon& poly)
 {
-	if (!painter_check_paint_engine(*this)) {
+	if (!painter_check_paint_engine()) {
 		return;
 	}
 
@@ -54,12 +53,25 @@ void bwPainter::drawText(
         const bwRectanglePixel& rectangle,
         const TextAlignment alignment) const
 {
-	if (!painter_check_paint_engine(*this)) {
+	if (!painter_check_paint_engine()) {
 		return;
 	}
 
-	if (text.size() > 0) {
+	if (!text.empty()) {
 		paint_engine->drawText(*this, text, rectangle, alignment);
+	}
+}
+
+void bwPainter::drawIcon(
+        const bwIconInterface& icon_interface,
+        const bwRectanglePixel& rect) const
+{
+	if (!painter_check_paint_engine()) {
+		return;
+	}
+
+	if (!rect.isEmpty() && icon_interface.isValid()) {
+		paint_engine->drawIcon(icon_interface, rect);
 	}
 }
 
@@ -89,10 +101,10 @@ const bwRectanglePixel& bwPainter::getContentMask() const
 	return content_mask;
 }
 
-void bwPainter::enableGradient(const bwGradient gradient)
+void bwPainter::enableGradient(const bwGradient& gradient)
 {
 	if (!active_gradient) {
-		active_gradient = bwPointer_new<bwGradient>();
+		active_gradient = bwPtr_new<bwGradient>();
 	}
 
 	*active_gradient = gradient;
@@ -186,9 +198,9 @@ class PolygonRoundboxCreator
 public:
 	PolygonRoundboxCreator(
 	        const bwRectanglePixel& rect,
-	        const unsigned int corners,
-	        const float radius,
-	        const bool is_outline);
+	        unsigned int corners,
+	        float _radius,
+	        bool is_outline);
 
 	void addVerts(bwPolygon& polygon);
 
@@ -216,14 +228,14 @@ private:
 	bwRectanglePixel rect;
 	bwRectanglePixel rect_inner;
 
-	float vec_outer[ROUNDCORNER_RESOLUTION][2];
-	float vec_inner[ROUNDCORNER_RESOLUTION][2];
+	float vec_outer[ROUNDCORNER_RESOLUTION][2] = {};
+	float vec_inner[ROUNDCORNER_RESOLUTION][2] = {};
 
-	int start_vertex_count;
-	unsigned int corners;
-	float radius;
-	float radius_inner;
-	bool is_outline;
+	int start_vertex_count = 0;
+	unsigned int corners = 0;
+	float radius = 0.0f;
+	float radius_inner = 0.0f;
+	bool is_outline = false;
 };
 } // namespace bWidgets
 constexpr float PolygonRoundboxCreator::cornervec[ROUNDCORNER_RESOLUTION][2];
@@ -303,9 +315,9 @@ void PolygonRoundboxCreator::addVertsTopLeft(bwPolygon& polygon) const
 
 PolygonRoundboxCreator::PolygonRoundboxCreator(
         const bwRectanglePixel& rect,
-        const unsigned int corners,
-        const float _radius,
-        const bool is_outline) :
+        unsigned int corners,
+        float _radius,
+        bool is_outline) :
     rect(rect), rect_inner(rect),
     corners(corners),
     radius(_radius), radius_inner(_radius - 1.0f),
@@ -351,7 +363,7 @@ void PolygonRoundboxCreator::addVerts(bwPolygon& polygon)
 	endRoundbox(polygon);
 }
 
-unsigned int getRoundboxMinsize(
+static unsigned int getRoundboxMinsize(
         const bwRectanglePixel& rect,
         unsigned int corners)
 {
@@ -426,7 +438,7 @@ void bwPainter::fillVertexColorsWithGradient(const bwPolygon& polygon, const bwR
 void bwPainter::drawRoundboxWidgetBase(
         const bwWidgetBaseStyle& base_style,
         const bwStyle& style,
-        const bwRectanglePixel rectangle,
+        const bwRectanglePixel& rectangle,
         const bwGradient& gradient,
         const float radius)
 {

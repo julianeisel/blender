@@ -35,6 +35,7 @@ set(INC
 	../../windowmanager
 	../../../../intern/bwidgets
 	../../../../intern/bwidgets/generics
+	../../../../intern/bwidgets/utils
 	../../../../intern/bwidgets/widgets
 	../../../../intern/guardedalloc
 	../../../../intern/glew-mx

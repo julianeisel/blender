@@ -4,18 +4,17 @@
 
 #include "bwPainter.h"
 #include "bwPanel.h"
-#include "bwPolygon.h"
 #include "bwStyle.h"
 
 using namespace bWidgets;
 
 
 bwPanel::bwPanel(
-        const std::string& label,
+        std::string label,
         unsigned int header_height_hint) :
     bwWidget(WIDGET_TYPE_PANEL, "bwPanel", 0, header_height_hint),
     header_height(header_height_hint),
-    label(label)
+    label(std::move(label))
 {
 	initialize();
 }
@@ -57,6 +56,11 @@ void bwPanel::mousePressEvent(
 	else {
 		assert(0);
 	}
+}
+
+const std::string* bwPanel::getLabel() const
+{
+	return &label;
 }
 
 bool bwPanel::isCoordinateInsideHeader(const bwPoint& point) const

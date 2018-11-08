@@ -10,7 +10,7 @@ class bwPanel : public bwWidget
 {
 public:
 	bwPanel(
-	        const std::string& label,
+	        std::string label,
 	        unsigned int header_height_hint);
 
 	void draw(class bwStyle& style) override;
@@ -19,6 +19,8 @@ public:
 	void mousePressEvent(
 	        const MouseButton button,
 	        const bwPoint& location) override;
+
+	const std::string* getLabel() const override;
 
 	bool isCoordinateInsideHeader(const bwPoint &point) const;
 	unsigned int getHeaderHeightHint() const;
@@ -36,7 +38,7 @@ private:
 	std::string label;
 
 public: bwWidgetBaseStyle base_style; // XXX public for setWidgetStyle. Should only be temporarily needed.
-public: bool draw_separator;
+public: bool draw_separator = false;
 };
 
 } // namespace bWidgets

@@ -3,10 +3,10 @@
 #include <memory>
 #include <string>
 
-#include "bwColor.h"
 #include "bwUtil.h"
 #include "bwWidget.h"
 #include "bwWidgetBaseStyle.h"
+
 
 namespace bWidgets {
 
@@ -28,17 +28,19 @@ public:
 	virtual void mouseEnter() override;
 	virtual void mouseLeave() override;
 
+	virtual const std::string* getLabel() const override;
+
 	/**
 	 * Function object called when applying changes to widget.
 	 */
-	bwPointer<bwFunctorInterface> apply_functor{nullptr};
+	bwPtr<bwFunctorInterface> apply_functor{nullptr};
 
 	unsigned int rounded_corners;
 
 protected:
 	// Protected constructor to force calling through inherited class (pseudo abstract).
 	bwAbstractButton(
-	        const std::string& text,
+	        std::string text,
 	        const WidgetType type, const std::string& identifier,
 	        const unsigned int width_hint = 0, const unsigned int height_hint = 0);
 	void apply();
