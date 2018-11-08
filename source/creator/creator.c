@@ -42,6 +42,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "CLG_log.h"
+
 #include "DNA_genfile.h"
 
 #include "BLI_args.h"
@@ -49,6 +51,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_callbacks.h"
 #include "BLI_string.h"
+#include "BLI_system.h"
 
 /* mostly init functions */
 #include "BKE_appdir.h"
@@ -60,7 +63,9 @@
 #include "BKE_global.h"
 #include "BKE_material.h"
 #include "BKE_modifier.h"
+#include "BKE_gpencil_modifier.h"
 #include "BKE_node.h"
+#include "BKE_shader_fx.h"
 #include "BKE_sound.h"
 #include "BKE_image.h"
 #include "BKE_particle.h"
@@ -75,18 +80,12 @@
 #include "ED_datafiles.h"
 
 #include "WM_api.h"
+#include "WM_toolsystem.h"
 
 #include "RNA_define.h"
 
 #ifdef WITH_FREESTYLE
 #  include "FRS_freestyle.h"
-#endif
-
-/* for passing information between creator and gameengine */
-#ifdef WITH_GAMEENGINE
-#  include "BL_System.h"
-#else /* dummy */
-#  define SYS_SystemHandle int
 #endif
 
 #include <signal.h>
@@ -180,6 +179,11 @@ static void callback_main_atexit(void *user_data)
 #endif
 }
 
+static void callback_clg_fatal(void *fp)
+{
+	BLI_system_backtrace(fp);
+}
+
 /** \} */
 
 
@@ -218,7 +222,6 @@ int main(
         )
 {
 	bContext *C;
-	SYS_SystemHandle syshandle;
 
 #ifndef WITH_PYTHON_MODULE
 	bArgs *ba;
@@ -234,6 +237,11 @@ int main(
 	/* ensure we free data on early-exit */
 	struct CreatorAtExitData app_init_data = {NULL};
 	BKE_blender_atexit_register(callback_main_atexit, &app_init_data);
+
+	/* Unbuffered stdout makes stdout and stderr better synchronized, and helps
+	 * when stepping through code in a debugger (prints are immediately
+	 * visible). */
+	setvbuf(stdout, NULL, _IONBF, 0);
 
 #ifdef WIN32
 	/* We delay loading of openmp so we can set the policy here. */
@@ -304,6 +312,10 @@ int main(
 	sdlewInit();
 #endif
 
+	/* Initialize logging */
+	CLG_init();
+	CLG_fatal_fn_set(callback_clg_fatal);
+
 	C = CTX_create();
 
 #ifdef WITH_PYTHON_MODULE
@@ -328,7 +340,7 @@ int main(
 #endif
 
 	main_callback_setup();
-	
+
 #if defined(__APPLE__) && !defined(WITH_PYTHON_MODULE)
 	/* patch to ignore argument finder gives us (pid?) */
 	if (argc == 2 && STREQLEN(argv[1], "-psn_", 5)) {
@@ -343,7 +355,7 @@ int main(
 		}
 	}
 #endif
-	
+
 #ifdef __FreeBSD__
 	fpsetmask(0);
 #endif
@@ -361,19 +373,15 @@ int main(
 	BKE_cachefiles_init();
 	BKE_images_init();
 	BKE_modifier_init();
+	BKE_gpencil_modifier_init();
+	BKE_shaderfx_init();
 	DEG_register_node_types();
 
 	BKE_brush_system_init();
 	RE_texture_rng_init();
-	
+
 
 	BLI_callback_global_init();
-
-#ifdef WITH_GAMEENGINE
-	syshandle = SYS_GetSystem();
-#else
-	syshandle = 0;
-#endif
 
 	/* first test for background */
 #ifndef WITH_PYTHON_MODULE
@@ -382,7 +390,7 @@ int main(
 	/* ensure we free on early exit */
 	app_init_data.ba = ba;
 
-	main_args_setup(C, ba, &syshandle);
+	main_args_setup(C, ba);
 
 	BLI_argsParse(ba, 1, NULL, NULL);
 
@@ -390,7 +398,6 @@ int main(
 
 #else
 	G.factory_startup = true;  /* using preferences or user startup makes no sense for py-as-module */
-	(void)syshandle;
 #endif
 
 #ifdef WITH_FFMPEG
@@ -420,7 +427,7 @@ int main(
 	/* Initialize ffmpeg if built in, also needed for bg mode if videos are
 	 * rendered via ffmpeg */
 	BKE_sound_init_once();
-	
+
 	init_def_material();
 
 	if (G.background == 0) {
@@ -456,9 +463,14 @@ int main(
 #else
 	printf("\n* WARNING * - Blender compiled without Python!\nthis is not intended for typical usage\n\n");
 #endif
-	
+
 	CTX_py_init_set(C, 1);
 	WM_keymap_init(C);
+
+	/* Called on load, however Python is not yet initialized, so call again here. */
+	if (!G.background) {
+		WM_toolsystem_init(C);
+	}
 
 #ifdef WITH_FREESTYLE
 	/* initialize Freestyle */
@@ -469,7 +481,7 @@ int main(
 	/* OK we are ready for it */
 #ifndef WITH_PYTHON_MODULE
 	main_args_setup_post(C, ba);
-	
+
 	if (G.background == 0) {
 		if (!G.file_loaded)
 			if (U.uiflag2 & USER_KEEP_SESSION)
@@ -505,20 +517,6 @@ int main(
 		WM_exit(C);
 	}
 	else {
-		if (G.fileflags & G_FILE_AUTOPLAY) {
-			if (G.f & G_SCRIPT_AUTOEXEC) {
-				if (WM_init_game(C)) {
-					return 0;
-				}
-			}
-			else {
-				if (!(G.f & G_SCRIPT_AUTOEXEC_FAIL_QUIET)) {
-					G.f |= G_SCRIPT_AUTOEXEC_FAIL;
-					BLI_snprintf(G.autoexec_fail, sizeof(G.autoexec_fail), "Game AutoStart");
-				}
-			}
-		}
-
 		if (!G.file_loaded) {
 			WM_init_splash(C);
 		}
@@ -527,7 +525,7 @@ int main(
 	WM_main(C);
 
 	return 0;
-} /* end of int main(argc, argv)	*/
+} /* end of int main(argc, argv) */
 
 #ifdef WITH_PYTHON_MODULE
 void main_python_exit(void)

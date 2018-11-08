@@ -4,7 +4,7 @@
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version. 
+ * of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,7 +17,7 @@
  *
  * The Original Code is Copyright (C) 2009 Blender Foundation.
  * All rights reserved.
- * 
+ *
  * Contributor(s): Blender Foundation.
  *
  * ***** END GPL LICENSE BLOCK *****
@@ -37,10 +37,9 @@ struct GlyphBLF;
 struct GlyphCacheBLF;
 struct rctf;
 
-/* vertex attribute IDs (fixed IDs so we don't have to pass them around) */
-#define BLF_POS_ID 0
-#define BLF_COORD_ID 1
-#define BLF_COLOR_ID 2
+void blf_batch_draw_vao_clear(void);
+void blf_batch_draw_begin(struct FontBLF *font);
+void blf_batch_draw(void);
 
 unsigned int blf_next_p2(unsigned int x);
 unsigned int blf_hash(unsigned int val);
@@ -78,6 +77,10 @@ float blf_font_fixed_width(struct FontBLF *font);
 int blf_font_count_missing_chars(struct FontBLF *font, const char *str, const size_t len, int *r_tot_chars);
 
 void blf_font_free(struct FontBLF *font);
+
+struct KerningCacheBLF *blf_kerning_cache_find(struct FontBLF *font);
+struct KerningCacheBLF *blf_kerning_cache_new(struct FontBLF *font);
+void blf_kerning_cache_clear(struct FontBLF *font);
 
 struct GlyphCacheBLF *blf_glyph_cache_find(struct FontBLF *font, unsigned int size, unsigned int dpi);
 struct GlyphCacheBLF *blf_glyph_cache_new(struct FontBLF *font);

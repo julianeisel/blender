@@ -34,28 +34,29 @@ class SCENE_OT_freestyle_fill_range_by_selection(bpy.types.Operator):
     bl_label = "Fill Range by Selection"
     bl_options = {'INTERNAL'}
 
-    type = EnumProperty(
-            name="Type", description="Type of the modifier to work on",
-            items=(("COLOR", "Color", "Color modifier type"),
-                   ("ALPHA", "Alpha", "Alpha modifier type"),
-                   ("THICKNESS", "Thickness", "Thickness modifier type")),
-            )
-    name = StringProperty(
-            name="Name",
-            description="Name of the modifier to work on",
-            )
+    type: EnumProperty(
+        name="Type", description="Type of the modifier to work on",
+        items=(
+            ('COLOR', "Color", "Color modifier type"),
+            ('ALPHA', "Alpha", "Alpha modifier type"),
+            ('THICKNESS', "Thickness", "Thickness modifier type"),
+        ),
+    )
+    name: StringProperty(
+        name="Name",
+        description="Name of the modifier to work on",
+    )
 
     @classmethod
     def poll(cls, context):
-        view_layer = context.scene.view_layers.active
+        view_layer = context.view_layer
         return view_layer and view_layer.freestyle_settings.linesets.active
 
     def execute(self, context):
         import sys
 
-        workspace = context.workspace
         scene = context.scene
-        view_layer = scene.view_layers.active
+        view_layer = context.view_layer
         lineset = view_layer.freestyle_settings.linesets.active
         linestyle = lineset.linestyle
         # Find the modifier to work on
@@ -80,7 +81,7 @@ class SCENE_OT_freestyle_fill_range_by_selection(bpy.types.Operator):
             return {'CANCELLED'}
         # Find selected vertices in editmesh
         ob = context.active_object
-        if ob.type == 'MESH' and workspace.object_mode == 'EDIT' and ob.name != ref.name:
+        if ob.type == 'MESH' and ob.mode == 'EDIT' and ob.name != ref.name:
             bpy.ops.object.mode_set(mode='OBJECT')
             selected_verts = [v for v in ob.data.vertices if v.select]
             bpy.ops.object.mode_set(mode='EDIT')
@@ -144,7 +145,6 @@ class SCENE_OT_freestyle_add_edge_marks_to_keying_set(bpy.types.Operator):
 
     def execute(self, context):
         # active keying set
-        workspace = context.workspace
         scene = context.scene
         ks = scene.keying_sets.active
         if ks is None:
@@ -152,7 +152,7 @@ class SCENE_OT_freestyle_add_edge_marks_to_keying_set(bpy.types.Operator):
             ks.bl_description = ""
         # add data paths to the keying set
         ob = context.active_object
-        ob_mode = workspace.object_mode
+        ob_mode = ob.mode
         mesh = ob.data
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
         for i, edge in enumerate(mesh.edges):
@@ -176,7 +176,6 @@ class SCENE_OT_freestyle_add_face_marks_to_keying_set(bpy.types.Operator):
 
     def execute(self, context):
         # active keying set
-        workspace = context.workspace
         scene = context.scene
         ks = scene.keying_sets.active
         if ks is None:
@@ -184,7 +183,7 @@ class SCENE_OT_freestyle_add_face_marks_to_keying_set(bpy.types.Operator):
             ks.bl_description = ""
         # add data paths to the keying set
         ob = context.active_object
-        ob_mode = workspace.object_mode
+        ob_mode = ob.mode
         mesh = ob.data
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
         for i, polygon in enumerate(mesh.polygons):
@@ -201,16 +200,16 @@ class SCENE_OT_freestyle_module_open(bpy.types.Operator):
     bl_label = "Open Style Module File"
     bl_options = {'INTERNAL'}
 
-    filepath = StringProperty(subtype='FILE_PATH')
+    filepath: StringProperty(subtype='FILE_PATH')
 
-    make_internal = BoolProperty(
+    make_internal: BoolProperty(
         name="Make internal",
         description="Make module file internal after loading",
         default=True)
 
     @classmethod
     def poll(cls, context):
-        view_layer = context.scene.view_layers.active
+        view_layer = context.view_layer
         return view_layer and view_layer.freestyle_settings.mode == 'SCRIPT'
 
     def invoke(self, context, event):

@@ -74,7 +74,7 @@ void BLI_listbase_sort(struct ListBase *listbase, int (*cmp)(const void *, const
 void BLI_listbase_sort_r(ListBase *listbase, int (*cmp)(void *, const void *, const void *), void *thunk) ATTR_NONNULL(1, 2);
 bool BLI_listbase_link_move(ListBase *listbase, void *vlink, int step) ATTR_NONNULL();
 void BLI_freelist(struct ListBase *listbase) ATTR_NONNULL(1);
-int  BLI_listbase_count_ex(const struct ListBase *listbase, const int count_max) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
+int  BLI_listbase_count_at_most(const struct ListBase *listbase, const int count_max) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
 int  BLI_listbase_count(const struct ListBase *listbase) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
 void BLI_freelinkN(struct ListBase *listbase, void *vlink) ATTR_NONNULL(1);
 
@@ -82,6 +82,7 @@ void BLI_listbase_swaplinks(struct ListBase *listbase, void *vlinka, void *vlink
 void BLI_listbases_swaplinks(struct ListBase *listbasea, struct ListBase *listbaseb, void *vlinka, void *vlinkb) ATTR_NONNULL(2, 3);
 
 void BLI_movelisttolist(struct ListBase *dst, struct ListBase *src) ATTR_NONNULL(1, 2);
+void BLI_movelisttolist_reverse(struct ListBase *dst, struct ListBase *src) ATTR_NONNULL(1, 2);
 void BLI_duplicatelist(struct ListBase *dst, const struct ListBase *src) ATTR_NONNULL(1, 2);
 void BLI_listbase_reverse(struct ListBase *lb) ATTR_NONNULL(1);
 void BLI_listbase_rotate_first(struct ListBase *lb, void *vlink) ATTR_NONNULL(1, 2);

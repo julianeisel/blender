@@ -25,20 +25,17 @@
 
 # add_subdirectory(atomic)  # header only
 add_subdirectory(bwidgets)
+add_subdirectory(clog)
 add_subdirectory(string)
 add_subdirectory(ghost)
 add_subdirectory(guardedalloc)
 add_subdirectory(libmv)
 add_subdirectory(memutil)
 add_subdirectory(opencolorio)
+add_subdirectory(opensubdiv)
 add_subdirectory(mikktspace)
 add_subdirectory(glew-mx)
 add_subdirectory(eigen)
-add_subdirectory(gawain)
-
-if(WITH_GAMEENGINE_DECKLINK)
-	add_subdirectory(decklink)
-endif()
 
 if(WITH_AUDASPACE)
 	add_subdirectory(audaspace)
@@ -64,10 +61,6 @@ if(WITH_IK_ITASC)
 	add_subdirectory(itasc)
 endif()
 
-if(WITH_GAMEENGINE)
-	add_subdirectory(moto)
-endif()
-
 if(WITH_CYCLES)
 	add_subdirectory(cycles)
 endif()
@@ -80,15 +73,9 @@ if(WITH_BULLET)
 	add_subdirectory(rigidbody)
 endif()
 
-if(WITH_OPENSUBDIV)
-	add_subdirectory(opensubdiv)
-endif()
-
 # only windows needs utf16 converter
-# gpudirect is a runtime interface to the nVidia's DVP driver, only for windows
 if(WIN32)
 	add_subdirectory(utfconv)
-	add_subdirectory(gpudirect)
 endif()
 
 if(WITH_OPENVDB)

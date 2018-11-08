@@ -32,7 +32,6 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
-#include "DNA_workspace_types.h"
 
 #include "BLI_math_vector.h"
 
@@ -43,6 +42,7 @@
 #include "DEG_depsgraph.h"
 
 #include "ED_view3d.h"
+#include "ED_paint.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -57,15 +57,14 @@
 #define PAINT_CURVE_SELECT_THRESHOLD 40.0f
 #define PAINT_CURVE_POINT_SELECT(pcp, i) (*(&pcp->bez.f1 + i) = SELECT)
 
-int paint_curve_poll(bContext *C)
+bool paint_curve_poll(bContext *C)
 {
-	const WorkSpace *workspace = CTX_wm_workspace(C);
 	Object *ob = CTX_data_active_object(C);
 	Paint *p;
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 	SpaceImage *sima;
 
-	if (rv3d && !(ob && ((workspace->object_mode & OB_MODE_ALL_PAINT) != 0)))
+	if (rv3d && !(ob && ((ob->mode & OB_MODE_ALL_PAINT) != 0)))
 		return false;
 
 	sima = CTX_wm_space_image(C);
@@ -207,7 +206,7 @@ static void paintcurve_point_add(bContext *C,  wmOperator *op, const int loc[2])
 		br->paint_curve = pc = BKE_paint_curve_add(bmain, "PaintCurve");
 	}
 
-	ED_paintcurve_undo_push(C, op, pc);
+	ED_paintcurve_undo_push_begin(op->type->name);
 
 	pcp = MEM_mallocN((pc->tot_points + 1) * sizeof(PaintCurvePoint), "PaintCurvePoint");
 	add_index = pc->add_index;
@@ -244,6 +243,8 @@ static void paintcurve_point_add(bContext *C,  wmOperator *op, const int loc[2])
 		pcp[add_index].bez.f1 = SELECT;
 		pcp[add_index].bez.h1 = HD_ALIGN;
 	}
+
+	ED_paintcurve_undo_push_end();
 
 	WM_paint_cursor_tag_redraw(window, ar);
 }
@@ -306,7 +307,7 @@ static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	ED_paintcurve_undo_push(C, op, pc);
+	ED_paintcurve_undo_push_begin(op->type->name);
 
 #define DELETE_TAG 2
 
@@ -346,6 +347,8 @@ static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
 
 #undef DELETE_TAG
 
+	ED_paintcurve_undo_push_end();
+
 	WM_paint_cursor_tag_redraw(window, ar);
 
 	return OPERATOR_FINISHED;
@@ -383,7 +386,7 @@ static bool paintcurve_point_select(bContext *C, wmOperator *op, const int loc[2
 	if (!pc)
 		return false;
 
-	ED_paintcurve_undo_push(C, op, pc);
+	ED_paintcurve_undo_push_begin(op->type->name);
 
 	if (toggle) {
 		PaintCurvePoint *pcp;
@@ -448,9 +451,13 @@ static bool paintcurve_point_select(bContext *C, wmOperator *op, const int loc[2
 			}
 		}
 
-		if (!pcp)
+		if (!pcp) {
+			ED_paintcurve_undo_push_end();
 			return false;
+		}
 	}
+
+	ED_paintcurve_undo_push_end();
 
 	WM_paint_cursor_tag_redraw(window, ar);
 
@@ -566,9 +573,6 @@ static int paintcurve_slide_invoke(bContext *C, wmOperator *op, const wmEvent *e
 		psd->align = align;
 		op->customdata = psd;
 
-		if (do_select)
-			ED_paintcurve_undo_push(C, op, pc);
-
 		/* first, clear all selection from points */
 		for (i = 0; i < pc->tot_points; i++)
 			pc->points[i].bez.f1 = pc->points[i].bez.f3 = pc->points[i].bez.f2 = 0;
@@ -591,6 +595,8 @@ static int paintcurve_slide_modal(bContext *C, wmOperator *op, const wmEvent *ev
 
 	if (event->type == psd->event && event->val == KM_RELEASE) {
 		MEM_freeN(psd);
+		ED_paintcurve_undo_push_begin(op->type->name);
+		ED_paintcurve_undo_push_end();
 		return OPERATOR_FINISHED;
 	}
 
@@ -599,8 +605,9 @@ static int paintcurve_slide_modal(bContext *C, wmOperator *op, const wmEvent *ev
 		{
 			ARegion *ar = CTX_wm_region(C);
 			wmWindow *window = CTX_wm_window(C);
-			float diff[2] = {event->mval[0] - psd->initial_loc[0],
-			                 event->mval[1] - psd->initial_loc[1]};
+			float diff[2] = {
+				event->mval[0] - psd->initial_loc[0],
+				event->mval[1] - psd->initial_loc[1]};
 			if (psd->select == 1) {
 				int i;
 				for (i = 0; i < 3; i++)
@@ -654,7 +661,7 @@ static int paintcurve_draw_exec(bContext *C, wmOperator *UNUSED(op))
 
 	switch (mode) {
 		case ePaintTexture2D:
-		case ePaintTextureProjective:
+		case ePaintTexture3D:
 			name = "PAINT_OT_image_paint";
 			break;
 		case ePaintWeight:
@@ -691,27 +698,27 @@ void PAINTCURVE_OT_draw(wmOperatorType *ot)
 static int paintcurve_cursor_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 {
 	ePaintMode mode = BKE_paintmode_get_active_from_context(C);
-	
+
 	switch (mode) {
 		case ePaintTexture2D:
 		{
 			ARegion *ar = CTX_wm_region(C);
 			SpaceImage *sima = CTX_wm_space_image(C);
 			float location[2];
-			
+
 			if (!sima)
 				return OPERATOR_CANCELLED;
-			
+
 			UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &location[0], &location[1]);
 			copy_v2_v2(sima->cursor, location);
 			WM_event_add_notifier(C, NC_SPACE | ND_SPACE_IMAGE, NULL);
 			break;
 		}
 		default:
-			ED_view3d_cursor3d_update(C, event->mval);
+			ED_view3d_cursor3d_update(C, event->mval, true, V3D_CURSOR_ORIENT_VIEW);
 			break;
 	}
-	
+
 	return OPERATOR_FINISHED;
 }
 

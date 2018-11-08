@@ -26,7 +26,7 @@ __all__ = (
     "object_add_grid_scale_apply_operator",
     "object_image_guess",
     "world_to_camera_view",
-    )
+)
 
 
 import bpy
@@ -100,7 +100,7 @@ def add_object_align_init(context, operator):
         if operator:
             properties.rotation = rotation.to_euler()
 
-    return location * rotation
+    return location @ rotation
 
 
 def object_data_add(context, obdata, operator=None, name=None):
@@ -119,20 +119,13 @@ def object_data_add(context, obdata, operator=None, name=None):
     :return: the newly created object in the scene.
     :rtype: :class:`bpy.types.Object`
     """
-    workspace = context.workspace
     scene = context.scene
     layer = context.view_layer
-    layer_collection = context.layer_collection
+    layer_collection = context.layer_collection or layer.active_layer_collection
+    scene_collection = layer_collection.collection
 
     for ob in layer.objects:
         ob.select_set(action='DESELECT')
-
-    if not layer_collection:
-        # when there is no collection linked to this view_layer create one
-        scene_collection = scene.master_collection.collections.new("")
-        layer_collection = layer.collections.link(scene_collection)
-    else:
-        scene_collection = layer_collection.collection
 
     if name is None:
         name = "Object" if obdata is None else obdata.name
@@ -147,9 +140,9 @@ def object_data_add(context, obdata, operator=None, name=None):
     # caused because entering edit-mode does not add a empty undo slot!
     if context.user_preferences.edit.use_enter_edit_mode:
         if not (obj_act and
-                obj_act.type == obj_new.type and
-                workspace.object_mode == 'EDIT'
-        ):
+                obj_act.mode == 'EDIT' and
+                obj_act.type == obj_new.type):
+
             _obdata = bpy.data.meshes.new(name)
             obj_act = bpy.data.objects.new(_obdata.name, _obdata)
             obj_act.matrix_world = obj_new.matrix_world
@@ -160,17 +153,14 @@ def object_data_add(context, obdata, operator=None, name=None):
             bpy.ops.ed.undo_push(message="Enter Editmode")
     # XXX
 
-    if (obj_act and
-        obj_act.type == obj_new.type and
-        workspace.object_mode == 'EDIT'
-    ):
+    if obj_act and obj_act.mode == 'EDIT' and obj_act.type == obj_new.type:
         bpy.ops.mesh.select_all(action='DESELECT')
         obj_act.select_set(action='SELECT')
         bpy.ops.object.mode_set(mode='OBJECT')
 
         obj_act.select_set(action='SELECT')
         scene.update()  # apply location
-        # scene.objects.active = obj_new
+        # layer.objects.active = obj_new
 
         # Match up UV layers, this is needed so adding an object with UV's
         # doesn't create new layers when there happens to be a naming mis-match.
@@ -198,19 +188,19 @@ class AddObjectHelper:
         if not self.view_align:
             self.rotation.zero()
 
-    view_align = BoolProperty(
-            name="Align to View",
-            default=False,
-            update=view_align_update_callback,
-            )
-    location = FloatVectorProperty(
-            name="Location",
-            subtype='TRANSLATION',
-            )
-    rotation = FloatVectorProperty(
-            name="Rotation",
-            subtype='EULER',
-            )
+    view_align: BoolProperty(
+        name="Align to View",
+        default=False,
+        update=view_align_update_callback,
+    )
+    location: FloatVectorProperty(
+        name="Location",
+        subtype='TRANSLATION',
+    )
+    rotation: FloatVectorProperty(
+        name="Rotation",
+        subtype='EULER',
+    )
 
     @classmethod
     def poll(self, context):
@@ -226,7 +216,7 @@ def object_add_grid_scale(context):
     space_data = context.space_data
 
     if space_data and space_data.type == 'VIEW_3D':
-        return space_data.grid_scale_unit
+        return space_data.overlay.grid_scale_unit
 
     return 1.0
 
@@ -253,10 +243,9 @@ def object_image_guess(obj, bm=None):
     first checking the texture-faces, then the material.
     """
     # TODO, cycles/nodes materials
-    workspace = context.workspace
     me = obj.data
     if bm is None:
-        if workspace.object_mode == 'EDIT':
+        if obj.mode == 'EDIT':
             import bmesh
             bm = bmesh.from_edit_mesh(me)
 
@@ -313,7 +302,7 @@ def world_to_camera_view(scene, obj, coord):
     """
     from mathutils import Vector
 
-    co_local = obj.matrix_world.normalized().inverted() * coord
+    co_local = obj.matrix_world.normalized().inverted() @ coord
     z = -co_local.z
 
     camera = obj.data

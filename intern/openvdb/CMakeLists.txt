@@ -38,8 +38,14 @@ set(SRC
 if(WITH_OPENVDB)
 	add_definitions(
 		-DWITH_OPENVDB
-		-DOPENVDB_3_ABI_COMPATIBLE
+		${OPENVDB_DEFINITIONS}
 	)
+
+	if(WITH_OPENVDB_3_ABI_COMPATIBLE)
+		add_definitions(
+			-DOPENVDB_3_ABI_COMPATIBLE
+		)
+	endif()
 
 	list(APPEND INC_SYS
 		${BOOST_INCLUDE_DIR}

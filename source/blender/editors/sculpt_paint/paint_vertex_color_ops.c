@@ -28,7 +28,6 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_workspace_types.h"
 
 #include "BLI_math_base.h"
 #include "BLI_math_color.h"
@@ -50,12 +49,11 @@
 #include "paint_intern.h"  /* own include */
 
 
-static int vertex_weight_paint_mode_poll(bContext *C)
+static bool vertex_weight_paint_mode_poll(bContext *C)
 {
-	const WorkSpace *workspace = CTX_wm_workspace(C);
 	Object *ob = CTX_data_active_object(C);
 	Mesh *me = BKE_mesh_from_object(ob);
-	return (ob && ELEM(workspace->object_mode, OB_MODE_VERTEX_PAINT, OB_MODE_WEIGHT_PAINT)) &&
+	return (ob && (ob->mode == OB_MODE_VERTEX_PAINT || ob->mode == OB_MODE_WEIGHT_PAINT)) &&
 	       (me && me->totpoly && me->dvert);
 }
 
@@ -109,7 +107,7 @@ static int vertex_color_set_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Scene *scene = CTX_data_scene(C);
 	Object *obact = CTX_data_active_object(C);
-	unsigned int paintcol = vpaint_get_current_col(scene, scene->toolsettings->vpaint);
+	unsigned int paintcol = vpaint_get_current_col(scene, scene->toolsettings->vpaint, false);
 
 	if (vertex_color_set(obact, paintcol)) {
 		WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, obact);
@@ -154,6 +152,7 @@ static bool vertex_paint_from_weight(Object *ob)
 	}
 
 	/* TODO: respect selection. */
+	/* TODO: Do we want to take weights from evaluated mesh instead? 2.7x was not doing it anyway... */
 	mp = me->mpoly;
 	vgroup_active = ob->actdef - 1;
 	for (int i = 0; i < me->totpoly; i++, mp++) {

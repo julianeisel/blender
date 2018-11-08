@@ -47,10 +47,12 @@
 #include "BKE_global.h"
 #include "BKE_colortools.h"
 #include "BKE_layer.h"
+#include "BKE_node.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 
 #include "DEG_depsgraph.h"
+#include "DEG_depsgraph_debug.h"
 #include "DEG_depsgraph_query.h"
 
 #include "RNA_access.h"
@@ -69,36 +71,13 @@
 #include "renderpipeline.h"
 #include "render_types.h"
 #include "render_result.h"
-#include "rendercore.h"
 
 /* Render Engine Types */
-
-static RenderEngineType internal_render_type = {
-	NULL, NULL,
-	"BLENDER_RENDER", N_("Blender Render"), RE_INTERNAL | RE_USE_LEGACY_PIPELINE,
-	NULL, NULL, NULL, NULL, NULL, NULL, render_internal_update_passes, NULL, NULL, NULL,
-	{NULL, NULL, NULL}
-};
-
-#ifdef WITH_GAMEENGINE
-
-static RenderEngineType internal_game_type = {
-	NULL, NULL,
-	"BLENDER_GAME", N_("Blender Game"), RE_INTERNAL | RE_GAME | RE_USE_LEGACY_PIPELINE,
-	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-	{NULL, NULL, NULL}
-};
-
-#endif
 
 ListBase R_engines = {NULL, NULL};
 
 void RE_engines_init(void)
 {
-	RE_engines_register(NULL, &internal_render_type);
-#ifdef WITH_GAMEENGINE
-	RE_engines_register(NULL, &internal_game_type);
-#endif
 	DRW_engines_register();
 }
 
@@ -107,9 +86,6 @@ void RE_engines_exit(void)
 	RenderEngineType *type, *next;
 
 	DRW_engines_free();
-
-	BKE_layer_collection_engine_settings_callback_free();
-	BKE_view_layer_engine_settings_callback_free();
 
 	for (type = R_engines.first; type; type = next) {
 		next = type->next;
@@ -125,18 +101,10 @@ void RE_engines_exit(void)
 	}
 }
 
-void RE_engines_register(Main *bmain, RenderEngineType *render_type)
+void RE_engines_register(RenderEngineType *render_type)
 {
 	if (render_type->draw_engine) {
 		DRW_engine_register(render_type->draw_engine);
-	}
-	if (render_type->collection_settings_create) {
-		BKE_layer_collection_engine_settings_callback_register(
-		            bmain, render_type->idname, render_type->collection_settings_create);
-	}
-	if (render_type->render_settings_create) {
-		BKE_view_layer_engine_settings_callback_register(
-		            bmain, render_type->idname, render_type->render_settings_create);
 	}
 	BLI_addtail(&R_engines, render_type);
 }
@@ -144,17 +112,17 @@ void RE_engines_register(Main *bmain, RenderEngineType *render_type)
 RenderEngineType *RE_engines_find(const char *idname)
 {
 	RenderEngineType *type;
-	
+
 	type = BLI_findstring(&R_engines, idname, offsetof(RenderEngineType, idname));
 	if (!type)
-		type = &internal_render_type;
-	
+		type = BLI_findstring(&R_engines, "BLENDER_EEVEE", offsetof(RenderEngineType, idname));
+
 	return type;
 }
 
 bool RE_engine_is_external(Render *re)
 {
-	return (re->engine && re->engine->type && re->engine->type->render_to_image);
+	return (re->engine && re->engine->type && re->engine->type->render);
 }
 
 bool RE_engine_is_opengl(RenderEngineType *render_type)
@@ -295,7 +263,7 @@ void RE_engine_add_pass(RenderEngine *engine, const char *name, int channels, co
 	render_result_add_pass(re->result, name, channels, chan_id, layername, NULL);
 }
 
-void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel, int highlight, int merge_results)
+void RE_engine_end_result(RenderEngine *engine, RenderResult *result, bool cancel, bool highlight, bool merge_results)
 {
 	Render *re = engine->re;
 
@@ -346,13 +314,13 @@ RenderResult *RE_engine_get_result(RenderEngine *engine)
 
 /* Cancel */
 
-int RE_engine_test_break(RenderEngine *engine)
+bool RE_engine_test_break(RenderEngine *engine)
 {
 	Render *re = engine->re;
 
 	if (re)
 		return re->test_break(re->tbh);
-	
+
 	return 0;
 }
 
@@ -439,7 +407,7 @@ void RE_engine_active_view_set(RenderEngine *engine, const char *viewname)
 	RE_SetActiveRenderView(re, viewname);
 }
 
-float RE_engine_get_camera_shift_x(RenderEngine *engine, Object *camera, int use_spherical_stereo)
+float RE_engine_get_camera_shift_x(RenderEngine *engine, Object *camera, bool use_spherical_stereo)
 {
 	Render *re = engine->re;
 
@@ -451,7 +419,7 @@ float RE_engine_get_camera_shift_x(RenderEngine *engine, Object *camera, int use
 }
 
 void RE_engine_get_camera_model_matrix(
-        RenderEngine *engine, Object *camera, int use_spherical_stereo, float *r_modelmat)
+        RenderEngine *engine, Object *camera, bool use_spherical_stereo, float *r_modelmat)
 {
 	Render *re = engine->re;
 
@@ -462,7 +430,7 @@ void RE_engine_get_camera_model_matrix(
 	BKE_camera_multiview_model_matrix(re ? &re->r : NULL, camera, re->viewname, (float (*)[4])r_modelmat);
 }
 
-int RE_engine_get_spherical_stereo(RenderEngine *engine, Object *camera)
+bool RE_engine_get_spherical_stereo(RenderEngine *engine, Object *camera)
 {
 	Render *re = engine->re;
 	return BKE_camera_multiview_spherical_stereo(re ? &re->r : NULL, camera) ? 1 : 0;
@@ -491,7 +459,7 @@ rcti* RE_engine_get_current_tiles(Render *re, int *r_total_tiles, bool *r_needs_
 		if (pa->status == PART_STATUS_IN_PROGRESS) {
 			if (total_tiles >= allocation_size) {
 				/* Just in case we're using crazy network rendering with more
-				 * slaves as BLENDER_MAX_THREADS.
+				 * workers than BLENDER_MAX_THREADS.
 				 */
 				allocation_size += allocation_step;
 				if (tiles == tiles_static) {
@@ -507,13 +475,6 @@ rcti* RE_engine_get_current_tiles(Render *re, int *r_total_tiles, bool *r_needs_
 			}
 			tiles[total_tiles] = pa->disprect;
 
-			if (pa->crop) {
-				tiles[total_tiles].xmin += pa->crop;
-				tiles[total_tiles].ymin += pa->crop;
-				tiles[total_tiles].xmax -= pa->crop;
-				tiles[total_tiles].ymax -= pa->crop;
-			}
-
 			total_tiles++;
 		}
 	}
@@ -527,29 +488,71 @@ RenderData *RE_engine_get_render_data(Render *re)
 	return &re->r;
 }
 
+/* Depsgraph */
+static void engine_depsgraph_init(RenderEngine *engine, ViewLayer *view_layer)
+{
+	Main *bmain = engine->re->main;
+	Scene *scene = engine->re->scene;
+
+	engine->depsgraph = DEG_graph_new(scene, view_layer, DAG_EVAL_RENDER);
+	DEG_debug_name_set(engine->depsgraph, "RENDER");
+
+	BKE_scene_graph_update_for_newframe(engine->depsgraph, bmain);
+}
+
+static void engine_depsgraph_free(RenderEngine *engine)
+{
+	DEG_graph_free(engine->depsgraph);
+
+	engine->depsgraph = NULL;
+}
+
+void RE_engine_frame_set(RenderEngine *engine, int frame, float subframe)
+{
+	if(!engine->depsgraph) {
+		return;
+	}
+
+#ifdef WITH_PYTHON
+	BPy_BEGIN_ALLOW_THREADS;
+#endif
+
+	Render *re = engine->re;
+	double cfra = (double)frame + (double)subframe;
+
+	CLAMP(cfra, MINAFRAME, MAXFRAME);
+	BKE_scene_frame_set(re->scene, cfra);
+	BKE_scene_graph_update_for_newframe(engine->depsgraph, re->main);
+
+	BKE_scene_camera_switch_update(re->scene);
+
+#ifdef WITH_PYTHON
+	BPy_END_ALLOW_THREADS;
+#endif
+}
+
 /* Bake */
 void RE_bake_engine_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 {
 	re->scene = scene;
 	re->main = bmain;
 	render_copy_renderdata(&re->r, &scene->r);
-	render_copy_viewrender(&re->view_render, &scene->view_render);
 }
 
 bool RE_bake_has_engine(Render *re)
 {
-	RenderEngineType *type = RE_engines_find(re->view_render.engine_id);
+	RenderEngineType *type = RE_engines_find(re->r.engine);
 	return (type->bake != NULL);
 }
 
 bool RE_bake_engine(
-        Render *re, Object *object,
+        Render *re, Depsgraph *depsgraph, Object *object,
         const int object_id, const BakePixel pixel_array[],
         const size_t num_pixels, const int depth,
         const eScenePassType pass_type, const int pass_filter,
         float result[])
 {
-	RenderEngineType *type = RE_engines_find(re->view_render.engine_id);
+	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;
 	bool persistent_data = (re->r.mode & R_PERSISTENT_DATA) != 0;
 
@@ -574,30 +577,19 @@ bool RE_bake_engine(
 	engine->resolution_x = re->winx;
 	engine->resolution_y = re->winy;
 
-	RE_parts_init(re, false);
+	RE_parts_init(re);
 	engine->tile_x = re->r.tilex;
 	engine->tile_y = re->r.tiley;
 
-	/* update is only called so we create the engine.session */
-	if (type->update)
-		type->update(engine, re->main, re->scene);
-
 	if (type->bake) {
-		EvaluationContext *eval_ctx = DEG_evaluation_context_new(DAG_EVAL_RENDER);
-		Depsgraph *depsgraph = DEG_graph_new();
-		ViewLayer *view_layer = BLI_findlink(&re->scene->view_layers, re->scene->active_view_layer);
+		engine->depsgraph = depsgraph;
 
-		DEG_evaluation_context_init_from_view_layer_for_render(
-					eval_ctx,
-					depsgraph,
-					re->scene,
-					view_layer);
-
-		BKE_scene_graph_update_tagged(eval_ctx, depsgraph, re->main, re->scene, view_layer);
+		/* update is only called so we create the engine.session */
+		if (type->update)
+			type->update(engine, re->main, engine->depsgraph);
 
 		type->bake(engine,
-		           depsgraph,
-		           re->scene,
+		           engine->depsgraph,
 		           object,
 		           pass_type,
 		           pass_filter,
@@ -607,8 +599,7 @@ bool RE_bake_engine(
 		           depth,
 		           result);
 
-		DEG_graph_free(depsgraph);
-		DEG_evaluation_context_free(eval_ctx);
+		engine->depsgraph = NULL;
 	}
 
 	engine->tile_x = 0;
@@ -632,36 +623,16 @@ bool RE_bake_engine(
 	return true;
 }
 
-void RE_engine_frame_set(RenderEngine *engine, int frame, float subframe)
-{
-	Render *re = engine->re;
-	Scene *scene = re->scene;
-	double cfra = (double)frame + (double)subframe;
-
-	CLAMP(cfra, MINAFRAME, MAXFRAME);
-	BKE_scene_frame_set(scene, cfra);
-
-#ifdef WITH_PYTHON
-	BPy_BEGIN_ALLOW_THREADS;
-#endif
-
-#ifdef WITH_PYTHON
-	BPy_END_ALLOW_THREADS;
-#endif
-
-	BKE_scene_camera_switch_update(scene);
-}
-
 /* Render */
 
 int RE_engine_render(Render *re, int do_all)
 {
-	RenderEngineType *type = RE_engines_find(re->view_render.engine_id);
+	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;
 	bool persistent_data = (re->r.mode & R_PERSISTENT_DATA) != 0;
 
 	/* verify if we can render */
-	if (!type->render_to_image)
+	if (!type->render)
 		return 0;
 	if ((re->r.scemode & R_BUTS_PREVIEW) && !(type->flag & RE_USE_PREVIEW))
 		return 0;
@@ -731,45 +702,52 @@ int RE_engine_render(Render *re, int do_all)
 	if (re->r.scemode & R_BUTS_PREVIEW)
 		engine->flag |= RE_ENGINE_PREVIEW;
 	engine->camera_override = re->camera_override;
-	engine->layer_override = re->layer_override;
 
 	engine->resolution_x = re->winx;
 	engine->resolution_y = re->winy;
 
-	RE_parts_init(re, false);
+	RE_parts_init(re);
 	engine->tile_x = re->partx;
 	engine->tile_y = re->party;
 
 	if (re->result->do_exr_tile)
 		render_result_exr_file_begin(re);
 
-	if (type->update) {
-		type->update(engine, re->main, re->scene);
-	}
-
 	/* Clear UI drawing locks. */
 	if (re->draw_lock) {
 		re->draw_lock(re->dlh, 0);
 	}
 
-	if (type->render_to_image) {
+	if (type->render) {
 		FOREACH_VIEW_LAYER_TO_RENDER_BEGIN(re, view_layer_iter)
 		{
-			EvaluationContext *eval_ctx = DEG_evaluation_context_new(DAG_EVAL_RENDER);
-			Depsgraph *depsgraph = DEG_graph_new();
+			if (re->draw_lock) {
+				re->draw_lock(re->dlh, 1);
+			}
+
 			ViewLayer *view_layer = BLI_findstring(&re->scene->view_layers, view_layer_iter->name, offsetof(ViewLayer, name));
+			engine_depsgraph_init(engine, view_layer);
 
-			DEG_evaluation_context_init_from_view_layer_for_render(
-						eval_ctx,
-						depsgraph,
-						re->scene,
-						view_layer);
+			if (type->update) {
+				type->update(engine, re->main, engine->depsgraph);
+			}
 
-			BKE_scene_graph_update_tagged(eval_ctx, depsgraph, re->main, re->scene, view_layer);
-			type->render_to_image(engine, depsgraph);
+			if (re->draw_lock) {
+				re->draw_lock(re->dlh, 0);
+			}
 
-			DEG_graph_free(depsgraph);
-			DEG_evaluation_context_free(eval_ctx);
+			type->render(engine, engine->depsgraph);
+
+			/* grease pencil render over previous render result */
+			if (!RE_engine_test_break(engine)) {
+				DRW_render_gpencil(engine, engine->depsgraph);
+			}
+
+			engine_depsgraph_free(engine);
+
+			if (RE_engine_test_break(engine)) {
+				break;
+			}
 		}
 		FOREACH_VIEW_LAYER_TO_RENDER_END;
 	}
@@ -806,7 +784,7 @@ int RE_engine_render(Render *re, int do_all)
 
 	if (BKE_reports_contain(re->reports, RPT_ERROR))
 		G.is_break = true;
-	
+
 #ifdef WITH_FREESTYLE
 	if (re->r.mode & R_EDGE_FRS)
 		RE_RenderFreestyleExternal(re);
@@ -827,8 +805,9 @@ void RE_engine_register_pass(struct RenderEngine *engine, struct Scene *scene, s
 	/* Register the pass in all scenes that have a render layer node for this layer.
 	 * Since multiple scenes can be used in the compositor, the code must loop over all scenes
 	 * and check whether their nodetree has a node that needs to be updated. */
-	Scene *sce;
-	for (sce = G.main->scene.first; sce; sce = sce->id.next) {
+	/* NOTE: using G_MAIN seems valid here,
+	 * unless we want to register that for every other temp Main we could generate??? */
+	for (Scene *sce = G_MAIN->scene.first; sce; sce = sce->id.next) {
 		if (sce->nodetree) {
 			ntreeCompositRegisterPass(sce->nodetree, scene, view_layer, name, type);
 		}

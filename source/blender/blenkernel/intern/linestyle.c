@@ -47,7 +47,6 @@
 #include "BKE_colorband.h"
 #include "BKE_context.h"
 #include "BKE_freestyle.h"
-#include "BKE_global.h"
 #include "BKE_library.h"
 #include "BKE_linestyle.h"
 #include "BKE_node.h"
@@ -213,17 +212,11 @@ void BKE_linestyle_make_local(struct Main *bmain, FreestyleLineStyle *linestyle,
 	BKE_id_make_local_generic(bmain, &linestyle->id, true, lib_local);
 }
 
-FreestyleLineStyle *BKE_linestyle_active_from_scene(Scene *scene)
+FreestyleLineStyle *BKE_linestyle_active_from_view_layer(ViewLayer *view_layer)
 {
-	ViewLayer *active_render_layer = BLI_findlink(&scene->view_layers, scene->active_view_layer);
-	if (active_render_layer) {
-		FreestyleConfig *config = &active_render_layer->freestyle_config;
-		FreestyleLineSet *lineset = BKE_freestyle_lineset_get_active(config);
-		if (lineset) {
-			return lineset->linestyle;
-		}
-	}
-	return NULL;
+	FreestyleConfig *config = &view_layer->freestyle_config;
+	FreestyleLineSet *lineset = BKE_freestyle_lineset_get_active(config);
+	return (lineset) ? lineset->linestyle : NULL;
 }
 
 static LineStyleModifier *new_modifier(const char *name, int type, size_t size)

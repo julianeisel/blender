@@ -4,7 +4,7 @@
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version. 
+ * of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -18,7 +18,7 @@
  * The Original Code is Copyright (C) 2007 Blender Foundation.
  * All rights reserved.
  *
- * 
+ *
  * Contributor(s): Blender Foundation
  *
  * ***** END GPL LICENSE BLOCK *****
@@ -32,6 +32,7 @@
 #define __DNA_WINDOWMANAGER_TYPES_H__
 
 #include "DNA_listBase.h"
+#include "DNA_screen_types.h"
 #include "DNA_vec_types.h"
 #include "DNA_userdef_types.h"
 
@@ -59,6 +60,7 @@ struct ReportList;
 struct Report;
 struct uiLayout;
 struct Stereo3dFormat;
+struct UndoStep;
 
 #define OP_MAX_TYPENAME 64
 #define KMAP_MAX_NAME   64
@@ -116,8 +118,7 @@ typedef struct ReportList {
 #
 #
 typedef struct ReportTimerInfo {
-	float col[3];
-	float grayscale;
+	float col[4];
 	float widthfac;
 } ReportTimerInfo;
 
@@ -155,6 +156,8 @@ typedef struct wmWindowManager {
 	ListBase timers;                  /* active timers */
 	struct wmTimer *autosavetimer;    /* timer for auto save */
 
+	struct UndoStack *undo_stack;     /* all undo history (runtime only). */
+
 	char is_interface_locked;		/* indicates whether interface is locked for user interaction */
 	char par[7];
 
@@ -175,17 +178,24 @@ enum {
 #  endif
 #endif
 
-/* the savable part, rest of data is local in ghostwinlay */
+/* the saveable part, rest of data is local in ghostwinlay */
 typedef struct wmWindow {
 	struct wmWindow *next, *prev;
 
 	void *ghostwin;             /* don't want to include ghost.h stuff */
-	void *gwnctx;               /* don't want to include gawin stuff */
+	void *gpuctx;               /* don't want to include gpu stuff */
 
-	struct Scene *scene;     /* The scene displayed in this window. */
-	struct Scene *new_scene; /* temporary when switching */
+	struct wmWindow *parent;    /* Parent window */
+
+	struct Scene *scene;        /* Active scene displayed in this window. */
+	struct Scene *new_scene;    /* temporary when switching */
+	char view_layer_name[64];   /* Active view layer displayed in this window. */
 
 	struct WorkSpaceInstanceHook *workspace_hook;
+
+	/** Global areas aren't part of the screen, but part of the window directly.
+	 * \note Code assumes global areas with fixed height, fixed width not supported yet */
+	ScrAreaMap global_areas;
 
 	struct bScreen *screen DNA_DEPRECATED;
 
@@ -214,9 +224,6 @@ typedef struct wmWindow {
 	 * Currently WIN32, runtime-only data */
 	struct wmIMEData *ime_data;
 
-	int drawmethod, drawfail;     /* internal for wm_draw.c only */
-	ListBase drawdata;            /* internal for wm_draw.c only */
-
 	ListBase queue;               /* all events (ghost level events were handled) */
 	ListBase handlers;            /* window+screen handlers, handled last */
 	ListBase modalhandlers;       /* priority handlers, handled first */
@@ -227,6 +234,9 @@ typedef struct wmWindow {
 
 	/* custom drawing callbacks */
 	ListBase drawcalls;
+
+	/* Private runtime info to show text in the status bar. */
+	void *cursor_keymap_status;
 } wmWindow;
 
 #ifdef ime_data
@@ -234,7 +244,7 @@ typedef struct wmWindow {
 #endif
 
 /* These two Lines with # tell makesdna this struct can be excluded. */
-/* should be something like DNA_EXCLUDE 
+/* should be something like DNA_EXCLUDE
  * but the preprocessor first removes all comments, spaces etc */
 #
 #
@@ -319,7 +329,9 @@ typedef struct wmKeyMap {
 
 	/* runtime */
 	/** Verify if enabled in the current context, use #WM_keymap_poll instead of direct calls. */
-	int (*poll)(struct bContext *);
+	bool (*poll)(struct bContext *);
+	bool (*poll_modal_item)(const struct wmOperator *op, int value);
+
 	/** For modal, #EnumPropertyItem for now. */
 	const void *modal_items;
 } wmKeyMap;
@@ -372,7 +384,6 @@ typedef struct wmOperator {
 	struct wmOperator *opm;       /* current running macro, not saved */
 	struct uiLayout *layout;      /* runtime for drawing */
 	short flag, pad[3];
-
 } wmOperator;
 
 /* operator type return flags: exec(), invoke() modal(), return values */

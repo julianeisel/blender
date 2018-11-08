@@ -4,7 +4,7 @@
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version. 
+ * of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -34,6 +34,8 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
+#include "ED_select_utils.h"
+#include "ED_keymap_templates.h"
 #include "ED_physics.h"
 #include "ED_object.h"
 
@@ -85,6 +87,7 @@ static void operatortypes_particle(void)
 	WM_operatortype_append(PARTICLE_OT_copy_particle_systems);
 	WM_operatortype_append(PARTICLE_OT_duplicate_particle_system);
 
+	WM_operatortype_append(PARTICLE_OT_dupliob_refresh);
 	WM_operatortype_append(PARTICLE_OT_dupliob_copy);
 	WM_operatortype_append(PARTICLE_OT_dupliob_remove);
 	WM_operatortype_append(PARTICLE_OT_dupliob_move_up);
@@ -111,14 +114,11 @@ static void keymap_particle(wmKeyConfig *keyconf)
 {
 	wmKeyMapItem *kmi;
 	wmKeyMap *keymap;
-	
-	keymap = WM_keymap_find(keyconf, "Particle", 0, 0);
+
+	keymap = WM_keymap_ensure(keyconf, "Particle", 0, 0);
 	keymap->poll = PE_poll;
-	
-	kmi = WM_keymap_add_item(keymap, "PARTICLE_OT_select_all", AKEY, KM_PRESS, 0, 0);
-	RNA_enum_set(kmi->ptr, "action", SEL_TOGGLE);
-	kmi = WM_keymap_add_item(keymap, "PARTICLE_OT_select_all", IKEY, KM_PRESS, KM_CTRL, 0);
-	RNA_enum_set(kmi->ptr, "action", SEL_INVERT);
+
+	ED_keymap_template_select_all(keymap, "PARTICLE_OT_select_all");
 
 	WM_keymap_add_item(keymap, "PARTICLE_OT_select_more", PADPLUSKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "PARTICLE_OT_select_less", PADMINUS, KM_PRESS, KM_CTRL, 0);
@@ -149,7 +149,7 @@ static void keymap_particle(wmKeyConfig *keyconf)
 	RNA_string_set(kmi->ptr, "data_path_primary", "tool_settings.particle_edit.brush.strength");
 
 	WM_keymap_add_menu(keymap, "VIEW3D_MT_particle_specials", WKEY, KM_PRESS, 0, 0);
-	
+
 	WM_keymap_add_item(keymap, "PARTICLE_OT_weight_set", KKEY, KM_PRESS, KM_SHIFT, 0);
 
 	ED_keymap_proportional_cycle(keyconf, keymap);
@@ -204,8 +204,8 @@ static void operatortypes_dynamicpaint(void)
 
 //static void keymap_pointcache(wmWindowManager *wm)
 //{
-//	wmKeyMap *keymap = WM_keymap_find(wm, "Pointcache", 0, 0);
-//	
+//	wmKeyMap *keymap = WM_keymap_ensure(wm, "Pointcache", 0, 0);
+//
 //	WM_keymap_add_item(keymap, "PHYSICS_OT_bake_all", AKEY, KM_PRESS, 0, 0);
 //	WM_keymap_add_item(keymap, "PHYSICS_OT_free_all", PADPLUSKEY, KM_PRESS, KM_CTRL, 0);
 //	WM_keymap_add_item(keymap, "PHYSICS_OT_bake_particle_system", PADMINUS, KM_PRESS, KM_CTRL, 0);
@@ -228,6 +228,3 @@ void ED_keymap_physics(wmKeyConfig *keyconf)
 	keymap_particle(keyconf);
 	//keymap_pointcache(keyconf);
 }
-
-
-

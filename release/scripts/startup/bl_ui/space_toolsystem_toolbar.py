@@ -24,101 +24,476 @@
 # For now keep this in a single file since it's an area that may change,
 # so avoid making changes all over the place.
 
+import bpy
 from bpy.types import Panel
 
 from .space_toolsystem_common import (
     ToolSelectPanelHelper,
+    ToolDef,
+)
+from .properties_material_gpencil import (
+    GPENCIL_UL_matslots,
+)
+from .properties_grease_pencil_common import (
+    AnnotationDataPanel,
 )
 
 
-class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'TOOLS'
-    bl_category = "Tools"
-    bl_label = "Active Tool (Test)"
-    bl_options = {'DEFAULT_CLOSED'}
+def generate_from_enum_ex(
+        context, *,
+        icon_prefix,
+        type,
+        attr,
+        tooldef_keywords={},
+):
+    tool_defs = []
+    for enum in type.bl_rna.properties[attr].enum_items_static:
+        name = enum.name
+        identifier = enum.identifier
+        tool_defs.append(
+            ToolDef.from_dict(
+                dict(
+                    text=name,
+                    icon=icon_prefix + identifier.lower(),
+                    data_block=identifier,
+                    **tooldef_keywords,
+                )
+            )
+        )
+    return tuple(tool_defs)
 
-    # Satisfy the 'ToolSelectPanelHelper' API.
-    keymap_prefix = "3D View Tool: "
 
-    @classmethod
-    def tools_from_context(cls, context):
-        return (cls._tools[None], cls._tools.get(context.mode, ()))
-
-    @classmethod
-    def tools_all(cls):
-        return [t for t_list in cls._tools.values() for t in t_list]
-
-    # Internal Data
-
-    # for reuse
-    _tools_transform = (
-        ("Translate", None,
-         (("transform.translate", dict(release_confirm=True), dict(type='EVT_TWEAK_A', value='ANY')),)),
-        ("Rotate", None,
-         (("transform.rotate", dict(release_confirm=True), dict(type='EVT_TWEAK_A', value='ANY')),)),
-        ("Scale", None,
-         (("transform.resize", dict(release_confirm=True), dict(type='EVT_TWEAK_A', value='ANY')),)),
-        ("Scale Cage", "VIEW3D_WGT_xform_cage", None),
-        None,
-        ("Ruler/Protractor", "VIEW3D_WGT_ruler",
-         (("view3d.ruler_add", dict(), dict(type='EVT_TWEAK_A', value='ANY')),)),
-    )
-
-    _tools = {
-        None: [
-            ("Cursor", None,
-             (("view3d.cursor3d", dict(), dict(type='ACTIONMOUSE', value='CLICK')),)),
-
-            # 'Select' Group
-            (
-                ("Select Border", None, (
-                    ("view3d.select_border", dict(deselect=False), dict(type='EVT_TWEAK_A', value='ANY')),
-                    ("view3d.select_border", dict(deselect=True), dict(type='EVT_TWEAK_A', value='ANY', ctrl=True)),
-                )),
-                ("Select Circle", None, (
-                    ("view3d.select_circle", dict(deselect=False), dict(type='ACTIONMOUSE', value='PRESS')),
-                    ("view3d.select_circle", dict(deselect=True), dict(type='ACTIONMOUSE', value='PRESS', ctrl=True)),
-                )),
-                ("Select Lasso", None, (
-                    ("view3d.select_lasso",
-                     dict(deselect=False), dict(type='EVT_TWEAK_A', value='ANY')),
-                    ("view3d.select_lasso",
-                     dict(deselect=True), dict(type='EVT_TWEAK_A', value='ANY', ctrl=True)),
-                )),
+class _defs_view3d_generic:
+    @ToolDef.from_fn
+    def cursor():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("view3d.cursor3d")
+            layout.prop(props, "use_depth")
+            layout.prop(props, "orientation")
+        return dict(
+            text="Cursor",
+            description=(
+                "Set the cursor location, drag to transform"
             ),
-            # End group.
-        ],
-        'OBJECT': [
-            *_tools_transform,
-        ],
-        'POSE': [
-            *_tools_transform,
-        ],
-        'EDIT_ARMATURE': [
-            *_tools_transform,
-            ("Roll", None, (
+            icon="ops.generic.cursor",
+            keymap=(
+                ("view3d.cursor3d", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+                ("transform.translate",
+                 dict(release_confirm=True, cursor_transform=True),
+                 dict(type='EVT_TWEAK_A', value='ANY'),
+                 ),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def cursor_click():
+        return dict(
+            text="None",
+            icon="ops.generic.cursor",
+            keymap=(
+                # This is a dummy keymap entry, until particle system is properly working with toolsystem.
+                ("view3d.cursor3d", dict(), dict(type='ACTIONMOUSE', value='CLICK', ctrl=True, alt=True, shift=True)),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def ruler():
+        return dict(
+            text="Measure",
+            description=(
+                "Measure distance and angles.\n"
+                "\u2022 Drag anywhere for new measurement.\n"
+                "\u2022 Drag ruler segment to measure an angle.\n"
+                "\u2022 Drag ruler outside the view to remove.\n"
+                "\u2022 Ctrl to snap.\n"
+                "\u2022 Shift to measure surface thickness"
+            ),
+            icon="ops.view3d.ruler",
+            widget="VIEW3D_GGT_ruler",
+            keymap=(
+                ("view3d.ruler_add", dict(), dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+
+def _defs_annotate_factory():
+
+    class _defs_annotate:
+
+        def draw_settings_common(context, layout, tool):
+            if type(context.gpencil_data_owner) is bpy.types.Object:
+                gpd = context.scene.grease_pencil
+            else:
+                gpd = context.gpencil_data
+
+            if gpd is not None:
+                if gpd.layers.active_note is not None:
+                    text = gpd.layers.active_note
+                    maxw = 25
+                    if len(text) > maxw:
+                        text = text[:maxw - 5] + '..' + text[-3:]
+                else:
+                    text = ""
+
+                layout.label(text="Annotation:")
+                gpl = context.active_gpencil_layer
+                if gpl is not None:
+                    sub = layout.row(align=True)
+                    sub.ui_units_x = 8
+
+                    sub.prop(gpl, "color", text="")
+                    sub.popover(
+                        panel="TOPBAR_PT_annotation_layers",
+                        text=text,
+                    )
+
+            tool_settings = context.tool_settings
+            space_type = tool.space_type
+            if space_type == 'VIEW_3D':
+                layout.separator()
+
+                row = layout.row(align=True)
+                row.prop(tool_settings, "annotation_stroke_placement_view3d", text="Placement")
+                if tool_settings.gpencil_stroke_placement_view3d == 'CURSOR':
+                    row.prop(tool_settings.gpencil_sculpt, "lockaxis")
+                elif tool_settings.gpencil_stroke_placement_view3d in {'SURFACE', 'STROKE'}:
+                    row.prop(tool_settings, "use_gpencil_stroke_endpoints")
+
+        @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+        def scribble(*, draw_settings):
+            return dict(
+                text="Annotate",
+                icon="ops.gpencil.draw",
+                cursor='PAINT_BRUSH',
+                keymap=(
+                    ("gpencil.annotate",
+                     dict(mode='DRAW', wait_for_input=False),
+                     dict(type='ACTIONMOUSE', value='PRESS')),
+                ),
+                draw_settings=draw_settings,
+            )
+
+        @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+        def line(*, draw_settings):
+            return dict(
+                text="Annotate Line",
+                icon="ops.gpencil.draw.line",
+                cursor='CROSSHAIR',
+                keymap=(
+                    ("gpencil.annotate",
+                     dict(mode='DRAW_STRAIGHT', wait_for_input=False),
+                     dict(type='EVT_TWEAK_A', value='ANY')),
+                ),
+                draw_settings=draw_settings,
+            )
+
+        @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+        def poly(*, draw_settings):
+            return dict(
+                text="Annotate Polygon",
+                icon="ops.gpencil.draw.poly",
+                cursor='CROSSHAIR',
+                keymap=(
+                    ("gpencil.annotate",
+                     dict(mode='DRAW_POLY', wait_for_input=False),
+                     dict(type='ACTIONMOUSE', value='PRESS')),
+                ),
+                draw_settings=draw_settings,
+            )
+
+        @ToolDef.from_fn
+        def eraser():
+            def draw_settings(context, layout, tool):
+                # TODO: Move this setting to tool_settings
+                user_prefs = context.user_preferences
+                layout.prop(user_prefs.edit, "grease_pencil_eraser_radius", text="Radius")
+            return dict(
+                text="Annotate Eraser",
+                icon="ops.gpencil.draw.eraser",
+                cursor='CROSSHAIR',  # XXX: Always show brush circle when enabled
+                keymap=(
+                    ("gpencil.annotate",
+                     dict(mode='ERASER', wait_for_input=False),
+                     dict(type='ACTIONMOUSE', value='PRESS')),
+                ),
+                draw_settings=draw_settings,
+            )
+
+    return _defs_annotate
+
+
+# Needed so annotation gets a keymap per space type.
+_defs_annotate_image = _defs_annotate_factory()
+_defs_annotate_view3d = _defs_annotate_factory()
+
+
+class _defs_transform:
+
+    @ToolDef.from_fn
+    def translate():
+        return dict(
+            text="Move",
+            # cursor='SCROLL_XY',
+            icon="ops.transform.translate",
+            widget="TRANSFORM_GGT_gizmo",
+            operator="transform.translate",
+            keymap=(
+                ("transform.translate", dict(release_confirm=True), dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def rotate():
+        return dict(
+            text="Rotate",
+            # cursor='SCROLL_XY',
+            icon="ops.transform.rotate",
+            widget="TRANSFORM_GGT_gizmo",
+            operator="transform.rotate",
+            keymap=(
+                ("transform.rotate", dict(release_confirm=True), dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def scale():
+        return dict(
+            text="Scale",
+            # cursor='SCROLL_XY',
+            icon="ops.transform.resize",
+            widget="TRANSFORM_GGT_gizmo",
+            operator="transform.resize",
+            keymap=(
+                ("transform.resize", dict(release_confirm=True), dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def scale_cage():
+        return dict(
+            text="Scale Cage",
+            icon="ops.transform.resize.cage",
+            widget="VIEW3D_GGT_xform_cage",
+            operator="transform.resize",
+        )
+
+    @ToolDef.from_fn
+    def transform():
+        def draw_settings(context, layout, tool):
+            layout.label(text="Gizmos:")
+            tool_settings = context.tool_settings
+            layout.prop(tool_settings, "use_gizmo_mode")
+
+            props = tool.gizmo_group_properties("TRANSFORM_GGT_gizmo")
+            layout.prop(props, "drag_action")
+
+        return dict(
+            text="Transform",
+            description=(
+                "Supports any combination of grab, rotate & scale at once"
+            ),
+            icon="ops.transform.transform",
+            widget="TRANSFORM_GGT_gizmo",
+            keymap=(
+                ("transform.from_gizmo", dict(), dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+
+class _defs_view3d_select:
+
+    @ToolDef.from_fn
+    def border():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("view3d.select_box")
+            layout.prop(props, "mode", expand=True)
+        return dict(
+            text="Select Box",
+            icon="ops.generic.select_box",
+            widget=None,
+            keymap=(
+                ("view3d.select_box",
+                 dict(mode='ADD'),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+                ("view3d.select_box",
+                 dict(mode='SUB'),
+                 dict(type='EVT_TWEAK_A', value='ANY', ctrl=True)),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def circle():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("view3d.select_circle")
+            layout.prop(props, "radius")
+
+        def draw_cursor(context, tool, xy):
+            from gpu_extras.presets import draw_circle_2d
+            props = tool.operator_properties("view3d.select_circle")
+            radius = props.radius
+            draw_circle_2d(xy, (1.0,) * 4, radius, 32)
+
+        return dict(
+            text="Select Circle",
+            icon="ops.generic.select_circle",
+            widget=None,
+            keymap=(
+                ("view3d.select_circle",
+                 dict(deselect=False),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+                ("view3d.select_circle",
+                 dict(deselect=True),
+                 dict(type='ACTIONMOUSE', value='PRESS', ctrl=True)),
+            ),
+            draw_settings=draw_settings,
+            draw_cursor=draw_cursor,
+        )
+
+    @ToolDef.from_fn
+    def lasso():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("view3d.select_lasso")
+            layout.prop(props, "mode", expand=True)
+        return dict(
+            text="Select Lasso",
+            icon="ops.generic.select_lasso",
+            widget=None,
+            keymap=(
+                ("view3d.select_lasso",
+                 dict(mode='ADD'),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+                ("view3d.select_lasso",
+                 dict(mode='SUB'),
+                 dict(type='EVT_TWEAK_A', value='ANY', ctrl=True)),
+            ),
+            draw_settings=draw_settings,
+        )
+# -----------------------------------------------------------------------------
+# Object Modes (named based on context.mode)
+
+
+class _defs_edit_armature:
+
+    @ToolDef.from_fn
+    def roll():
+        return dict(
+            text="Roll",
+            icon="ops.armature.bone.roll",
+            widget=None,
+            keymap=(
                 ("transform.transform",
                  dict(release_confirm=True, mode='BONE_ROLL'),
-                 dict(type='EVT_TWEAK_A', value='ANY')),
-            )),
-            None,
-            ("Extrude Cursor", None,
-             (("armature.click_extrude", dict(), dict(type='ACTIONMOUSE', value='PRESS')),)),
-        ],
-        'EDIT_MESH': [
-            *_tools_transform,
-            None,
-            ("Rip Region", None, (
-                ("mesh.rip_move", dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
-                 dict(type='ACTIONMOUSE', value='PRESS')),
-            )),
-            ("Rip Edge", None, (
-                ("mesh.rip_edge_move", dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
-                 dict(type='ACTIONMOUSE', value='PRESS')),
-            )),
+                 dict(type='EVT_TWEAK_A', value='ANY'),),
+            ),
+        )
 
-            ("Poly Build", None, (
+    @ToolDef.from_fn
+    def bone_envelope():
+        return dict(
+            text="Bone Envelope",
+            icon="ops.transform.bone_envelope",
+            widget=None,
+            keymap=(
+                ("transform.transform",
+                 dict(release_confirm=True, mode='BONE_ENVELOPE'),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def bone_size():
+        return dict(
+            text="Bone Size",
+            icon="ops.transform.bone_size",
+            widget=None,
+            keymap=(
+                ("transform.transform",
+                 dict(release_confirm=True, mode='BONE_SIZE'),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def extrude():
+        return dict(
+            text="Extrude",
+            icon="ops.armature.extrude_move",
+            widget=None,
+            keymap=(
+                ("armature.extrude_move",
+                 dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def extrude_cursor():
+        return dict(
+            text="Extrude to Cursor",
+            icon="ops.armature.extrude_cursor",
+            widget=None,
+            keymap=(
+                ("armature.click_extrude", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+
+class _defs_edit_mesh:
+
+    @ToolDef.from_fn
+    def cube_add():
+        return dict(
+            text="Add Cube",
+            icon="ops.mesh.primitive_cube_add_gizmo",
+            widget=None,
+            keymap=(
+                ("view3d.cursor3d", dict(), dict(type='ACTIONMOUSE', value='CLICK')),
+                ("mesh.primitive_cube_add_gizmo", dict(), dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def rip_region():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.rip_move")
+            props_macro = props.MESH_OT_rip
+            layout.prop(props_macro, "use_fill")
+
+        return dict(
+            text="Rip Region",
+            icon="ops.mesh.rip",
+            widget=None,
+            keymap=(
+                ("mesh.rip_move",
+                 dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def rip_edge():
+        return dict(
+            text="Rip Edge",
+            icon="ops.mesh.rip_edge",
+            widget=None,
+            keymap=(
+                ("mesh.rip_edge_move",
+                 dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def poly_build():
+        return dict(
+            text="Poly Build",
+            icon="ops.mesh.polybuild_hover",
+            widget="VIEW3D_GGT_mesh_preselect_elem",
+            keymap=(
                 ("mesh.polybuild_face_at_cursor_move",
                  dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
                  dict(type='ACTIONMOUSE', value='PRESS')),
@@ -126,43 +501,1354 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
                  dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
                  dict(type='ACTIONMOUSE', value='PRESS', ctrl=True)),
                 ("mesh.polybuild_dissolve_at_cursor", dict(), dict(type='ACTIONMOUSE', value='CLICK', alt=True)),
-                ("mesh.polybuild_hover", dict(use_boundary=False), dict(type='MOUSEMOVE', value='ANY', alt=True)),
-                ("mesh.polybuild_hover", dict(use_boundary=True), dict(type='MOUSEMOVE', value='ANY', any=True)),
-            )),
-
-            # Knife Group
-            (
-                ("Knife", None, (
-                    ("mesh.knife_tool",
-                     dict(wait_for_input=False, use_occlude_geometry=True, only_selected=False),
-                     dict(type='ACTIONMOUSE', value='PRESS')),)),
-                ("Knife (Selected)", None, (
-                    ("mesh.knife_tool",
-                     dict(wait_for_input=False, use_occlude_geometry=False, only_selected=True),
-                     dict(type='ACTIONMOUSE', value='PRESS')),)),
-                None,
-                ("Bisect", None, (
-                    ("mesh.bisect",
-                     dict(),
-                     dict(type='EVT_TWEAK_A', value='ANY')),)),
             ),
-            # End group.
-            ("Extrude Cursor", None,
-             (("mesh.dupli_extrude_cursor", dict(), dict(type='ACTIONMOUSE', value='PRESS')),)),
+        )
+
+    @ToolDef.from_fn
+    def edge_slide():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("transform.edge_slide")
+            layout.prop(props, "correct_uv")
+
+        return dict(
+            text="Edge Slide",
+            icon="ops.transform.edge_slide",
+            widget=None,
+            keymap=(
+                ("transform.edge_slide", dict(release_confirm=True),
+                 dict(type='ACTIONMOUSE', value='PRESS')
+                 ),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def vert_slide():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("transform.vert_slide")
+            layout.prop(props, "correct_uv")
+
+        return dict(
+            text="Vertex Slide",
+            icon="ops.transform.vert_slide",
+            widget=None,
+            keymap=(
+                ("transform.vert_slide", dict(release_confirm=True),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def spin():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.spin")
+            layout.prop(props, "steps")
+            props = tool.gizmo_group_properties("MESH_GGT_spin")
+            layout.prop(props, "axis")
+
+        return dict(
+            text="Spin",
+            icon="ops.mesh.spin",
+            widget="MESH_GGT_spin",
+            keymap=(
+                ("mesh.spin", dict(),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def spin_duplicate():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.spin")
+            layout.prop(props, "steps")
+            props = tool.gizmo_group_properties("MESH_GGT_spin")
+            layout.prop(props, "axis")
+
+        return dict(
+            text="Spin (Duplicate)",
+            icon="ops.mesh.spin.duplicate",
+            widget="MESH_GGT_spin",
+            keymap=(
+                ("mesh.spin", dict(dupli=True),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def inset():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.inset")
+            layout.prop(props, "use_outset")
+            layout.prop(props, "use_individual")
+            layout.prop(props, "use_even_offset")
+            layout.prop(props, "use_relative_offset")
+
+        return dict(
+            text="Inset Faces",
+            icon="ops.mesh.inset",
+            widget=None,
+            keymap=(
+                ("mesh.inset", dict(release_confirm=True),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def bevel():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.bevel")
+            layout.prop(props, "offset_type")
+            layout.prop(props, "segments")
+            layout.prop(props, "profile", slider=True)
+            layout.prop(props, "vertex_only")
+
+        return dict(
+            text="Bevel",
+            icon="ops.mesh.bevel",
+            widget=None,
+            keymap=(
+                ("mesh.bevel", dict(release_confirm=True),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def extrude():
+        def draw_settings(context, layout, tool):
+            props = tool.gizmo_group_properties("MESH_GGT_extrude")
+            layout.prop(props, "axis_type", expand=True)
+        return dict(
+            text="Extrude Region",
+            # The operator description isn't useful in this case, give our own.
+            description=(
+                "Extrude freely or along an axis"
+            ),
+            icon="ops.mesh.extrude_region_move",
+            widget="MESH_GGT_extrude",
+            # Important to use same operator as 'E' key.
+            operator="view3d.edit_mesh_extrude_move_normal",
+            keymap=(
+                ("mesh.extrude_context_move",
+                 dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def extrude_normals():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.extrude_region_shrink_fatten")
+            props_macro = props.TRANSFORM_OT_shrink_fatten
+            layout.prop(props_macro, "use_even_offset")
+        return dict(
+            text="Extrude Along Normals",
+            icon="ops.mesh.extrude_region_shrink_fatten",
+            widget=None,
+            operator="mesh.extrude_region_shrink_fatten",
+            keymap=(
+                ("mesh.extrude_region_shrink_fatten",
+                 dict(TRANSFORM_OT_shrink_fatten=dict(release_confirm=True)),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def extrude_individual():
+        return dict(
+            text="Extrude Individual",
+            icon="ops.mesh.extrude_faces_move",
+            widget=None,
+            keymap=(
+                ("mesh.extrude_faces_move", dict(TRANSFORM_OT_shrink_fatten=dict(release_confirm=True)),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def extrude_cursor():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.dupli_extrude_cursor")
+            layout.prop(props, "rotate_source")
+
+        return dict(
+            text="Extrude to Cursor",
+            icon="ops.mesh.dupli_extrude_cursor",
+            widget=None,
+            keymap=(
+                ("mesh.dupli_extrude_cursor", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def loopcut_slide():
+
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.loopcut_slide")
+            props_macro = props.MESH_OT_loopcut
+            layout.prop(props_macro, "number_cuts")
+            props_macro = props.TRANSFORM_OT_edge_slide
+            layout.prop(props_macro, "correct_uv")
+
+        return dict(
+            text="Loop Cut",
+            icon="ops.mesh.loopcut_slide",
+            widget="VIEW3D_GGT_mesh_preselect_edgering",
+            keymap=(
+                ("mesh.loopcut_slide",
+                 dict(TRANSFORM_OT_edge_slide=dict(release_confirm=True)),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def offset_edge_loops_slide():
+        return dict(
+            text="Offset Edge Loop Cut",
+            icon="ops.mesh.offset_edge_loops_slide",
+            widget=None,
+            keymap=(
+                ("mesh.offset_edge_loops_slide", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def vertex_smooth():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.vertices_smooth")
+            layout.prop(props, "repeat")
+        return dict(
+            text="Smooth",
+            icon="ops.mesh.vertices_smooth",
+            widget="WM_GGT_value_operator_redo",
+            keymap=(
+                # Use 0.0, so dragging increases from nothing.
+                ("mesh.vertices_smooth", dict(factor=0.0),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def vertex_randomize():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("transform.vertex_random")
+            layout.prop(props, "uniform")
+            layout.prop(props, "normal")
+            layout.prop(props, "seed")
+        return dict(
+            text="Randomize",
+            icon="ops.transform.vertex_random",
+            widget="WM_GGT_value_operator_redo",
+            keymap=(
+                # Use 0.0, so dragging increases from nothing.
+                ("transform.vertex_random", dict(offset=0.0),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def shear():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("transform.shear")
+            layout.label(text="View Axis:")
+            layout.prop(props, "shear_axis", expand=True)
+        return dict(
+            text="Shear",
+            icon="ops.transform.shear",
+            widget="VIEW3D_GGT_xform_shear",
+            keymap=(
+                ("transform.shear", dict(release_confirm=True),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def tosphere():
+        return dict(
+            text="To Sphere",
+            icon="ops.transform.tosphere",
+            widget=None,
+            keymap=(
+                ("transform.tosphere", dict(release_confirm=True),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def shrink_fatten():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("transform.shrink_fatten")
+            layout.prop(props, "use_even_offset")
+
+        return dict(
+            text="Shrink/Fatten",
+            icon="ops.transform.shrink_fatten",
+            widget=None,
+            keymap=(
+                ("transform.shrink_fatten", dict(release_confirm=True),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def push_pull():
+        return dict(
+            text="Push/Pull",
+            icon="ops.transform.push_pull",
+            widget=None,
+            keymap=(
+                ("transform.push_pull", dict(release_confirm=True),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def knife():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.knife_tool")
+            layout.prop(props, "use_occlude_geometry")
+            layout.prop(props, "only_selected")
+
+        return dict(
+            text="Knife",
+            icon="ops.mesh.knife_tool",
+            widget=None,
+            keymap=(
+                ("mesh.knife_tool",
+                 dict(wait_for_input=False),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def bisect():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("mesh.bisect")
+            layout.prop(props, "use_fill")
+            layout.prop(props, "clear_inner")
+            layout.prop(props, "clear_outer")
+            layout.prop(props, "threshold")
+        return dict(
+            text="Bisect",
+            icon="ops.mesh.bisect",
+            widget=None,
+            keymap=(
+                ("mesh.bisect",
+                 dict(),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+
+class _defs_edit_curve:
+
+    @ToolDef.from_fn
+    def draw():
+        def draw_settings(context, layout, tool):
+            # Tool settings initialize operator options.
+            tool_settings = context.tool_settings
+            cps = tool_settings.curve_paint_settings
+
+            col = layout.row()
+
+            col.prop(cps, "curve_type")
+
+            if cps.curve_type == 'BEZIER':
+                col.prop(cps, "error_threshold")
+                col.prop(cps, "fit_method")
+                col.prop(cps, "use_corners_detect")
+
+                col = layout.row()
+                col.active = cps.use_corners_detect
+                col.prop(cps, "corner_angle")
+
+        return dict(
+            text="Draw",
+            cursor='PAINT_BRUSH',
+            icon="ops.curve.draw",
+            widget=None,
+            keymap=(
+                ("curve.draw", dict(wait_for_input=False), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def extrude():
+        return dict(
+            text="Extrude",
+            icon="ops.curve.extrude_move",
+            widget=None,
+            keymap=(
+                ("curve.extrude_move",
+                 dict(TRANSFORM_OT_translate=dict(release_confirm=True)),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def extrude_cursor():
+        return dict(
+            text="Extrude Cursor",
+            icon="ops.curve.extrude_cursor",
+            widget=None,
+            keymap=(
+                ("curve.vertex_add", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+
+class _defs_pose:
+
+    @ToolDef.from_fn
+    def breakdown():
+        return dict(
+            text="Breakdowner",
+            icon="ops.pose.breakdowner",
+            widget=None,
+            keymap=(
+                ("pose.breakdown", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def push():
+        return dict(
+            text="Push",
+            icon="ops.pose.push",
+            widget=None,
+            keymap=(
+                ("pose.push", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def relax():
+        return dict(
+            text="Relax",
+            icon="ops.pose.relax",
+            widget=None,
+            keymap=(
+                ("pose.relax", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+
+class _defs_particle:
+
+    @staticmethod
+    def generate_from_brushes(context):
+        return generate_from_enum_ex(
+            context,
+            icon_prefix="brush.particle.",
+            type=bpy.types.ParticleEdit,
+            attr="tool",
+        )
+
+
+class _defs_sculpt:
+
+    @staticmethod
+    def generate_from_brushes(context):
+        return generate_from_enum_ex(
+            context,
+            icon_prefix="brush.sculpt.",
+            type=bpy.types.Brush,
+            attr="sculpt_tool",
+        )
+
+    @ToolDef.from_fn
+    def hide_border():
+        return dict(
+            text="Box Hide",
+            icon="ops.sculpt.border_hide",
+            widget=None,
+            keymap=(
+                ("paint.hide_show", dict(action='HIDE'), dict(type='EVT_TWEAK_A', value='ANY')),
+                ("paint.hide_show", dict(action='SHOW'), dict(type='EVT_TWEAK_A', value='ANY', ctrl=True)),
+                ("paint.hide_show", dict(action='SHOW', area='ALL'), dict(type='SELECTMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def mask_border():
+        return dict(
+            text="Box Mask",
+            icon="ops.sculpt.border_mask",
+            widget=None,
+            keymap=(
+                ("view3d.select_box", dict(mode='ADD'), dict(type='EVT_TWEAK_A', value='ANY')),
+                ("view3d.select_box", dict(mode='SUB'), dict(type='EVT_TWEAK_A', value='ANY', ctrl=True)),
+            ),
+        )
+
+
+class _defs_vertex_paint:
+
+    @staticmethod
+    def poll_select_mask(context):
+        ob = context.active_object
+        return ob.type == 'MESH' and ob.data.use_paint_mask
+
+    @staticmethod
+    def generate_from_brushes(context):
+        return generate_from_enum_ex(
+            context,
+            icon_prefix="brush.paint_vertex.",
+            type=bpy.types.Brush,
+            attr="vertex_tool",
+        )
+
+class _defs_texture_paint:
+
+    @staticmethod
+    def generate_from_brushes(context):
+        return generate_from_enum_ex(
+            context,
+            icon_prefix="brush.paint_texture.",
+            type=bpy.types.Brush,
+            attr="image_tool",
+        )
+
+
+class _defs_weight_paint:
+
+    @staticmethod
+    def poll_select_mask(context):
+        ob = context.active_object
+        return (ob.type == 'MESH' and
+                (ob.data.use_paint_mask or
+                 ob.data.use_paint_mask_vertex))
+
+    @staticmethod
+    def generate_from_brushes(context):
+        return generate_from_enum_ex(
+            context,
+            icon_prefix="brush.paint_weight.",
+            type=bpy.types.Brush,
+            attr="weight_tool",
+        )
+
+    @ToolDef.from_fn
+    def sample_weight():
+        return dict(
+            text="Sample Weight",
+            icon="ops.paint.weight_sample",
+            widget=None,
+            keymap=(
+                ("paint.weight_sample", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def sample_weight_group():
+        return dict(
+            text="Sample Vertex Group",
+            icon="ops.paint.weight_sample_group",
+            widget=None,
+            keymap=(
+                ("paint.weight_sample_group", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def gradient():
+        def draw_settings(context, layout, tool):
+            brush = context.tool_settings.weight_paint.brush
+            if brush is not None:
+                from .properties_paint_common import UnifiedPaintPanel
+                UnifiedPaintPanel.prop_unified_weight(layout, context, brush, "weight", slider=True, text="Weight")
+            props = tool.operator_properties("paint.weight_gradient")
+            layout.prop(props, "type")
+
+        return dict(
+            text="Gradient",
+            icon="ops.paint.weight_gradient",
+            widget=None,
+            keymap=(
+                ("paint.weight_gradient", dict(), dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+
+class _defs_image_generic:
+
+    @staticmethod
+    def poll_uvedit(context):
+        ob = context.edit_object
+        if ob is not None:
+            data = ob.data
+            if data is not None:
+                return bool(getattr(data, "uv_layers", False))
+        return False
+
+    @ToolDef.from_fn
+    def cursor():
+        return dict(
+            text="Cursor",
+            description=(
+                "Set the cursor location, drag to transform"
+            ),
+            icon="ops.generic.cursor",
+            keymap=(
+                ("uv.cursor_set", dict(), dict(type='ACTIONMOUSE', value='PRESS')),
+                ("transform.translate",
+                 dict(release_confirm=True, cursor_transform=True),
+                 dict(type='EVT_TWEAK_A', value='ANY'),
+                 ),
+            ),
+        )
+
+
+class _defs_image_uv_transform:
+
+    @ToolDef.from_fn
+    def transform():
+        return dict(
+            text="Transform",
+            description=(
+                "Supports any combination of grab, rotate & scale at once"
+            ),
+            icon="ops.transform.transform",
+            widget="IMAGE_GGT_gizmo2d",
+            # No keymap default action, only for gizmo!
+        )
+
+
+class _defs_image_uv_select:
+
+    @ToolDef.from_fn
+    def border():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("uv.select_box")
+            layout.prop(props, "deselect")
+        return dict(
+            text="Select Box",
+            icon="ops.generic.select_box",
+            widget=None,
+            keymap=(
+                ("uv.select_box",
+                 dict(),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+                ("uv.select_box",
+                 dict(deselect=True),
+                 dict(type='EVT_TWEAK_A', value='ANY', ctrl=True)),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def circle():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("uv.select_circle")
+            layout.prop(props, "radius")
+        return dict(
+            text="Select Circle",
+            icon="ops.generic.select_circle",
+            widget=None,
+            keymap=(
+                ("uv.select_circle",
+                 dict(deselect=False),
+                 dict(type='ACTIONMOUSE', value='PRESS')),
+                ("uv.select_circle",
+                 dict(deselect=True),
+                 dict(type='ACTIONMOUSE', value='PRESS', ctrl=True)),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def lasso():
+        return dict(
+            text="Select Lasso",
+            icon="ops.generic.select_lasso",
+            widget=None,
+            keymap=(
+                ("uv.select_lasso",
+                 dict(deselect=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+                # ("uv.select_lasso",
+                #  dict(deselect=True),
+                #  dict(type='EVT_TWEAK_A', value='ANY', ctrl=True)),
+            ),
+        )
+
+
+class _defs_image_uv_sculpt:
+
+    @staticmethod
+    def generate_from_brushes(context):
+        return generate_from_enum_ex(
+            context,
+            icon_prefix="brush.uv_sculpt.",
+            data=context.tool_settings,
+            attr="uv_sculpt_tool",
+        )
+
+
+class _defs_gpencil_paint:
+
+    @staticmethod
+    def generate_from_brushes(context):
+        return generate_from_enum_ex(
+            context,
+            icon_prefix="brush.gpencil_draw.",
+            type=bpy.types.Brush,
+            attr="gpencil_tool",
+            tooldef_keywords=dict(
+                operator="gpencil.draw",
+            ),
+        )
+
+
+class _defs_gpencil_edit:
+    @ToolDef.from_fn
+    def bend():
+        return dict(
+            text="Bend",
+            icon="ops.gpencil.edit_bend",
+            widget=None,
+            keymap=(
+                ("transform.bend",
+                 dict(release_confirm=True),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def box_select():
+        return dict(
+            text="Select Box",
+            icon="ops.generic.select_box",
+            widget=None,
+            keymap=(
+                ("gpencil.select_box",
+                 dict(),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def circle_select():
+        return dict(
+            text="Select Circle",
+            icon="ops.generic.select_circle",
+            widget=None,
+            keymap=(
+                ("gpencil.select_circle",
+                 dict(),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def lasso_select():
+        return dict(
+            text="Select Lasso",
+            icon="ops.generic.select_lasso",
+            widget=None,
+            keymap=(
+                ("gpencil.select_lasso",
+                 dict(),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def shear():
+        return dict(
+            text="Shear",
+            icon="ops.gpencil.edit_shear",
+            widget=None,
+            keymap=(
+                ("transform.shear",
+                 dict(release_confirm=True),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+    @ToolDef.from_fn
+    def tosphere():
+        return dict(
+            text="To Sphere",
+            icon="ops.transform.tosphere",
+            widget=None,
+            keymap=(
+                ("transform.tosphere",
+                 dict(release_confirm=True),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+        )
+
+
+class _defs_gpencil_sculpt:
+
+    def draw_settings_common(context, layout, tool):
+        ob = context.active_object
+        if ob and ob.mode == 'GPENCIL_SCULPT':
+            tool_settings = context.tool_settings
+            settings = tool_settings.gpencil_sculpt
+            tool = settings.tool
+            brush = settings.brush
+
+            layout.prop(brush, "size", slider=True)
+
+            row = layout.row(align=True)
+            row.prop(brush, "strength", slider=True)
+            row.prop(brush, "use_pressure_strength", text="")
+
+            if tool in {'THICKNESS', 'STRENGTH', 'PINCH', 'TWIST'}:
+                row.separator()
+                row.prop(brush, "direction", expand=True, text="")
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def smooth(*, draw_settings):
+        return dict(
+            text="Smooth",
+            icon="ops.gpencil.sculpt_smooth",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='SMOOTH', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def thickness(*, draw_settings):
+        return dict(
+            text="Thickness",
+            icon="ops.gpencil.sculpt_thickness",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='THICKNESS', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def strength(*, draw_settings):
+        return dict(
+            text="Strength",
+            icon="ops.gpencil.sculpt_strength",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='STRENGTH', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def grab(*, draw_settings):
+        return dict(
+            text="Grab",
+            icon="ops.gpencil.sculpt_grab",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='GRAB', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def push(*, draw_settings):
+        return dict(
+            text="Push",
+            icon="ops.gpencil.sculpt_push",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='PUSH', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def twist(*, draw_settings):
+        return dict(
+            text="Twist",
+            icon="ops.gpencil.sculpt_twist",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='TWIST', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def pinch(*, draw_settings):
+        return dict(
+            text="Pinch",
+            icon="ops.gpencil.sculpt_pinch",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='PINCH', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def randomize(*, draw_settings):
+        return dict(
+            text="Randomize",
+            icon="ops.gpencil.sculpt_randomize",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='RANDOMIZE', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def clone(*, draw_settings):
+        return dict(
+            text="Clone",
+            icon="ops.gpencil.sculpt_clone",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='CLONE', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+
+class _defs_gpencil_weight:
+
+    def draw_settings_common(context, layout, tool):
+        ob = context.active_object
+        if ob and ob.mode == 'GPENCIL_WEIGHT':
+            settings = context.tool_settings.gpencil_sculpt
+            brush = settings.brush
+
+            layout.prop(brush, "size", slider=True)
+
+            row = layout.row(align=True)
+            row.prop(brush, "strength", slider=True)
+            row.prop(brush, "use_pressure_strength", text="")
+
+    @ToolDef.from_fn.with_args(draw_settings=draw_settings_common)
+    def paint(*, draw_settings):
+        return dict(
+            text="Draw",
+            icon="ops.gpencil.sculpt_weight",
+            widget=None,
+            keymap=(
+                ("gpencil.brush_paint",
+                 dict(mode='WEIGHT', wait_for_input=False),
+                 dict(type='EVT_TWEAK_A', value='ANY')),
+            ),
+            draw_settings=draw_settings,
+        )
+
+
+class TOPBAR_PT_gpencil_materials(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'HEADER'
+    bl_label = "Materials"
+    bl_ui_units_x = 14
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.object
+        return ob and ob.type == 'GPENCIL'
+
+    @staticmethod
+    def draw(self, context):
+        layout = self.layout
+        ob = context.object
+
+        if ob:
+            is_sortable = len(ob.material_slots) > 1
+            rows = 1
+            if (is_sortable):
+                rows = 10
+
+            row = layout.row()
+
+            row.template_list("GPENCIL_UL_matslots", "", ob, "material_slots", ob, "active_material_index", rows=rows)
+
+            col = row.column(align=True)
+            col.menu("GPENCIL_MT_color_specials", icon='DOWNARROW_HLT', text="")
+
+            if is_sortable:
+                col.separator()
+
+                col.operator("object.material_slot_move", icon='TRIA_UP', text="").direction = 'UP'
+                col.operator("object.material_slot_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
+
+                col.separator()
+
+                sub = col.column(align=True)
+                sub.operator("gpencil.color_isolate", icon='LOCKED', text="").affect_visibility = False
+                sub.operator("gpencil.color_isolate", icon='HIDE_OFF', text="").affect_visibility = True
+
+
+class IMAGE_PT_tools_active(ToolSelectPanelHelper, Panel):
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'TOOLS'
+    bl_label = "Tools"  # not visible
+    bl_options = {'HIDE_HEADER'}
+
+    # Satisfy the 'ToolSelectPanelHelper' API.
+    keymap_prefix = "Image Editor Tool:"
+
+    @classmethod
+    def tools_from_context(cls, context, mode=None):
+        if mode is None:
+            if context.space_data is None:
+                mode = 'VIEW'
+            else:
+                mode = context.space_data.mode
+        for tools in (cls._tools[None], cls._tools.get(mode, ())):
+            for item in tools:
+                if not (type(item) is ToolDef) and callable(item):
+                    yield from item(context)
+                else:
+                    yield item
+
+    @classmethod
+    def tools_all(cls):
+        yield from cls._tools.items()
+
+    # for reuse
+    _tools_transform = (
+        _defs_image_uv_transform.transform,
+    )
+
+    _tools_select = (
+        (
+            _defs_image_uv_select.border,
+            _defs_image_uv_select.circle,
+            _defs_image_uv_select.lasso,
+        ),
+    )
+
+    _tools_annotate = (
+        (
+            _defs_annotate_image.scribble,
+            _defs_annotate_image.line,
+            _defs_annotate_image.poly,
+            _defs_annotate_image.eraser,
+        ),
+    )
+
+    _tools = {
+        None: [
+            # for all modes
         ],
-        'EDIT_CURVE': [
+        'VIEW': [
+        ],
+        'UV': [
+            _defs_image_generic.cursor,
+            *_tools_select,
+            None,
             *_tools_transform,
             None,
-            ("Draw", None,
-             (("curve.draw", dict(wait_for_input=False), dict(type='ACTIONMOUSE', value='PRESS')),)),
-            ("Extrude Cursor", None,
-             (("curve.vertex_add", dict(), dict(type='ACTIONMOUSE', value='PRESS')),)),
+            *_tools_annotate,
+            None,
+            lambda context: (
+                _defs_image_uv_sculpt.generate_from_brushes(context)
+                if _defs_image_generic.poll_uvedit(context)
+                else ()
+            ),
+        ],
+        'MASK': [
+            None,
+        ],
+        'PAINT': [
+            _defs_texture_paint.generate_from_brushes,
         ],
     }
 
 
+class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'TOOLS'
+    bl_label = "Tools"  # not visible
+    bl_options = {'HIDE_HEADER'}
+
+    # Satisfy the 'ToolSelectPanelHelper' API.
+    keymap_prefix = "3D View Tool:"
+
+    @classmethod
+    def tools_from_context(cls, context, mode=None):
+        if mode is None:
+            mode = context.mode
+        for tools in (cls._tools[None], cls._tools.get(mode, ())):
+            for item in tools:
+                if not (type(item) is ToolDef) and callable(item):
+                    yield from item(context)
+                else:
+                    yield item
+
+    @classmethod
+    def tools_all(cls):
+        yield from cls._tools.items()
+
+    # for reuse
+    _tools_transform = (
+        _defs_transform.transform,
+        _defs_transform.translate,
+        _defs_transform.rotate,
+        (
+            _defs_transform.scale,
+            _defs_transform.scale_cage,
+        ),
+    )
+
+    _tools_select = (
+        (
+            _defs_view3d_select.border,
+            _defs_view3d_select.circle,
+            _defs_view3d_select.lasso,
+        ),
+    )
+
+    _tools_annotate = (
+        (
+            _defs_annotate_view3d.scribble,
+            _defs_annotate_view3d.line,
+            _defs_annotate_view3d.poly,
+            _defs_annotate_view3d.eraser,
+        ),
+        _defs_view3d_generic.ruler,
+    )
+
+    _tools_gpencil_select = (
+        (
+            _defs_gpencil_edit.box_select,
+            _defs_gpencil_edit.circle_select,
+            _defs_gpencil_edit.lasso_select,
+        ),
+    )
+
+    _tools = {
+        None: [
+            # Don't use this! because of paint modes.
+            # _defs_view3d_generic.cursor,
+            # End group.
+        ],
+        'OBJECT': [
+            _defs_view3d_generic.cursor,
+            *_tools_select,
+            None,
+            *_tools_transform,
+            None,
+            *_tools_annotate,
+        ],
+        'POSE': [
+            _defs_view3d_generic.cursor,
+            *_tools_select,
+            None,
+            *_tools_transform,
+            None,
+            *_tools_annotate,
+            None,
+            (
+                _defs_pose.breakdown,
+                _defs_pose.push,
+                _defs_pose.relax,
+            ),
+        ],
+        'EDIT_ARMATURE': [
+            _defs_view3d_generic.cursor,
+            *_tools_select,
+            None,
+            *_tools_transform,
+            None,
+            *_tools_annotate,
+            _defs_edit_armature.roll,
+            (
+                _defs_edit_armature.bone_size,
+                _defs_edit_armature.bone_envelope,
+            ),
+            None,
+            (
+                _defs_edit_armature.extrude,
+                _defs_edit_armature.extrude_cursor,
+            ),
+        ],
+        'EDIT_MESH': [
+            _defs_view3d_generic.cursor,
+            *_tools_select,
+            None,
+            *_tools_transform,
+            None,
+            *_tools_annotate,
+            None,
+            _defs_edit_mesh.cube_add,
+            None,
+            (
+                _defs_edit_mesh.extrude,
+                _defs_edit_mesh.extrude_normals,
+                _defs_edit_mesh.extrude_individual,
+                _defs_edit_mesh.extrude_cursor,
+            ),
+            _defs_edit_mesh.inset,
+            _defs_edit_mesh.bevel,
+            (
+                _defs_edit_mesh.loopcut_slide,
+                _defs_edit_mesh.offset_edge_loops_slide,
+            ),
+            (
+                _defs_edit_mesh.knife,
+                _defs_edit_mesh.bisect,
+            ),
+            _defs_edit_mesh.poly_build,
+            (
+                _defs_edit_mesh.spin,
+                _defs_edit_mesh.spin_duplicate,
+            ),
+            (
+                _defs_edit_mesh.vertex_smooth,
+                _defs_edit_mesh.vertex_randomize,
+            ),
+            (
+                _defs_edit_mesh.edge_slide,
+                _defs_edit_mesh.vert_slide,
+            ),
+            (
+                _defs_edit_mesh.shrink_fatten,
+                _defs_edit_mesh.push_pull,
+            ),
+            (
+                _defs_edit_mesh.shear,
+                _defs_edit_mesh.tosphere,
+            ),
+            (
+                _defs_edit_mesh.rip_region,
+                _defs_edit_mesh.rip_edge,
+            ),
+        ],
+        'EDIT_CURVE': [
+            _defs_view3d_generic.cursor,
+            *_tools_select,
+            None,
+            *_tools_transform,
+            None,
+            *_tools_annotate,
+            None,
+            _defs_edit_curve.draw,
+            (
+                _defs_edit_curve.extrude,
+                _defs_edit_curve.extrude_cursor,
+            )
+        ],
+        'PARTICLE': [
+            _defs_view3d_generic.cursor,
+            _defs_particle.generate_from_brushes,
+        ],
+        'SCULPT': [
+            _defs_sculpt.generate_from_brushes,
+            None,
+            _defs_sculpt.hide_border,
+            _defs_sculpt.mask_border,
+        ],
+        'PAINT_TEXTURE': [
+            _defs_texture_paint.generate_from_brushes,
+        ],
+        'PAINT_VERTEX': [
+            _defs_vertex_paint.generate_from_brushes,
+            None,
+            lambda context: (
+                VIEW3D_PT_tools_active._tools_select
+                if _defs_vertex_paint.poll_select_mask(context)
+                else ()
+            ),
+        ],
+        'PAINT_WEIGHT': [
+            # TODO, check for mixed pose mode
+            _defs_view3d_generic.cursor,
+            _defs_weight_paint.generate_from_brushes,
+            None,
+            _defs_weight_paint.sample_weight,
+            _defs_weight_paint.sample_weight_group,
+            None,
+            lambda context: (
+                VIEW3D_PT_tools_active._tools_select
+                if _defs_weight_paint.poll_select_mask(context)
+                else ()
+            ),
+            None,
+            _defs_weight_paint.gradient,
+        ],
+        'GPENCIL_PAINT': [
+            _defs_gpencil_paint.generate_from_brushes,
+        ],
+        'GPENCIL_EDIT': [
+            _defs_view3d_generic.cursor,
+            _defs_gpencil_edit.box_select,
+            _defs_gpencil_edit.circle_select,
+            _defs_gpencil_edit.lasso_select,
+            None,
+            *_tools_transform,
+            None,
+            _defs_gpencil_edit.bend,
+            _defs_gpencil_edit.shear,
+            _defs_gpencil_edit.tosphere,
+        ],
+        'GPENCIL_SCULPT': [
+            _defs_gpencil_sculpt.smooth,
+            _defs_gpencil_sculpt.thickness,
+            _defs_gpencil_sculpt.strength,
+            _defs_gpencil_sculpt.grab,
+            _defs_gpencil_sculpt.push,
+            _defs_gpencil_sculpt.twist,
+            _defs_gpencil_sculpt.pinch,
+            _defs_gpencil_sculpt.randomize,
+            _defs_gpencil_sculpt.clone,
+            None,
+            *_tools_gpencil_select,
+        ],
+        'GPENCIL_WEIGHT': [
+            _defs_gpencil_weight.paint,
+        ],
+    }
+
+
+class TOPBAR_PT_annotation_layers(Panel, AnnotationDataPanel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'HEADER'
+    bl_label = "Layers"
+    bl_ui_units_x = 14
+
+
 classes = (
+    IMAGE_PT_tools_active,
     VIEW3D_PT_tools_active,
+    TOPBAR_PT_gpencil_materials,
+    TOPBAR_PT_annotation_layers,
 )
 
 if __name__ == "__main__":  # only for live edit.

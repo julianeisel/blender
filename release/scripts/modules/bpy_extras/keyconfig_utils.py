@@ -18,12 +18,36 @@
 
 # <pep8 compliant>
 
+
+def _km_expand_from_toolsystem(space_type, context_mode):
+    def _fn():
+        from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
+        for cls in ToolSelectPanelHelper.__subclasses__():
+            if cls.bl_space_type == space_type:
+                return cls.keymap_ui_hierarchy(context_mode)
+        raise Exception("keymap not found")
+    return _fn
+
+
+def _km_hierarchy_iter_recursive(items):
+    for sub in items:
+        if callable(sub):
+            yield from sub()
+        else:
+            yield (*sub[:3], list(_km_hierarchy_iter_recursive(sub[3])))
+
+
+def km_hierarchy():
+    return list(_km_hierarchy_iter_recursive(_km_hierarchy))
+
+
 # bpy.type.KeyMap: (km.name, km.space_type, km.region_type, [...])
 
 #    ('Script', 'EMPTY', 'WINDOW', []),
 
 
-KM_HIERARCHY = [
+# Access via 'km_hierarchy'.
+_km_hierarchy = [
     ('Window', 'EMPTY', 'WINDOW', []),  # file save, window change, exit
     ('Screen', 'EMPTY', 'WINDOW', [     # full screen, undo, screenshot
         ('Screen Editing', 'EMPTY', 'WINDOW', []),    # re-sizing, action corners
@@ -36,26 +60,54 @@ KM_HIERARCHY = [
     ('User Interface', 'EMPTY', 'WINDOW', []),
 
     ('3D View', 'VIEW_3D', 'WINDOW', [  # view 3d navigation and generic stuff (select, transform)
-        ('Object Mode', 'EMPTY', 'WINDOW', []),
-        ('Mesh', 'EMPTY', 'WINDOW', []),
-        ('Curve', 'EMPTY', 'WINDOW', []),
-        ('Armature', 'EMPTY', 'WINDOW', []),
-        ('Metaball', 'EMPTY', 'WINDOW', []),
-        ('Lattice', 'EMPTY', 'WINDOW', []),
-        ('Font', 'EMPTY', 'WINDOW', []),
+        ('Object Mode', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'OBJECT'),
+        ]),
+        ('Mesh', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'EDIT_MESH'),
+        ]),
+        ('Curve', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'EDIT_CURVE'),
+        ]),
+        ('Armature', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'EDIT_ARMATURE'),
+        ]),
+        ('Metaball', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'EDIT_METABALL'),
+        ]),
+        ('Lattice', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'EDIT_LATTICE'),
+        ]),
+        ('Font', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'EDIT_TEXT'),
+        ]),
 
-        ('Pose', 'EMPTY', 'WINDOW', []),
+        ('Pose', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'POSE'),
+        ]),
 
-        ('Vertex Paint', 'EMPTY', 'WINDOW', []),
-        ('Weight Paint', 'EMPTY', 'WINDOW', []),
+        ('Vertex Paint', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'PAINT_VERTEX'),
+        ]),
+        ('Weight Paint', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'PAINT_WEIGHT'),
+        ]),
         ('Weight Paint Vertex Selection', 'EMPTY', 'WINDOW', []),
         ('Face Mask', 'EMPTY', 'WINDOW', []),
-        ('Image Paint', 'EMPTY', 'WINDOW', []),  # image and view3d
-        ('Sculpt', 'EMPTY', 'WINDOW', []),
+        # image and view3d
+        ('Image Paint', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'PAINT_TEXTURE'),
+        ]),
+        ('Sculpt', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'SCULPT'),
+        ]),
 
-        ('Particle', 'EMPTY', 'WINDOW', []),
+        ('Particle', 'EMPTY', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', 'PARTICLE'),
+        ]),
 
         ('Knife Tool Modal Map', 'EMPTY', 'WINDOW', []),
+        ('Custom Normals Modal Map', 'EMPTY', 'WINDOW', []),
         ('Paint Stroke Modal', 'EMPTY', 'WINDOW', []),
         ('Paint Curve', 'EMPTY', 'WINDOW', []),
 
@@ -68,7 +120,10 @@ KM_HIERARCHY = [
         ('View3D Zoom Modal', 'EMPTY', 'WINDOW', []),
         ('View3D Dolly Modal', 'EMPTY', 'WINDOW', []),
 
-        ('3D View Generic', 'VIEW_3D', 'WINDOW', []),    # toolbar and properties
+        # toolbar and properties
+        ('3D View Generic', 'VIEW_3D', 'WINDOW', [
+            _km_expand_from_toolsystem('VIEW_3D', None),
+        ]),
     ]),
 
     ('Graph Editor', 'GRAPH_EDITOR', 'WINDOW', [
@@ -87,7 +142,9 @@ KM_HIERARCHY = [
         ('UV Editor', 'EMPTY', 'WINDOW', []),  # image (reverse order, UVEdit before Image)
         ('Image Paint', 'EMPTY', 'WINDOW', []),  # image and view3d
         ('UV Sculpt', 'EMPTY', 'WINDOW', []),
-        ('Image Generic', 'IMAGE_EDITOR', 'WINDOW', []),
+        ('Image Generic', 'IMAGE_EDITOR', 'WINDOW', [
+            _km_expand_from_toolsystem('IMAGE_EDITOR', None),
+        ]),
     ]),
 
     ('Outliner', 'OUTLINER', 'WINDOW', []),
@@ -99,7 +156,6 @@ KM_HIERARCHY = [
         ('SequencerCommon', 'SEQUENCE_EDITOR', 'WINDOW', []),
         ('SequencerPreview', 'SEQUENCE_EDITOR', 'WINDOW', []),
     ]),
-    ('Logic Editor', 'LOGIC_EDITOR', 'WINDOW', []),
 
     ('File Browser', 'FILE_BROWSER', 'WINDOW', [
         ('File Browser Main', 'FILE_BROWSER', 'WINDOW', []),
@@ -122,6 +178,12 @@ KM_HIERARCHY = [
 
     ('Grease Pencil', 'EMPTY', 'WINDOW', [  # grease pencil stuff (per region)
         ('Grease Pencil Stroke Edit Mode', 'EMPTY', 'WINDOW', []),
+        ('Grease Pencil Stroke Paint (Draw brush)', 'EMPTY', 'WINDOW', []),
+        ('Grease Pencil Stroke Paint (Fill)', 'EMPTY', 'WINDOW', []),
+        ('Grease Pencil Stroke Paint (Erase)', 'EMPTY', 'WINDOW', []),
+        ('Grease Pencil Stroke Paint Mode', 'EMPTY', 'WINDOW', []),
+        ('Grease Pencil Stroke Sculpt Mode', 'EMPTY', 'WINDOW', []),
+        ('Grease Pencil Stroke Weight Mode', 'EMPTY', 'WINDOW', []),
     ]),
     ('Mask Editing', 'EMPTY', 'WINDOW', []),
     ('Frames', 'EMPTY', 'WINDOW', []),    # frame navigation (per region)
@@ -132,7 +194,7 @@ KM_HIERARCHY = [
     ('View3D Gesture Circle', 'EMPTY', 'WINDOW', []),
     ('Gesture Straight Line', 'EMPTY', 'WINDOW', []),
     ('Gesture Zoom Border', 'EMPTY', 'WINDOW', []),
-    ('Gesture Border', 'EMPTY', 'WINDOW', []),
+    ('Gesture Box', 'EMPTY', 'WINDOW', []),
 
     ('Standard Modal Map', 'EMPTY', 'WINDOW', []),
     ('Transform Modal Map', 'EMPTY', 'WINDOW', []),
@@ -177,8 +239,8 @@ def addon_keymap_register(wm, keymaps_description):
     for km_info, km_items in keymaps_description:
         km_name, km_sptype, km_regtype, km_ismodal = km_info
         kmap = [k for k in kconf.keymaps
-                  if k.name == km_name and k.region_type == km_regtype and
-                     k.space_type == km_sptype and k.is_modal == km_ismodal]
+                if k.name == km_name and k.region_type == km_regtype and
+                k.space_type == km_sptype and k.is_modal == km_ismodal]
         if kmap:
             kmap = kmap[0]
         else:
@@ -202,8 +264,8 @@ def addon_keymap_unregister(wm, keymaps_description):
         for km_info, km_items in keymaps_description:
             km_name, km_sptype, km_regtype, km_ismodal = km_info
             kmaps = (k for k in kconf.keymaps
-                       if k.name == km_name and k.region_type == km_regtype and
-                          k.space_type == km_sptype and k.is_modal == km_ismodal)
+                     if k.name == km_name and k.region_type == km_regtype and
+                     k.space_type == km_sptype and k.is_modal == km_ismodal)
             for kmap in kmaps:
                 for kmi_kwargs, props in km_items:
                     idname = kmi_kwargs["idname"]
@@ -240,9 +302,9 @@ def _export_properties(prefix, properties, kmi_id, lines=None):
         lines = []
 
     def string_value(value):
-        if isinstance(value, str) or isinstance(value, bool) or isinstance(value, float) or isinstance(value, int):
+        if isinstance(value, (str, bool, float, int)):
             return repr(value)
-        elif getattr(value, '__len__', False):
+        elif hasattr(value, "__len__"):
             return repr(list(value))
 
         print("Export key configuration: can't write ", value)
@@ -296,8 +358,10 @@ def _kmistr(kmi, is_modal):
     return "".join(s)
 
 
-def keyconfig_export(wm, kc, filepath):
-
+def keyconfig_export(
+        wm, kc, filepath, *,
+        all_keymaps=False,
+):
     f = open(filepath, "w")
 
     f.write("import bpy\n")
@@ -327,7 +391,7 @@ def keyconfig_export(wm, kc, filepath):
         keymaps = []
     edited_kc = FakeKeyConfig()
     for km in wm.keyconfigs.user.keymaps:
-        if km.is_user_modified:
+        if all_keymaps or km.is_user_modified:
             edited_kc.keymaps.append(km)
     # merge edited keymaps with non-default keyconfig, if it exists
     if kc != wm.keyconfigs.default:
@@ -402,7 +466,15 @@ def keyconfig_test(kc):
     # Function body
 
     result = False
-    for entry in KM_HIERARCHY:
+    for entry in km_hierarchy():
         if testEntry(kc, entry):
             result = True
     return result
+
+
+# Note, we may eventually replace existing logic with this
+# so key configs are always data.
+from .keyconfig_utils_experimental import (
+    keyconfig_export_as_data,
+    keyconfig_import_from_data,
+)

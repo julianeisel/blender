@@ -60,8 +60,9 @@ vec2 get_ao_dir(float jitter)
 
 void get_max_horizon_grouped(vec4 co1, vec4 co2, vec3 x, float lod, inout float h)
 {
-	co1 *= mipRatio[int(lod + 1.0)].xyxy; /* +1 because we are using half res top level */
-	co2 *= mipRatio[int(lod + 1.0)].xyxy; /* +1 because we are using half res top level */
+	int mip = int(lod) + hizMipOffset;
+	co1 *= mipRatio[mip].xyxy;
+	co2 *= mipRatio[mip].xyxy;
 
 	float depth1 = textureLod(maxzBuffer, co1.xy, floor(lod)).r;
 	float depth2 = textureLod(maxzBuffer, co1.zw, floor(lod)).r;
@@ -184,7 +185,8 @@ void integrate_slice(vec3 normal, vec2 t_phi, vec2 horizons, inout float visibil
 	bent_normal += vec3(sin(b_angle) * -t_phi, cos(b_angle) * 0.5);
 }
 
-void gtao_deferred(vec3 normal, vec3 position, vec4 noise, float frag_depth, out float visibility, out vec3 bent_normal)
+void gtao_deferred(
+        vec3 normal, vec3 position, vec4 noise, float frag_depth, out float visibility, out vec3 bent_normal)
 {
 	/* Fetch early, hide latency! */
 	vec4 horizons = texelFetch(horizonBuffer, ivec2(gl_FragCoord.xy), 0);
@@ -245,7 +247,7 @@ float gtao_multibounce(float visibility, vec3 albedo)
 float occlusion_compute(vec3 N, vec3 vpos, float user_occlusion, vec4 rand, out vec3 bent_normal)
 {
 #ifndef USE_REFRACTION
-	if ((int(aoSettings) & USE_AO) > 0) {
+	if ((int(aoSettings) & USE_AO) != 0) {
 		float visibility;
 		vec3 vnor = mat3(ViewMatrix) * N;
 

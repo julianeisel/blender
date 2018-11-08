@@ -48,6 +48,7 @@ public:
 	BoundBox bounds;
 	uint random_id;
 	int pass_id;
+	ustring asset_name;
 	vector<ParamValue> attributes;
 	uint visibility;
 	array<Transform> motion;
@@ -115,6 +116,9 @@ public:
 
 	void apply_static_transforms(DeviceScene *dscene, Scene *scene, Progress& progress);
 
+	string get_cryptomatte_objects(Scene *scene);
+	string get_cryptomatte_assets(Scene *scene);
+
 protected:
 	void device_update_object_transform(UpdateObjectTransformState *state,
 	                                    Object *ob,
@@ -129,4 +133,3 @@ protected:
 CCL_NAMESPACE_END
 
 #endif /* __OBJECT_H__ */
-

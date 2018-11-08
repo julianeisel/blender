@@ -22,25 +22,43 @@
  *  \ingroup edcurve
  */
 
+#include "MEM_guardedalloc.h"
+
+#include "CLG_log.h"
+
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_anim_types.h"
 
-#include "MEM_guardedalloc.h"
-
 #include "BLI_blenlib.h"
 #include "BLI_ghash.h"
+#include "BLI_array_utils.h"
 
+#include "BKE_animsys.h"
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_fcurve.h"
-#include "BKE_library.h"
-#include "BKE_animsys.h"
+#include "BKE_layer.h"
+#include "BKE_undo_system.h"
 
+#include "DEG_depsgraph.h"
+
+#include "ED_object.h"
+#include "ED_undo.h"
 #include "ED_util.h"
 #include "ED_curve.h"
 
+#include "WM_types.h"
+#include "WM_api.h"
+
 #include "curve_intern.h"
+
+/** We only need this locally. */
+static CLG_LogRef LOG = {"ed.undo.curve"};
+
+/* -------------------------------------------------------------------- */
+/** \name Undo Conversion
+ * \{ */
 
 typedef struct {
 	ListBase nubase;
@@ -49,13 +67,18 @@ typedef struct {
 	ListBase fcurves, drivers;
 	int actnu;
 	int flag;
+
+	/* Stored in the object, needed since users may change the active key while in edit-mode. */
+	struct {
+		short shapenr;
+	} obedit;
+
+	size_t undo_size;
 } UndoCurve;
 
-static void undoCurve_to_editCurve(void *ucu, void *UNUSED(edata), void *cu_v)
+static void undocurve_to_editcurve(UndoCurve *ucu, Curve *cu, short *r_shapenr)
 {
-	Curve *cu = cu_v;
-	UndoCurve *undoCurve = ucu;
-	ListBase *undobase = &undoCurve->nubase;
+	ListBase *undobase = &ucu->nubase;
 	ListBase *editbase = BKE_curve_editNurbs_get(cu);
 	Nurb *nu, *newnu;
 	EditNurb *editnurb = cu->editnurb;
@@ -63,19 +86,19 @@ static void undoCurve_to_editCurve(void *ucu, void *UNUSED(edata), void *cu_v)
 
 	BKE_nurbList_free(editbase);
 
-	if (undoCurve->undoIndex) {
+	if (ucu->undoIndex) {
 		BKE_curve_editNurb_keyIndex_free(&editnurb->keyindex);
-		editnurb->keyindex = ED_curve_keyindex_hash_duplicate(undoCurve->undoIndex);
+		editnurb->keyindex = ED_curve_keyindex_hash_duplicate(ucu->undoIndex);
 	}
 
 	if (ad) {
 		if (ad->action) {
 			free_fcurves(&ad->action->curves);
-			copy_fcurves(&ad->action->curves, &undoCurve->fcurves);
+			copy_fcurves(&ad->action->curves, &ucu->fcurves);
 		}
 
 		free_fcurves(&ad->drivers);
-		copy_fcurves(&ad->drivers, &undoCurve->drivers);
+		copy_fcurves(&ad->drivers, &ucu->drivers);
 	}
 
 	/* copy  */
@@ -89,75 +112,196 @@ static void undoCurve_to_editCurve(void *ucu, void *UNUSED(edata), void *cu_v)
 		BLI_addtail(editbase, newnu);
 	}
 
-	cu->actvert = undoCurve->actvert;
-	cu->actnu = undoCurve->actnu;
-	cu->flag = undoCurve->flag;
+	cu->actvert = ucu->actvert;
+	cu->actnu = ucu->actnu;
+	cu->flag = ucu->flag;
+	*r_shapenr = ucu->obedit.shapenr;
 	ED_curve_updateAnimPaths(cu);
 }
 
-static void *editCurve_to_undoCurve(void *UNUSED(edata), void *cu_v)
+static void undocurve_from_editcurve(UndoCurve *ucu, Curve *cu, const short shapenr)
 {
-	Curve *cu = cu_v;
+	BLI_assert(BLI_array_is_zeroed(ucu, 1));
 	ListBase *nubase = BKE_curve_editNurbs_get(cu);
-	UndoCurve *undoCurve;
 	EditNurb *editnurb = cu->editnurb, tmpEditnurb;
 	Nurb *nu, *newnu;
 	AnimData *ad = BKE_animdata_from_id(&cu->id);
 
-	undoCurve = MEM_callocN(sizeof(UndoCurve), "undoCurve");
+	/* TODO: include size of fcurve & undoIndex */
+	// ucu->undo_size = 0;
 
 	if (editnurb->keyindex) {
-		undoCurve->undoIndex = ED_curve_keyindex_hash_duplicate(editnurb->keyindex);
-		tmpEditnurb.keyindex = undoCurve->undoIndex;
+		ucu->undoIndex = ED_curve_keyindex_hash_duplicate(editnurb->keyindex);
+		tmpEditnurb.keyindex = ucu->undoIndex;
 	}
 
 	if (ad) {
 		if (ad->action)
-			copy_fcurves(&undoCurve->fcurves, &ad->action->curves);
+			copy_fcurves(&ucu->fcurves, &ad->action->curves);
 
-		copy_fcurves(&undoCurve->drivers, &ad->drivers);
+		copy_fcurves(&ucu->drivers, &ad->drivers);
 	}
 
 	/* copy  */
 	for (nu = nubase->first; nu; nu = nu->next) {
 		newnu = BKE_nurb_duplicate(nu);
 
-		if (undoCurve->undoIndex) {
+		if (ucu->undoIndex) {
 			ED_curve_keyindex_update_nurb(&tmpEditnurb, nu, newnu);
 		}
 
-		BLI_addtail(&undoCurve->nubase, newnu);
+		BLI_addtail(&ucu->nubase, newnu);
+
+		ucu->undo_size += (
+		        (nu->bezt ? (sizeof(BezTriple) * nu->pntsu) : 0) +
+		        (nu->bp ? (sizeof(BPoint) * (nu->pntsu * nu->pntsv)) : 0) +
+		        (nu->knotsu ? (sizeof(float) * KNOTSU(nu)) : 0) +
+		        (nu->knotsv ? (sizeof(float) * KNOTSV(nu)) : 0) +
+		        sizeof(Nurb));
 	}
 
-	undoCurve->actvert = cu->actvert;
-	undoCurve->actnu = cu->actnu;
-	undoCurve->flag = cu->flag;
+	ucu->actvert = cu->actvert;
+	ucu->actnu = cu->actnu;
+	ucu->flag = cu->flag;
 
-	return undoCurve;
+	ucu->obedit.shapenr = shapenr;
 }
 
-static void free_undoCurve(void *ucv)
+static void undocurve_free_data(UndoCurve *uc)
 {
-	UndoCurve *undoCurve = ucv;
+	BKE_nurbList_free(&uc->nubase);
 
-	BKE_nurbList_free(&undoCurve->nubase);
+	BKE_curve_editNurb_keyIndex_free(&uc->undoIndex);
 
-	BKE_curve_editNurb_keyIndex_free(&undoCurve->undoIndex);
-
-	free_fcurves(&undoCurve->fcurves);
-	free_fcurves(&undoCurve->drivers);
-
-	MEM_freeN(undoCurve);
+	free_fcurves(&uc->fcurves);
+	free_fcurves(&uc->drivers);
 }
 
-static void *get_data(bContext *C)
+static Object *editcurve_object_from_context(bContext *C)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	return obedit;
+	if (obedit && ELEM(obedit->type, OB_CURVE, OB_SURF)) {
+		Curve *cu = obedit->data;
+		if (BKE_curve_editNurbs_get(cu) != NULL) {
+			return obedit;
+		}
+	}
+	return NULL;
 }
 
-/* and this is all the undo system needs to know */
-void undo_push_curve(bContext *C, const char *name)
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Implements ED Undo System
+ *
+ * \note This is similar for all edit-mode types.
+ * \{ */
+
+typedef struct CurveUndoStep_Elem {
+	UndoRefID_Object obedit_ref;
+	UndoCurve data;
+} CurveUndoStep_Elem;
+
+typedef struct CurveUndoStep {
+	UndoStep step;
+	CurveUndoStep_Elem *elems;
+	uint                elems_len;
+} CurveUndoStep;
+
+static bool curve_undosys_poll(bContext *C)
 {
-	undo_editmode_push(C, name, get_data, free_undoCurve, undoCurve_to_editCurve, editCurve_to_undoCurve, NULL);
+	Object *obedit = editcurve_object_from_context(C);
+	return (obedit != NULL);
 }
+
+static bool curve_undosys_step_encode(struct bContext *C, UndoStep *us_p)
+{
+	CurveUndoStep *us = (CurveUndoStep *)us_p;
+
+	ViewLayer *view_layer = CTX_data_view_layer(C);
+	uint objects_len = 0;
+	Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(view_layer, &objects_len);
+
+	us->elems = MEM_callocN(sizeof(*us->elems) * objects_len, __func__);
+	us->elems_len = objects_len;
+
+	for (uint i = 0; i < objects_len; i++) {
+		Object *ob = objects[i];
+		CurveUndoStep_Elem *elem = &us->elems[i];
+
+		elem->obedit_ref.ptr = ob;
+		undocurve_from_editcurve(&elem->data, ob->data, ob->shapenr);
+		us->step.data_size += elem->data.undo_size;
+	}
+	MEM_freeN(objects);
+	return true;
+}
+
+static void curve_undosys_step_decode(struct bContext *C, UndoStep *us_p, int UNUSED(dir))
+{
+	/* TODO(campbell): undo_system: use low-level API to set mode. */
+	ED_object_mode_set(C, OB_MODE_EDIT);
+	BLI_assert(curve_undosys_poll(C));
+
+	CurveUndoStep *us = (CurveUndoStep *)us_p;
+
+	for (uint i = 0; i < us->elems_len; i++) {
+		CurveUndoStep_Elem *elem = &us->elems[i];
+		Object *obedit = elem->obedit_ref.ptr;
+		Curve *cu = obedit->data;
+		if (cu->editnurb == NULL) {
+			/* Should never fail, may not crash but can give odd behavior. */
+			CLOG_ERROR(&LOG, "name='%s', failed to enter edit-mode for object '%s', undo state invalid",
+			           us_p->name, obedit->id.name);
+			continue;
+		}
+		undocurve_to_editcurve(&elem->data, obedit->data, &obedit->shapenr);
+		DEG_id_tag_update(&obedit->id, OB_RECALC_DATA);
+	}
+
+	/* The first element is always active */
+	ED_undo_object_set_active_or_warn(CTX_data_view_layer(C), us->elems[0].obedit_ref.ptr, us_p->name, &LOG);
+
+	WM_event_add_notifier(C, NC_GEOM | ND_DATA, NULL);
+}
+
+static void curve_undosys_step_free(UndoStep *us_p)
+{
+	CurveUndoStep *us = (CurveUndoStep *)us_p;
+
+	for (uint i = 0; i < us->elems_len; i++) {
+		CurveUndoStep_Elem *elem = &us->elems[i];
+		undocurve_free_data(&elem->data);
+	}
+	MEM_freeN(us->elems);
+}
+
+static void curve_undosys_foreach_ID_ref(
+        UndoStep *us_p, UndoTypeForEachIDRefFn foreach_ID_ref_fn, void *user_data)
+{
+	CurveUndoStep *us = (CurveUndoStep *)us_p;
+
+	for (uint i = 0; i < us->elems_len; i++) {
+		CurveUndoStep_Elem *elem = &us->elems[i];
+		foreach_ID_ref_fn(user_data, ((UndoRefID *)&elem->obedit_ref));
+	}
+}
+
+/* Export for ED_undo_sys. */
+void ED_curve_undosys_type(UndoType *ut)
+{
+	ut->name = "Edit Curve";
+	ut->poll = curve_undosys_poll;
+	ut->step_encode = curve_undosys_step_encode;
+	ut->step_decode = curve_undosys_step_decode;
+	ut->step_free = curve_undosys_step_free;
+
+	ut->step_foreach_ID_ref = curve_undosys_foreach_ID_ref;
+
+	ut->mode = BKE_UNDOTYPE_MODE_STORE;
+	ut->use_context = true;
+
+	ut->step_size = sizeof(CurveUndoStep);
+}
+
+/** \} */

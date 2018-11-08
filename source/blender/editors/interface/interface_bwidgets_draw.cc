@@ -64,32 +64,32 @@ void GawainPaintEngine::setupViewport(
 #define WIDGET_AA_JITTER 8
 
 static const float jit[WIDGET_AA_JITTER][2] = {
-	{ 0.468813, -0.481430}, {-0.155755, -0.352820},
-	{ 0.219306, -0.238501}, {-0.393286, -0.110949},
-	{-0.024699,  0.013908}, { 0.343805,  0.147431},
-	{-0.272855,  0.269918}, { 0.095909,  0.388710}
+	{ 0.468813f, -0.481430f}, {-0.155755f, -0.352820f},
+	{ 0.219306f, -0.238501f}, {-0.393286f, -0.110949f},
+	{-0.024699f,  0.013908f}, { 0.343805f,  0.147431f},
+	{-0.272855f,  0.269918f}, { 0.095909f,  0.388710f}
 };
 
 
-static Gwn_PrimType paint_engine_polygon_drawtype_convert(
+static GPUPrimType paint_engine_polygon_drawtype_convert(
         const bwPainter::DrawType& drawtype)
 {
 	switch (drawtype) {
 		case bwPainter::DRAW_TYPE_FILLED:
-			return GWN_PRIM_TRI_FAN;
+			return GPU_PRIM_TRI_FAN;
 		case bwPainter::DRAW_TYPE_OUTLINE:
-			return GWN_PRIM_TRI_STRIP;
+			return GPU_PRIM_TRI_STRIP;
 		case bwPainter::DRAW_TYPE_LINE:
-			return GWN_PRIM_LINE_STRIP;
+			return GPU_PRIM_LINE_STRIP;
 	}
 
-	return GWN_PRIM_NONE;
+	return GPU_PRIM_NONE;
 }
 
 static void paint_engine_polygon_draw_geometry_uniform_color(
         const bwPolygon& polygon,
         const bwColor& color,
-        const Gwn_PrimType prim_type,
+        const GPUPrimType prim_type,
         const unsigned int attr_pos)
 {
 	const bwPointVec& vertices = polygon.getVertices();
@@ -105,7 +105,7 @@ static void paint_engine_polygon_draw_geometry_uniform_color(
 static void paint_engine_polygon_draw_geometry_shaded(
         const bwPainter& painter,
         const bwPolygon& polygon,
-        const Gwn_PrimType prim_type,
+        const GPUPrimType prim_type,
         const unsigned int attr_pos, const unsigned int attr_color)
 {
 	const bwPointVec& vertices = polygon.getVertices();
@@ -113,7 +113,7 @@ static void paint_engine_polygon_draw_geometry_shaded(
 
 	immBegin(prim_type, vert_count);
 	for (int i = 0; i < vert_count; i++) {
-		immAttrib4fv(attr_color, painter.getVertexColor(i));
+		immAttr4fv(attr_color, painter.getVertexColor(i));
 		immVertex2f(attr_pos, vertices[i].x, vertices[i].y);
 	}
 	immEnd();
@@ -122,7 +122,7 @@ static void paint_engine_polygon_draw_geometry(
         const bwPainter& painter,
         const bwPolygon& polygon,
         const bwColor& color,
-        const Gwn_PrimType type,
+        const GPUPrimType type,
         const unsigned int attr_pos, const unsigned int attr_color)
 {
 	if (painter.isGradientEnabled()) {
@@ -138,11 +138,11 @@ void GawainPaintEngine::drawPolygon(
 {
 	const bool is_shaded = painter.isGradientEnabled();
 	const bwColor& color = painter.getActiveColor();
-	const Gwn_PrimType prim_type = paint_engine_polygon_drawtype_convert(painter.active_drawtype);
-	Gwn_VertFormat *format = immVertexFormat();
-	unsigned int attr_pos = GWN_vertformat_attr_add(format, "pos", GWN_COMP_F32, 2, GWN_FETCH_FLOAT);
-	unsigned int attr_color = is_shaded ? GWN_vertformat_attr_add(
-	                                          format, "color", GWN_COMP_F32, 4, GWN_FETCH_FLOAT) : 0;
+	const GPUPrimType prim_type = paint_engine_polygon_drawtype_convert(painter.active_drawtype);
+	GPUVertFormat *format = immVertexFormat();
+	unsigned int attr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+	unsigned int attr_color = is_shaded ? GPU_vertformat_attr_add(
+	                                          format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT) : 0;
 
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_BLEND);
@@ -155,9 +155,9 @@ void GawainPaintEngine::drawPolygon(
 		drawcolor[3] /= WIDGET_AA_JITTER;
 
 		for (int i = 0; i < WIDGET_AA_JITTER; i++) {
-			gpuTranslate2fv(jit[i]);
+			GPU_matrix_translate_2fv(jit[i]);
 			paint_engine_polygon_draw_geometry(painter, polygon, drawcolor, prim_type, attr_pos, attr_color);
-			gpuTranslate2f(-jit[i][0], -jit[i][1]);
+			GPU_matrix_translate_2f(-jit[i][0], -jit[i][1]);
 		}
 	}
 	else {

@@ -36,7 +36,7 @@ __all__ = (
     "RKS_GEN_rotation",
     "RKS_GEN_scaling",
     "RKS_GEN_bendy_bones",
-    )
+)
 
 import bpy
 
@@ -57,10 +57,9 @@ def path_add_property(path, prop):
 
 # selected objects (active object must be in object mode)
 def RKS_POLL_selected_objects(ksi, context):
-    workspace = context.workspace
     ob = context.active_object
     if ob:
-        return workspace.object_mode == 'OBJECT'
+        return ob.mode == 'OBJECT'
     else:
         return bool(context.selected_objects)
 
@@ -68,9 +67,8 @@ def RKS_POLL_selected_objects(ksi, context):
 # selected bones
 def RKS_POLL_selected_bones(ksi, context):
     # we must be in Pose Mode, and there must be some bones selected
-    workspace = context.workspace
     ob = context.active_object
-    if ob and workspace.object_mode == 'POSE':
+    if ob and ob.mode == 'POSE':
         if context.active_pose_bone or context.selected_pose_bones:
             return True
 
@@ -89,9 +87,8 @@ def RKS_POLL_selected_items(ksi, context):
 
 # all selected objects or pose bones, depending on which we've got
 def RKS_ITER_selected_item(ksi, context, ks):
-    workspace = context.workspace
     ob = context.active_object
-    if ob and workspace.object_mode == 'POSE':
+    if ob and ob.mode == 'POSE':
         for bone in context.selected_pose_bones:
             ksi.generate(context, ks, bone)
     else:
@@ -156,8 +153,10 @@ def get_transform_generators_base_info(data):
         # no path in this case
         path = ""
 
-        # data on ID-blocks directly should get grouped by the KeyingSet
-        grouping = None
+        # transform data on ID-blocks directly should get grouped under a
+        # hardcoded label ("Object Transforms") so that they get grouped
+        # consistently when keyframed directly
+        grouping = "Object Transforms"
     else:
         # get the path to the ID-block
         path = data.path_from_id()
@@ -222,6 +221,7 @@ def RKS_GEN_scaling(ksi, context, ks, data):
 
 # ------
 
+
 # Property identifiers for Bendy Bones
 bbone_property_ids = (
     "bbone_curveinx",
@@ -259,4 +259,3 @@ def RKS_GEN_bendy_bones(ksi, context, ks, data):
             ks.paths.add(id_block, path, group_method='NAMED', group_name=grouping)
         else:
             ks.paths.add(id_block, path)
-

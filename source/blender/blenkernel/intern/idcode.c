@@ -39,7 +39,7 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_library.h"
+#include "BKE_main.h"
 #include "BKE_idcode.h"
 
 typedef struct {
@@ -47,7 +47,7 @@ typedef struct {
 	const char *name, *plural;
 
 	const char *i18n_context;
-	
+
 	int flags;
 #define IDTYPE_FLAGS_ISLINKABLE (1 << 0)
 } IDType;
@@ -61,13 +61,13 @@ static IDType idtypes[] = {
 	{ ID_BR,   "Brush",              "brushes",         BLT_I18NCONTEXT_ID_BRUSH,              IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_CA,   "Camera",             "cameras",         BLT_I18NCONTEXT_ID_CAMERA,             IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_CF,   "CacheFile",          "cache_files",     BLT_I18NCONTEXT_ID_CACHEFILE,          IDTYPE_FLAGS_ISLINKABLE },
+	{ ID_GR,   "Collection",         "collections",     BLT_I18NCONTEXT_ID_COLLECTION,         IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_CU,   "Curve",              "curves",          BLT_I18NCONTEXT_ID_CURVE,              IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_GD,   "GPencil",            "grease_pencil",   BLT_I18NCONTEXT_ID_GPENCIL,            IDTYPE_FLAGS_ISLINKABLE }, /* rename gpencil */
-	{ ID_GR,   "Group",              "groups",          BLT_I18NCONTEXT_ID_GROUP,              IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_IM,   "Image",              "images",          BLT_I18NCONTEXT_ID_IMAGE,              IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_IP,   "Ipo",                "ipos",            "",                                    IDTYPE_FLAGS_ISLINKABLE }, /* deprecated */
 	{ ID_KE,   "Key",                "shape_keys",      BLT_I18NCONTEXT_ID_SHAPEKEY,           0                       },
-	{ ID_LA,   "Lamp",               "lamps",           BLT_I18NCONTEXT_ID_LAMP,               IDTYPE_FLAGS_ISLINKABLE },
+	{ ID_LA,   "Light",              "lights",          BLT_I18NCONTEXT_ID_LAMP,               IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_LI,   "Library",            "libraries",       BLT_I18NCONTEXT_ID_LIBRARY,            0                       },
 	{ ID_LS,   "FreestyleLineStyle", "linestyles",      BLT_I18NCONTEXT_ID_FREESTYLELINESTYLE, IDTYPE_FLAGS_ISLINKABLE },
 	{ ID_LT,   "Lattice",            "lattices",        BLT_I18NCONTEXT_ID_LATTICE,            IDTYPE_FLAGS_ISLINKABLE },
@@ -101,7 +101,7 @@ static IDType idtypes[] = {
 /* -1 for ID_ID */
 BLI_STATIC_ASSERT((ARRAY_SIZE(idtypes) - 1 == MAX_LIBARRAY), "Missing IDType");
 
-static IDType *idtype_from_name(const char *str) 
+static IDType *idtype_from_name(const char *str)
 {
 	int i = ARRAY_SIZE(idtypes);
 
@@ -120,7 +120,7 @@ static IDType *idtype_from_code(short idcode)
 	while (i--)
 		if (idcode == idtypes[i].code)
 			return &idtypes[i];
-	
+
 	return NULL;
 }
 

@@ -31,6 +31,7 @@ set(INC
 	../../makesrna
 	../../windowmanager
 	../../../../intern/guardedalloc
+	../../../../intern/clog
 	../../../../intern/glew-mx
 )
 
@@ -41,11 +42,11 @@ set(INC_SYS
 set(SRC
 	ed_transverts.c
 	ed_util.c
-	editmode_undo.c
+	gizmo_utils.c
+	keymap_templates.c
 	numinput.c
-	undo.c
+	select_utils.c
 
-	util_intern.h
 	# general includes
 	../include/BIF_gl.h
 	../include/BIF_glutil.h
@@ -56,16 +57,18 @@ set(SRC
 	../include/ED_curve.h
 	../include/ED_datafiles.h
 	../include/ED_fileselect.h
+	../include/ED_gizmo_library.h
+	../include/ED_gizmo_utils.h
 	../include/ED_gpencil.h
 	../include/ED_image.h
 	../include/ED_info.h
 	../include/ED_keyframes_draw.h
 	../include/ED_keyframes_edit.h
 	../include/ED_keyframing.h
+	../include/ED_keymap_templates.h
 	../include/ED_lattice.h
 	../include/ED_logic.h
 	../include/ED_markers.h
-	../include/ED_manipulator_library.h
 	../include/ED_mask.h
 	../include/ED_mball.h
 	../include/ED_mesh.h
@@ -81,6 +84,7 @@ set(SRC
 	../include/ED_screen.h
 	../include/ED_screen_types.h
 	../include/ED_sculpt.h
+	../include/ED_select_utils.h
 	../include/ED_sequencer.h
 	../include/ED_sound.h
 	../include/ED_space_api.h
@@ -89,6 +93,7 @@ set(SRC
 	../include/ED_transform_snap_object_context.h
 	../include/ED_transverts.h
 	../include/ED_types.h
+	../include/ED_undo.h
 	../include/ED_util.h
 	../include/ED_uvedit.h
 	../include/ED_view3d.h

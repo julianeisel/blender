@@ -81,7 +81,7 @@ void DRW_stats_free(void)
 
 void DRW_stats_begin(void)
 {
-	if (G.debug_value > 20) {
+	if (G.debug_value > 20 && G.debug_value < 30) {
 		DTP.is_recording = true;
 	}
 
@@ -225,7 +225,13 @@ void DRW_stats_draw(rcti *rect)
 
 	double init_tot_time = 0.0, background_tot_time = 0.0, render_tot_time = 0.0, tot_time = 0.0;
 
-	UI_FontThemeColor(BLF_default(), TH_TEXT_HI);
+	int fontid = BLF_default();
+	UI_FontThemeColor(fontid, TH_TEXT_HI);
+	BLF_enable(fontid, BLF_SHADOW);
+	BLF_shadow(fontid, 5, (const float[4]){0.0f, 0.0f, 0.0f, 0.75f});
+	BLF_shadow_offset(fontid, 0, -1);
+
+	BLF_batch_draw_begin();
 
 	/* ------------------------------------------ */
 	/* ---------------- CPU stats --------------- */
@@ -298,8 +304,8 @@ void DRW_stats_draw(rcti *rect)
 	/* ------------------------------------------ */
 
 	/* Memory Stats */
-	unsigned int tex_mem = GPU_texture_memory_usage_get();
-	unsigned int vbo_mem = GWN_vertbuf_get_memory_usage();
+	uint tex_mem = GPU_texture_memory_usage_get();
+	uint vbo_mem = GPU_vertbuf_get_memory_usage();
 
 	sprintf(stat_string, "GPU Memory");
 	draw_stat(rect, 0, v, stat_string, sizeof(stat_string));
@@ -351,4 +357,7 @@ void DRW_stats_draw(rcti *rect)
 		draw_stat(rect, 16 + timer->lvl, v, stat_string, sizeof(stat_string));
 		v++;
 	}
+
+	BLF_batch_draw_end();
+	BLF_disable(fontid, BLF_SHADOW);
 }

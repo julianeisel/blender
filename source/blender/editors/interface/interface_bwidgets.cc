@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 #include "BLI_rect.h"
+#include "BLI_utildefines.h"
 
 #include "UI_interface.h"
 
