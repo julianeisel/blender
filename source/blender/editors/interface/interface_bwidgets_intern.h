@@ -49,6 +49,7 @@ public:
 	        const bWidgets::bwRectanglePixel& rect,
 	        const bWidgets::TextAlignment alignment) override;
 	void drawIcon(
+	        const bWidgets::bwPainter&,
 	        const bWidgets::bwIconInterface&,
 	        const bWidgets::bwRectanglePixel&) override;
 };

@@ -198,6 +198,7 @@ void GawainPaintEngine::drawText(
 }
 
 void GawainPaintEngine::drawIcon(
+        const bwPainter& /*painter*/,
         const bwIconInterface& iicon,
         const bwRectanglePixel& rect)
 {
