@@ -128,11 +128,13 @@ static bwPtr<bwWidget> ui_widget_convert_label_button(
 static bwPtr<bwWidget> ui_widget_convert_push_button(
         const uiBut *but,
         const rcti *rect,
+        const Icon& icon,
         const int roundboxalign)
 {
 	auto button = static_cast<bwPushButton*>(ui_widget_create_from_button_type(but->type, but->drawstr));
 
 	button->rectangle.set(rect->xmin, BLI_rcti_size_x(rect), rect->ymin, BLI_rcti_size_y(rect));
+	button->setIcon(icon);
 	button->rounded_corners = ui_widget_convert_roundbox(roundboxalign);
 	button->state           = ui_widget_convert_state(*but);
 
@@ -142,20 +144,18 @@ static bwPtr<bwWidget> ui_widget_convert_push_button(
 void ui_widget_draw(
         const uiBut *but,
         const rcti *rect,
-        const uchar *icon_color,
         const int roundboxalign)
 {
 	bwPtr<bwWidget> widget;
-	bwColor icon_col(static_cast<uint>(icon_color[0]), icon_color[1], icon_color[2], icon_color[3]);
 	const float aspect = but->block->aspect / UI_DPI_FAC;
-	Icon icon(ui_but_widget_icon_id(but), icon_col, aspect); // Widget will reference this, keep alive until widget is destroyed.
+	Icon icon(ui_but_widget_icon_id(but), aspect); // Widget will reference this, keep alive until widget is destroyed.
 
 	switch (but->type) {
 		case UI_BTYPE_LABEL:
 			widget = ui_widget_convert_label_button(but, rect, icon);
 			break;
 		case UI_BTYPE_BUT:
-			widget = ui_widget_convert_push_button(but, rect, roundboxalign);
+			widget = ui_widget_convert_push_button(but, rect, icon, roundboxalign);
 			break;
 		default:
 			break;

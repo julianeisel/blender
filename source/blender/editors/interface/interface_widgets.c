@@ -4398,7 +4398,7 @@ void ui_draw_but(const bContext *C, ARegion *ar, uiStyle *style, uiBut *but, rct
 //				widget_disabled(&disablerect);
 	}
 	else {
-		ui_widget_draw(but, rect, (const uchar *)tui->wcol_text.text, roundboxalign);
+		ui_widget_draw(but, rect, roundboxalign);
 	}
 }
 

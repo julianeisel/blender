@@ -785,7 +785,6 @@ void ui_widgets_init(void);
 void ui_widget_draw(
         const uiBut *but,
         const rcti *rect,
-        const uchar *icon_color,
         const int roundboxalign);
 
 void ui_draw_menu_item(struct uiFontStyle *fstyle, rcti *rect, const char *name, int iconid, int state, bool use_sep);

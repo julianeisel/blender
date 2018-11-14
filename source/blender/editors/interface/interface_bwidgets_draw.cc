@@ -171,6 +171,13 @@ void GawainPaintEngine::drawPolygon(
 	glDisable(GL_BLEND);
 }
 
+static void convert_bwColor_to_uchar(const bwColor& bw_col, uchar* uchar_col)
+{
+	for (int i = 0; i < 4; i++) {
+		uchar_col[i] = static_cast<unsigned char>(bw_col[i] * 255);
+	}
+}
+
 void GawainPaintEngine::drawText(
         const bwPainter& painter,
         const std::string& text,
@@ -178,13 +185,7 @@ void GawainPaintEngine::drawText(
         const TextAlignment /*alignment*/)
 {
 	uiStyle *style = UI_style_get_dpi();
-	const bwColor &bw_col = painter.getActiveColor();
-	unsigned char col[] = {
-		(unsigned char)(bw_col[0] * 255),
-		(unsigned char)(bw_col[1] * 255),
-		(unsigned char)(bw_col[2] * 255),
-		(unsigned char)(bw_col[3] * 255)
-	};
+	uchar col[4];
 	rcti b_rect = {
 		.xmin = (int)rectangle.xmin,
 		.xmax = (int)rectangle.xmax,
@@ -194,25 +195,22 @@ void GawainPaintEngine::drawText(
 
 	b_rect.xmin += UI_TEXT_MARGIN_X * U.widget_unit;
 
+	convert_bwColor_to_uchar(painter.getActiveColor(), col);
+
 	UI_fontstyle_draw(&style->widget, &b_rect, text.c_str(), col);
 }
 
 void GawainPaintEngine::drawIcon(
-        const bwPainter& /*painter*/,
+        const bwPainter& painter,
         const bwIconInterface& iicon,
         const bwRectanglePixel& rect)
 {
 	const Icon& icon = static_cast<const Icon&>(iicon);
-	const float xs = (rect.xmin + rect.xmax - rect.height()) / 2.0f;
-	const float ys = (rect.ymin + rect.ymax - rect.height()) / 2.0f;
-	char col[] = {
-		(char)(icon.mono_color[0] * 255),
-		(char)(icon.mono_color[1] * 255),
-		(char)(icon.mono_color[2] * 255),
-		(char)(icon.mono_color[3] * 255)
-	};
+	uchar col[4];
+
+	convert_bwColor_to_uchar(painter.getActiveColor(), col);
 
 	GPU_blend(true);
-	UI_icon_draw_aspect(xs, ys, static_cast<int>(icon.iconid), icon.aspect, 1.0f, col);
+	UI_icon_draw_aspect(rect.xmin, rect.ymin, static_cast<int>(icon.iconid), icon.aspect, 1.0f, reinterpret_cast<const char*>(col));
 	GPU_blend(false);
 }

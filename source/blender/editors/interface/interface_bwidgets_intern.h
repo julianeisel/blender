@@ -57,8 +57,8 @@ public:
 class Icon : public bWidgets::bwIconInterface
 {
 public:
-	Icon(BIFIconID icon_id, bWidgets::bwColor col, float aspect) :
-	    iconid(icon_id), mono_color(col), aspect(aspect)
+	Icon(BIFIconID icon_id, float aspect) :
+	    iconid(icon_id), aspect(aspect)
 	{
 		
 	}
@@ -68,7 +68,6 @@ public:
 		return iconid != ICON_NONE;
 	}
 	BIFIconID iconid;
-	bWidgets::bwColor mono_color;
 	float aspect;
 };
 
