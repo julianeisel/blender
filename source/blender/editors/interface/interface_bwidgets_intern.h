@@ -15,9 +15,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
  * ***** END GPL LICENSE BLOCK *****
  */
 
@@ -30,6 +27,20 @@
 
 #include "bwIconInterface.h"
 #include "bwPaintEngine.h"
+#include "bwStyle.h"
+
+/**
+ * \brief A bWidgets style for Blender themes.
+ */
+class BlenderThemeStyle : public bWidgets::bwStyle
+{
+public:
+	BlenderThemeStyle();
+
+	void setupGlobals();
+	void setWidgetStyle(bWidgets::bwWidget&) override;
+	void polish(bWidgets::bwWidget&) override;
+};
 
 /**
  * \brief A paint-engine implementation based on the Gawain graphics library.

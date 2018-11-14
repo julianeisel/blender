@@ -15,9 +15,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
  * ***** END GPL LICENSE BLOCK *****
  */
 
@@ -60,7 +57,7 @@ void ui_widgets_init(void)
 	bwStyleManager &style_manager = bwStyleManager::getStyleManager();
 
 	style_manager.registerDefaultStyleTypes();
-	G_style = bwPtr<bwStyle>(style_manager.createStyleFromTypeID(bwStyle::STYLE_CLASSIC));
+	G_style = bwPtr_new<BlenderThemeStyle>();
 
 	bwPainter::paint_engine = bwPtr_new<GawainPaintEngine>();
 }
@@ -161,7 +158,10 @@ void ui_widget_draw(
 			break;
 	}
 
+	auto& style = static_cast<BlenderThemeStyle&>(*G_style);
+	style.setupGlobals(); // Only needs to be called once before drawing any widget, but leaving here for now.
+
 	if (widget) {
-		widget->draw(*G_style);
+		widget->draw(style);
 	}
 }

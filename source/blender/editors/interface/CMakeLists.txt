@@ -51,6 +51,7 @@ set(SRC
 	interface_anim.c
 	interface_bwidgets.cc
 	interface_bwidgets_draw.cc
+	interface_bwidgets_style.cc
 	interface_context_menu.c
 	interface_draw.c
 	interface_eyedropper.c
