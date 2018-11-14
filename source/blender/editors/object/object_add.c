@@ -125,7 +125,6 @@ const EnumPropertyItem rna_enum_light_type_items[] = {
 	{LA_LOCAL, "POINT", ICON_LIGHT_POINT, "Point", "Omnidirectional point light source"},
 	{LA_SUN, "SUN", ICON_LIGHT_SUN, "Sun", "Constant direction parallel ray light source"},
 	{LA_SPOT, "SPOT", ICON_LIGHT_SPOT, "Spot", "Directional cone light source"},
-	{LA_HEMI, "HEMI", ICON_LIGHT_HEMI, "Hemi", "180 degree constant light source"},
 	{LA_AREA, "AREA", ICON_LIGHT_AREA, "Area", "Directional area light source"},
 	{0, NULL, 0, NULL, NULL}
 };
@@ -467,6 +466,17 @@ void OBJECT_OT_add(wmOperatorType *ot)
 /********************** Add Probe Operator **********************/
 
 /* for object add operator */
+static const char *get_lightprobe_defname(int type)
+{
+	switch (type) {
+		case LIGHTPROBE_TYPE_GRID: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "IrradianceVolume");
+		case LIGHTPROBE_TYPE_PLANAR: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "ReflectionPlane");
+		case LIGHTPROBE_TYPE_CUBE: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "ReflectionCubemap");
+		default:
+			return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "LightProbe");
+	}
+}
+
 static int lightprobe_add_exec(bContext *C, wmOperator *op)
 {
 	Object *ob;
@@ -483,8 +493,7 @@ static int lightprobe_add_exec(bContext *C, wmOperator *op)
 	type = RNA_enum_get(op->ptr, "type");
 	radius = RNA_float_get(op->ptr, "radius");
 
-	const char *name = CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Light Probe");
-	ob = ED_object_add_type(C, OB_LIGHTPROBE, name, loc, rot, false);
+	ob = ED_object_add_type(C, OB_LIGHTPROBE, get_lightprobe_defname(type), loc, rot, false);
 	BKE_object_obdata_size_init(ob, radius);
 
 	probe = (LightProbe *)ob->data;
@@ -506,7 +515,7 @@ static int lightprobe_add_exec(bContext *C, wmOperator *op)
 			probe->attenuation_type = LIGHTPROBE_SHAPE_ELIPSOID;
 			break;
 		default:
-			BLI_assert(!"Lightprobe type not configured.");
+			BLI_assert(!"LightProbe type not configured.");
 			break;
 	}
 
@@ -1056,7 +1065,6 @@ static const char *get_light_defname(int type)
 		case LA_LOCAL: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Point");
 		case LA_SUN: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Sun");
 		case LA_SPOT: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Spot");
-		case LA_HEMI: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Hemi");
 		case LA_AREA: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Area");
 		default:
 			return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Light");

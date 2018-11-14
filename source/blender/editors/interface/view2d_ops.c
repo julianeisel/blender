@@ -1157,7 +1157,7 @@ static int view_zoomdrag_modal(bContext *C, wmOperator *op, const wmEvent *event
 		vzd->dy += dy;
 
 		/* store mouse coordinates for next time, if not doing continuous zoom
-		 *	- continuous zoom only depends on distance of mouse to starting point to determine rate of change
+		 * - continuous zoom only depends on distance of mouse to starting point to determine rate of change
 		 */
 		if (U.viewzoom != USER_ZOOM_CONT) { // XXX store this setting as RNA prop?
 			vzd->lastx = event->x;
@@ -1249,9 +1249,9 @@ static int view_borderzoom_exec(bContext *C, wmOperator *op)
 
 	if (zoom_in) {
 		/* zoom in:
-		 *	- 'cur' rect will be defined by the coordinates of the border region
-		 *	- just set the 'cur' rect to have the same coordinates as the border region
-		 *	  if zoom is allowed to be changed
+		 * - 'cur' rect will be defined by the coordinates of the border region
+		 * - just set the 'cur' rect to have the same coordinates as the border region
+		 *   if zoom is allowed to be changed
 		 */
 		if ((v2d->keepzoom & V2D_LOCKZOOM_X) == 0) {
 			cur_new.xmin = rect.xmin;
@@ -1264,9 +1264,9 @@ static int view_borderzoom_exec(bContext *C, wmOperator *op)
 	}
 	else {
 		/* zoom out:
-		 *	- the current 'cur' rect coordinates are going to end up where the 'rect' ones are,
-		 *	  but the 'cur' rect coordinates will need to be adjusted to take in more of the view
-		 *	- calculate zoom factor, and adjust using center-point
+		 * - the current 'cur' rect coordinates are going to end up where the 'rect' ones are,
+		 *   but the 'cur' rect coordinates will need to be adjusted to take in more of the view
+		 * - calculate zoom factor, and adjust using center-point
 		 */
 		float zoom, center, size;
 
@@ -1555,7 +1555,6 @@ static void VIEW2D_OT_smoothview(wmOperatorType *ot)
 {
 	/* identifiers */
 	ot->name = "Smooth View 2D";
-	ot->description = "";
 	ot->idname = "VIEW2D_OT_smoothview";
 
 	/* api callbacks */
@@ -1637,8 +1636,8 @@ static short mouse_in_scroller_handle(int mouse, int sc_min, int sc_max, int sh_
 	bool in_min, in_max, in_bar, out_min, out_max, in_view = 1;
 
 	/* firstly, check if
-	 *	- 'bubble' fills entire scroller
-	 *	- 'bubble' completely out of view on either side
+	 * - 'bubble' fills entire scroller
+	 * - 'bubble' completely out of view on either side
 	 */
 	if ((sh_min <= sc_min) && (sh_max >= sc_max)) in_view = 0;
 	if (sh_min == sh_max) {
@@ -1716,7 +1715,7 @@ static void scroller_activate_init(bContext *C, wmOperator *op, const wmEvent *e
 	vsm->lastx = event->x;
 	vsm->lasty = event->y;
 	/* 'zone' depends on where mouse is relative to bubble
-	 *	- zooming must be allowed on this axis, otherwise, default to pan
+	 * - zooming must be allowed on this axis, otherwise, default to pan
 	 */
 	scrollers = UI_view2d_scrollers_calc(C, v2d, NULL, V2D_ARG_DUMMY, V2D_ARG_DUMMY, V2D_ARG_DUMMY, V2D_ARG_DUMMY);
 
@@ -2129,85 +2128,5 @@ void ED_operatortypes_view2d(void)
 
 void ED_keymap_view2d(wmKeyConfig *keyconf)
 {
-	wmKeyMap *keymap = WM_keymap_ensure(keyconf, "View2D", 0, 0);
-	wmKeyMapItem *kmi;
-
-	/* scrollers */
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroller_activate", LEFTMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroller_activate", MIDDLEMOUSE, KM_PRESS, 0, 0);
-
-	/* pan/scroll */
-	WM_keymap_add_item(keymap, "VIEW2D_OT_pan", MIDDLEMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_pan", MIDDLEMOUSE, KM_PRESS, KM_SHIFT, 0);
-
-	WM_keymap_add_item(keymap, "VIEW2D_OT_pan", MOUSEPAN, 0, 0, 0);
-
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_right", WHEELDOWNMOUSE, KM_PRESS, KM_CTRL, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_left", WHEELUPMOUSE, KM_PRESS, KM_CTRL, 0);
-
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_down", WHEELDOWNMOUSE, KM_PRESS, KM_SHIFT, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_up", WHEELUPMOUSE, KM_PRESS, KM_SHIFT, 0);
-
-#ifdef WITH_INPUT_NDOF
-	WM_keymap_add_item(keymap, "VIEW2D_OT_ndof", NDOF_MOTION, 0, 0, 0);
-#endif
-
-	/* zoom - single step */
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom_out", WHEELOUTMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom_in", WHEELINMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom_out", PADMINUS, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom_in", PADPLUSKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom", MOUSEPAN, 0, KM_CTRL, 0);
-
-	WM_keymap_verify_item(keymap, "VIEW2D_OT_smoothview", TIMER1, KM_ANY, KM_ANY, 0);
-
-	/* scroll up/down - no modifiers, only when zoom fails */
-	/* these may fail if zoom is disallowed, in which case they should pass on event */
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_down", WHEELDOWNMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_up", WHEELUPMOUSE, KM_PRESS, 0, 0);
-	/* these may be necessary if vertical scroll is disallowed */
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_right", WHEELDOWNMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_left", WHEELUPMOUSE, KM_PRESS, 0, 0);
-
-	/* alternatives for page up/down to scroll */
-#if 0 // XXX disabled, since this causes conflicts with hotkeys in animation editors
-	/* scroll up/down may fall through to left/right */
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_down", PAGEDOWNKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_up", PAGEUPKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_right", PAGEDOWNKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_left", PAGEUPKEY, KM_PRESS, 0, 0);
-	/* shift for moving view left/right with page up/down */
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_right", PAGEDOWNKEY, KM_PRESS, KM_SHIFT, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_left", PAGEUPKEY, KM_PRESS, KM_SHIFT, 0);
-#endif
-
-	/* zoom - drag */
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom", MIDDLEMOUSE, KM_PRESS, KM_CTRL, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom", MOUSEZOOM, 0, 0, 0);
-
-	/* borderzoom - drag */
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom_border", BKEY, KM_PRESS, KM_SHIFT, 0);
-
-	/* Alternative keymap for buttons listview */
-	keymap = WM_keymap_ensure(keyconf, "View2D Buttons List", 0, 0);
-
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroller_activate", LEFTMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroller_activate", MIDDLEMOUSE, KM_PRESS, 0, 0);
-
-	WM_keymap_add_item(keymap, "VIEW2D_OT_pan", MIDDLEMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_pan", MOUSEPAN, 0, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_down", WHEELDOWNMOUSE, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_up", WHEELUPMOUSE, KM_PRESS, 0, 0);
-
-	kmi = WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_down", PAGEDOWNKEY, KM_PRESS, 0, 0);
-	RNA_boolean_set(kmi->ptr, "page", true);
-	kmi = WM_keymap_add_item(keymap, "VIEW2D_OT_scroll_up", PAGEUPKEY, KM_PRESS, 0, 0);
-	RNA_boolean_set(kmi->ptr, "page", true);
-
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom", MIDDLEMOUSE, KM_PRESS, KM_CTRL, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom", MOUSEZOOM, 0, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom", MOUSEPAN, 0, KM_CTRL, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom_out", PADMINUS, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_zoom_in", PADPLUSKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "VIEW2D_OT_reset", HOMEKEY, KM_PRESS, 0, 0);
+	WM_keymap_ensure(keyconf, "View2D", 0, 0);
 }

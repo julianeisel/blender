@@ -824,8 +824,8 @@ static int reports_to_text_exec(bContext *C, wmOperator *UNUSED(op))
 	txt = BKE_text_add(bmain, "Recent Reports");
 
 	/* convert entire list to a display string, and add this to the text-block
-	 *	- if commandline debug option enabled, show debug reports too
-	 *	- otherwise, up to info (which is what users normally see)
+	 * - if commandline debug option enabled, show debug reports too
+	 * - otherwise, up to info (which is what users normally see)
 	 */
 	str = BKE_reports_string(reports, (G.debug & G_DEBUG) ? RPT_DEBUG : RPT_INFO);
 
@@ -1156,7 +1156,7 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 		}
 		/* Try to find a valid po file for current language... */
 		edittranslation_find_po_file(root, uilng, popath, FILE_MAX);
-/*		printf("po path: %s\n", popath);*/
+		/* printf("po path: %s\n", popath); */
 		if (popath[0] == '\0') {
 			BKE_reportf(op->reports, RPT_ERROR, "No valid po found for language '%s' under %s", uilng, root);
 			return OPERATOR_CANCELLED;
@@ -1434,34 +1434,7 @@ void ED_operatortypes_ui(void)
  */
 void ED_keymap_ui(wmKeyConfig *keyconf)
 {
-	wmKeyMap *keymap = WM_keymap_ensure(keyconf, "User Interface", 0, 0);
-	wmKeyMapItem *kmi;
-
-	/* eyedroppers - notice they all have the same shortcut, but pass the event
-	 * through until a suitable eyedropper for the active button is found */
-	WM_keymap_add_item(keymap, "UI_OT_eyedropper_color", EKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "UI_OT_eyedropper_colorband", EKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "UI_OT_eyedropper_colorband_point", EKEY, KM_PRESS, KM_ALT, 0);
-	WM_keymap_add_item(keymap, "UI_OT_eyedropper_id", EKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "UI_OT_eyedropper_depth", EKEY, KM_PRESS, 0, 0);
-
-	/* Copy Data Path */
-	WM_keymap_add_item(keymap, "UI_OT_copy_data_path_button", CKEY, KM_PRESS, KM_CTRL | KM_SHIFT, 0);
-	kmi = WM_keymap_add_item(keymap, "UI_OT_copy_data_path_button", CKEY, KM_PRESS, KM_CTRL | KM_SHIFT | KM_ALT, 0);
-	RNA_boolean_set(kmi->ptr, "full_path", true);
-
-	/* keyframes */
-	WM_keymap_add_item(keymap, "ANIM_OT_keyframe_insert_button", IKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "ANIM_OT_keyframe_delete_button", IKEY, KM_PRESS, KM_ALT, 0);
-	WM_keymap_add_item(keymap, "ANIM_OT_keyframe_clear_button", IKEY, KM_PRESS, KM_SHIFT | KM_ALT, 0);
-
-	/* drivers */
-	WM_keymap_add_item(keymap, "ANIM_OT_driver_button_add", DKEY, KM_PRESS, KM_CTRL, 0);
-	WM_keymap_add_item(keymap, "ANIM_OT_driver_button_remove", DKEY, KM_PRESS, KM_CTRL | KM_ALT, 0);
-
-	/* keyingsets */
-	WM_keymap_add_item(keymap, "ANIM_OT_keyingset_button_add", KKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "ANIM_OT_keyingset_button_remove", KKEY, KM_PRESS, KM_ALT, 0);
+	WM_keymap_ensure(keyconf, "User Interface", 0, 0);
 
 	eyedropper_modal_keymap(keyconf);
 	eyedropper_colorband_modal_keymap(keyconf);

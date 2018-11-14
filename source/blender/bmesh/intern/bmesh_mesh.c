@@ -29,7 +29,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_listBase.h"
-#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_linklist_stack.h"
@@ -189,7 +188,7 @@ BMesh *BM_mesh_create(
 /**
  * \brief BMesh Free Mesh Data
  *
- *	Frees a BMesh structure.
+ * Frees a BMesh structure.
  *
  * \note frees mesh, but not actual BMesh struct
  */
@@ -298,7 +297,7 @@ void BM_mesh_clear(BMesh *bm)
 /**
  * \brief BMesh Free Mesh
  *
- *	Frees a BMesh data and its structure.
+ * Frees a BMesh data and its structure.
  */
 void BM_mesh_free(BMesh *bm)
 {

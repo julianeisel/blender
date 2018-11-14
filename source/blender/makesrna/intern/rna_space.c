@@ -1060,7 +1060,7 @@ static void rna_SpaceImageEditor_image_set(PointerRNA *ptr, PointerRNA value)
 	ViewLayer *view_layer = WM_window_get_active_view_layer(win);
 	Object *obedit = OBEDIT_FROM_VIEW_LAYER(view_layer);
 
-	BLI_assert(BKE_id_is_in_gobal_main(value.data));
+	BLI_assert(BKE_id_is_in_global_main(value.data));
 	ED_space_image_set(G_MAIN, sima, scene, obedit, (Image *)value.data);
 }
 
@@ -1560,21 +1560,21 @@ static void rna_SpaceDopeSheetEditor_mode_update(bContext *C, PointerRNA *ptr)
 	if (saction->mode == SACTCONT_SHAPEKEY) {
 		Key *key = BKE_key_from_object(obact);
 
-		/* 1)	update the action stored for the editor */
+		/* 1) update the action stored for the editor */
 		if (key)
 			saction->action = (key->adt) ? key->adt->action : NULL;
 		else
 			saction->action = NULL;
 
-		/* 2)	enable 'show sliders' by default, since one of the main
-		 *		points of the ShapeKey Editor is to provide a one-stop shop
-		 *		for controlling the shapekeys, whose main control is the value
+		/* 2) enable 'show sliders' by default, since one of the main
+		 *    points of the ShapeKey Editor is to provide a one-stop shop
+		 *    for controlling the shapekeys, whose main control is the value
 		 */
 		saction->flag |= SACTION_SLIDERS;
 	}
 	/* make sure action stored is valid */
 	else if (saction->mode == SACTCONT_ACTION) {
-		/* 1)	update the action stored for the editor */
+		/* 1) update the action stored for the editor */
 		/* TODO: context selector could help decide this with more control? */
 		if (obact)
 			saction->action = (obact->adt) ? obact->adt->action : NULL;
