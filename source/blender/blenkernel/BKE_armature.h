@@ -25,7 +25,6 @@
 
 struct Bone;
 struct Depsgraph;
-struct GHash;
 struct ListBase;
 struct Main;
 struct Object;
@@ -75,6 +74,11 @@ void BKE_armature_copy_data(struct Main *bmain,
                             const int flag);
 struct bArmature *BKE_armature_copy(struct Main *bmain, const struct bArmature *arm);
 
+void BKE_armature_copy_bone_transforms(struct bArmature *armature_dst,
+                                       const struct bArmature *armature_src);
+
+void BKE_armature_transform(struct bArmature *arm, const float mat[4][4], const bool do_props);
+
 /* Bounding box. */
 struct BoundBox *BKE_armature_boundbox_get(struct Object *ob);
 
@@ -97,7 +101,7 @@ float distfactor_to_bone(
 
 void BKE_armature_where_is(struct bArmature *arm);
 void BKE_armature_where_is_bone(struct Bone *bone,
-                                struct Bone *prevbone,
+                                const struct Bone *bone_parent,
                                 const bool use_recursion);
 void BKE_pose_clear_pointers(struct bPose *pose);
 void BKE_pose_remap_bone_pointers(struct bArmature *armature, struct bPose *pose);
