@@ -173,26 +173,18 @@ elseif(APPLE AND NOT WITH_X11)
 elseif(WITH_X11)
   list(APPEND INC_SYS
     ${X11_X11_INCLUDE_PATH}
-    ${WAYLAND_CLIENT_INCLUDE_DIR}
-  )
-  list(APPEND LIB
-    ${WAYLAND_CLIENT_LIBRARY}
   )
 
   list(APPEND SRC
     intern/GHOST_DisplayManagerX11.cpp
     intern/GHOST_SystemX11.cpp
-    intern/GHOST_SystemWayland.cpp
     intern/GHOST_TaskbarX11.cpp
     intern/GHOST_WindowX11.cpp
-    intern/GHOST_WindowWayland.cpp
 
     intern/GHOST_DisplayManagerX11.h
     intern/GHOST_SystemX11.h
-    intern/GHOST_SystemWayland.h
     intern/GHOST_TaskbarX11.h
     intern/GHOST_WindowX11.h
-    intern/GHOST_WindowWayland.h
   )
 
   if(NOT WITH_GL_EGL)
@@ -266,6 +258,24 @@ elseif(WITH_X11)
   endif()
 
   add_definitions(-DWITH_X11)
+
+elseif(WITH_WAYLAND)
+  list(APPEND INC_SYS
+    ${WAYLAND_CLIENT_INCLUDE_DIR}
+  )
+  list(APPEND LIB
+    ${WAYLAND_CLIENT_LIBRARY}
+  )
+
+  list(APPEND SRC
+    intern/GHOST_SystemWayland.cpp
+    intern/GHOST_WindowWayland.cpp
+
+    intern/GHOST_SystemWayland.h
+    intern/GHOST_WindowWayland.h
+  )
+
+  add_definitions(-DWITH_WAYLAND)
 
 elseif(WIN32)
   ## Warnings as errors, this is too strict!

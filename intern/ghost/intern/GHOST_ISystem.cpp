@@ -29,6 +29,7 @@
 
 #ifdef WITH_X11
 #  include "GHOST_SystemX11.h"
+#elif defined(WITH_WAYLAND)
 #  include "GHOST_SystemWayland.h"
 #else
 #  ifdef WITH_HEADLESS
@@ -52,7 +53,8 @@ GHOST_TSuccess GHOST_ISystem::createSystem()
   if (!m_system) {
 #ifdef WITH_X11
     m_system = new GHOST_SystemX11();
-    GHOST_ISystem *m_wayland_system = new GHOST_SystemWayland();
+#elif defined(WITH_WAYLAND)
+    m_system = new GHOST_SystemWayland();
 #else
 #  ifdef WITH_HEADLESS
     m_system = new GHOST_SystemNULL();

@@ -256,6 +256,12 @@ mark_as_advanced(WITH_GHOST_DEBUG)
 option(WITH_GHOST_SDL    "Enable building Blender against SDL for windowing rather than the native APIs" OFF)
 mark_as_advanced(WITH_GHOST_SDL)
 
+
+if(UNIX AND NOT APPLE)
+  option(WITH_WAYLAND "Enable experimental support for the Wayland display server on Linux and use it instead of X11" OFF)
+  mark_as_advanced(WITH_WAYLAND)
+endif()
+
 if(WITH_X11)
   option(WITH_GHOST_XDND    "Enable drag'n'drop support on X11 using XDND protocol" ON)
 endif()
@@ -719,7 +725,7 @@ if(WITH_INSTALL_PORTABLE)
   set(CMAKE_SKIP_BUILD_RPATH TRUE)
 endif()
 
-if(WITH_GHOST_SDL OR WITH_HEADLESS)
+if(WITH_GHOST_SDL OR WITH_HEADLESS OR WITH_WAYLAND)
   set(WITH_X11           OFF)
   set(WITH_X11_XINPUT    OFF)
   set(WITH_X11_XF86VMODE OFF)
@@ -852,8 +858,6 @@ endif()
 if(WITH_X11)
   find_package(X11 REQUIRED)
 
-  find_package(Wayland REQUIRED)
-
   find_path(X11_XF86keysym_INCLUDE_PATH X11/XF86keysym.h ${X11_INC_SEARCH_PATH})
   mark_as_advanced(X11_XF86keysym_INCLUDE_PATH)
 
@@ -899,7 +903,8 @@ if(WITH_X11)
       want to build without")
     endif()
   endif()
-
+elseif(WITH_WAYLAND)
+  find_package(Wayland REQUIRED)
 endif()
 
 
