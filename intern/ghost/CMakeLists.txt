@@ -182,13 +182,17 @@ elseif(WITH_X11)
   list(APPEND SRC
     intern/GHOST_DisplayManagerX11.cpp
     intern/GHOST_SystemX11.cpp
+    intern/GHOST_SystemWayland.cpp
     intern/GHOST_TaskbarX11.cpp
     intern/GHOST_WindowX11.cpp
+    intern/GHOST_WindowWayland.cpp
 
     intern/GHOST_DisplayManagerX11.h
     intern/GHOST_SystemX11.h
+    intern/GHOST_SystemWayland.h
     intern/GHOST_TaskbarX11.h
     intern/GHOST_WindowX11.h
+    intern/GHOST_WindowWayland.h
   )
 
   if(NOT WITH_GL_EGL)
