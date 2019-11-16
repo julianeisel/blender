@@ -82,8 +82,13 @@ class GHOST_WindowWayland : public GHOST_Window {
                                             bool canInvertColor);
 
  private:
+  struct wl_display *m_display; /* Non-owning! */
   struct wl_surface *m_surface;
   struct wl_shell_surface *m_shell_surface;
+  struct wl_egl_window *m_egl_window;
+
+  bool m_valid_setup;
+  bool m_debug_context;
 };
 
 #endif  // __GHOST_WINDOWWAYLAND_H__

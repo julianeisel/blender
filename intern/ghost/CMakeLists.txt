@@ -265,6 +265,7 @@ elseif(WITH_WAYLAND)
   )
   list(APPEND LIB
     ${WAYLAND_CLIENT_LIBRARY}
+    ${WAYLAND_EGL_LIBRARY}
   )
 
   list(APPEND SRC

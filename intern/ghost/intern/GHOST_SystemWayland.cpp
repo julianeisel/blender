@@ -22,6 +22,7 @@
 
 #include <wayland-client.h>
 
+#include "GHOST_Event.h"
 #include "GHOST_WindowManager.h"
 #include "GHOST_WindowWayland.h"
 
@@ -118,6 +119,7 @@ GHOST_IWindow *GHOST_SystemWayland::createWindow(const STR_String &title,
       /* Store the pointer to the window */
       m_windowManager->addWindow(window);
       m_windowManager->setActiveWindow(window);
+      pushEvent(new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowSize, window));
     }
     else {
       GHOST_PRINT("GHOST_SystemWin32::createWindow(): window invalid\n");

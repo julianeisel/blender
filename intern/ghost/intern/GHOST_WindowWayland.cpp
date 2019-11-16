@@ -18,7 +18,15 @@
  * \ingroup GHOST
  */
 
+#include <iostream>
+
+#include <GL/eglew.h>
+
 #include <wayland-client.h>
+#include <wayland-egl.h>
+
+#include "GHOST_ContextEGL.h"
+#include "GHOST_Debug.h"
 
 #include "GHOST_WindowWayland.h"
 
@@ -40,16 +48,92 @@ GHOST_WindowWayland::GHOST_WindowWayland(wl_display *display,
                                          const bool exclusive,
                                          const bool alphaBackground,
                                          const bool is_debug)
-    : GHOST_Window(width, height, state, stereoVisual, exclusive)
+    : GHOST_Window(width, height, state, stereoVisual, exclusive),
+      m_display(display),
+      m_valid_setup(false),
+      m_debug_context(is_debug)
 {
+  /* XXX bad size is passed here, breaking wayland calls. Need to update system desktop size
+   * getters first. */
+  width = 420;
+  height = 700;
+
   m_surface = wl_compositor_create_surface(compositor);
   m_shell_surface = wl_shell_get_shell_surface(shell, m_surface);
+  wl_shell_surface_set_toplevel(m_shell_surface);
+
+  m_egl_window = wl_egl_window_create(m_surface, width, height);
+
+  /* now set up the rendering context. */
+  if (setDrawingContextType(type) == GHOST_kSuccess) {
+    m_valid_setup = true;
+    GHOST_PRINT("Created window\n");
+  }
 }
 
 GHOST_WindowWayland::~GHOST_WindowWayland()
 {
+  wl_egl_window_destroy(m_egl_window);
   wl_shell_surface_destroy(m_shell_surface);
   wl_surface_destroy(m_surface);
+}
+
+GHOST_Context *GHOST_WindowWayland::newDrawingContext(GHOST_TDrawingContextType type)
+{
+  if (type == GHOST_kDrawingContextTypeOpenGL) {
+    GHOST_ContextEGL *context;
+
+#if defined(WITH_GL_PROFILE_CORE)
+    for (int minor = 5; minor >= 0; --minor) {
+      context = new GHOST_ContextEGL(m_wantStereoVisual,
+                                     m_egl_window,
+                                     m_display,
+                                     EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR,
+                                     4,
+                                     minor,
+                                     (m_debug_context ? EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR : 0),
+                                     0,
+                                     EGL_OPENGL_API);
+
+      if (context->initializeDrawingContext()) {
+        return context;
+      }
+      else {
+        delete context;
+      }
+    }
+    context = new GHOST_ContextEGL(m_wantStereoVisual,
+                                   m_egl_window,
+                                   m_display,
+                                   EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR,
+                                   3,
+                                   3,
+                                   (m_debug_context ? EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR : 0),
+                                   0,
+                                   EGL_OPENGL_API);
+
+    if (context->initializeDrawingContext()) {
+      return context;
+    }
+    else {
+      /* TODO proper error dialog? */
+      std::cout
+          << "Blender - Unsupported Graphics Card or Driver\n\n"
+          << "A graphics card and driver with support for OpenGL 3.3 or higher is required.\n"
+             "Installing the latest driver for your graphics card may resolve the issue.\n\n"
+             "The program will now close."
+          << std::endl;
+      delete context;
+      exit(0);
+    }
+#else
+    /* Only core profile supported for Wayland backend, could add compatible profile support but
+     * it's not used currently anyway. */
+#  error
+#endif
+  }
+
+  return NULL;
 }
 
 GHOST_TSuccess GHOST_WindowWayland::setWindowCursorShape(GHOST_TStandardCursor shape)
@@ -70,7 +154,7 @@ GHOST_TSuccess GHOST_WindowWayland::setWindowCustomCursorShape(GHOST_TUns8 *bitm
 
 bool GHOST_WindowWayland::getValid() const
 {
-  return true;
+  return GHOST_Window::getValid() && m_valid_setup;
 }
 
 void GHOST_WindowWayland::setTitle(const STR_String &title)
@@ -164,9 +248,4 @@ GHOST_TSuccess GHOST_WindowWayland::beginFullScreen() const
 GHOST_TSuccess GHOST_WindowWayland::endFullScreen() const
 {
   return GHOST_kSuccess;
-}
-
-GHOST_Context *GHOST_WindowWayland::newDrawingContext(GHOST_TDrawingContextType type)
-{
-  return NULL;
 }

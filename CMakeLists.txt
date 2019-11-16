@@ -735,6 +735,13 @@ if(WITH_GHOST_SDL OR WITH_HEADLESS OR WITH_WAYLAND)
   set(WITH_INPUT_IME     OFF)
 endif()
 
+if(WITH_WAYLAND)
+  set(WITH_GL_EGL ON)
+
+  # EGL define to make it use wayland types.
+  add_definitions(-DWL_EGL_PLATFORM)
+endif()
+
 if(WITH_CPU_SSE)
   TEST_SSE_SUPPORT(COMPILER_SSE_FLAG COMPILER_SSE2_FLAG)
 else()
@@ -1110,7 +1117,7 @@ if(WITH_GL_EGL)
       )
     endif()
 
-    list(APPEND BLENDER_GL_LIBRARIES OPENGLES_EGL_LIBRARY)
+    list(APPEND BLENDER_GL_LIBRARIES ${OPENGLES_EGL_LIBRARY})
 
   else()
     set(OPENGLES_EGL_LIBRARY "" CACHE FILEPATH "EGL library file")
@@ -1238,6 +1245,9 @@ else()
     # This won't affect the non-experimental glew library,
     # but is used for conditional compilation elsewhere.
     list(APPEND GL_DEFINITIONS -DGLEW_NO_ES)
+    if (WITH_GL_EGL)
+      list(APPEND GL_DEFINITIONS -DGLEW_EGL)
+    endif()
 
     set(BLENDER_GLEW_LIBRARIES extern_glew)
 

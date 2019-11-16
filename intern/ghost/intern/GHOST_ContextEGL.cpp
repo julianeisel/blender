@@ -307,8 +307,9 @@ GHOST_TSuccess GHOST_ContextEGL::releaseDrawingContext()
   if (m_display) {
     bindAPI(m_api);
 
-    return EGL_CHK(::eglMakeCurrent(m_display, None, None, NULL)) ? GHOST_kSuccess :
-                                                                    GHOST_kFailure;
+    return EGL_CHK(::eglMakeCurrent(m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, NULL)) ?
+               GHOST_kSuccess :
+               GHOST_kFailure;
   }
   else {
     return GHOST_kFailure;
@@ -335,6 +336,14 @@ GHOST_TSuccess GHOST_ContextEGL::initializeDrawingContext()
   // objects have to be declared here due to the use of goto
   std::vector<EGLint> attrib_list;
   EGLint num_config = 0;
+
+  eglGetDisplay = (PFNEGLGETDISPLAYPROC)eglGetProcAddress("eglGetDisplay");
+  eglGetCurrentDisplay = (PFNEGLGETCURRENTDISPLAYPROC)eglGetProcAddress("eglGetCurrentDisplay");
+  eglGetCurrentSurface = (PFNEGLGETCURRENTSURFACEPROC)eglGetProcAddress("eglGetCurrentSurface");
+  eglGetCurrentContext = (PFNEGLGETCURRENTCONTEXTPROC)eglGetProcAddress("eglGetCurrentContext");
+  eglInitialize = (PFNEGLINITIALIZEPROC)eglGetProcAddress("eglInitialize");
+  eglMakeCurrent = (PFNEGLMAKECURRENTPROC)eglGetProcAddress("eglMakeCurrent");
+  eglChooseConfig = (PFNEGLCHOOSECONFIGPROC)eglGetProcAddress("eglChooseConfig");
 
   if (m_stereoVisual)
     fprintf(stderr, "Warning! Stereo OpenGL ES contexts are not supported.\n");
