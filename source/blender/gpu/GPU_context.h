@@ -1,6 +1,4 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -17,14 +15,10 @@
  *
  * The Original Code is Copyright (C) 2016 by Mike Erwin.
  * All rights reserved.
- *
- * Contributor(s): Blender Foundation
- *
- * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/gpu/GPU_context.h
- *  \ingroup gpu
+/** \file
+ * \ingroup gpu
  *
  * This interface allow GPU to manage VAOs for multiple context and threads.
  */
@@ -32,17 +26,17 @@
 #ifndef __GPU_CONTEXT_H__
 #define __GPU_CONTEXT_H__
 
+#include "GPU_batch.h"
+#include "GPU_common.h"
+#include "GPU_shader_interface.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "GPU_common.h"
-#include "GPU_batch.h"
-#include "GPU_shader_interface.h"
-
 typedef struct GPUContext GPUContext;
 
-GPUContext *GPU_context_create(void);
+GPUContext *GPU_context_create(GLuint default_framebuffer);
 void GPU_context_discard(GPUContext *);
 
 void GPU_context_active_set(GPUContext *);

@@ -1,6 +1,4 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -14,19 +12,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Contributor(s): Bastien Montagne
- *
- * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/python/intern/bpy_rna_id_collection.h
- *  \ingroup pythonintern
+/** \file
+ * \ingroup pythonintern
  */
 
 #ifndef __BPY_RNA_ID_COLLECTION_H__
 #define __BPY_RNA_ID_COLLECTION_H__
 
-int BPY_rna_id_collection_module(PyObject *);
+extern PyMethodDef BPY_rna_id_collection_user_map_method_def;
+extern PyMethodDef BPY_rna_id_collection_batch_remove_method_def;
+extern PyMethodDef BPY_rna_id_collection_orphans_purge_method_def;
 
-#endif  /* __BPY_RNA_ID_COLLECTION_H__ */
+#endif /* __BPY_RNA_ID_COLLECTION_H__ */

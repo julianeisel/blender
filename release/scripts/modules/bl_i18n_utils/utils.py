@@ -21,7 +21,6 @@
 # Some misc utilities...
 
 import collections
-import concurrent.futures
 import copy
 import hashlib
 import os
@@ -178,28 +177,34 @@ def enable_addons(addons=None, support=None, disable=False, check_only=False):
     if support is None:
         support = {}
 
-    userpref = bpy.context.user_preferences
-    used_ext = {ext.module for ext in userpref.addons}
+    prefs = bpy.context.preferences
+    used_ext = {ext.module for ext in prefs.addons}
+    # In case we need to blacklist some add-ons...
+    black_list = {}
 
     ret = [
         mod for mod in addon_utils.modules()
-        if ((addons and mod.__name__ in addons) or
-            (not addons and addon_utils.module_bl_info(mod)["support"] in support))
+        if (((addons and mod.__name__ in addons) or
+            (not addons and addon_utils.module_bl_info(mod)["support"] in support)) and
+            (mod.__name__ not in black_list))
     ]
 
     if not check_only:
         for mod in ret:
-            module_name = mod.__name__
-            if disable:
-                if module_name not in used_ext:
-                    continue
-                print("    Disabling module ", module_name)
-                bpy.ops.wm.addon_disable(module=module_name)
-            else:
-                if module_name in used_ext:
-                    continue
-                print("    Enabling module ", module_name)
-                bpy.ops.wm.addon_enable(module=module_name)
+            try:
+                module_name = mod.__name__
+                if disable:
+                    if module_name not in used_ext:
+                        continue
+                    print("    Disabling module ", module_name)
+                    bpy.ops.preferences.addon_disable(module=module_name)
+                else:
+                    if module_name in used_ext:
+                        continue
+                    print("    Enabling module ", module_name)
+                    bpy.ops.preferences.addon_enable(module=module_name)
+            except Exception as e:  # XXX TEMP WORKAROUND
+                print(e)
 
         # XXX There are currently some problems with bpy/rna...
         #     *Very* tricky to solve!
@@ -231,6 +236,12 @@ class I18nMessage:
         self.comment_lines = comment_lines or []
         self.is_fuzzy = is_fuzzy
         self.is_commented = is_commented
+
+    # ~ def __getstate__(self):
+        # ~ return {key: getattr(self, key) for key in self.__slots__}
+
+    # ~ def __getstate__(self):
+        # ~ return {key: getattr(self, key) for key in self.__slots__}
 
     def _get_msgctxt(self):
         return "".join(self.msgctxt_lines)
@@ -420,6 +431,14 @@ class I18nMessages:
 
         self._reverse_cache = None
 
+    def __getstate__(self):
+        return (self.settings, self.uid, self.msgs, self.parsing_errors)
+
+    def __setstate__(self, data):
+        self.__init__()
+        self.settings, self.uid, self.msgs, self.parsing_errors = data
+        self.update_info()
+
     @staticmethod
     def _new_messages():
         return getattr(collections, 'OrderedDict', dict)()
@@ -560,24 +579,23 @@ class I18nMessages:
 
         # Next process new keys.
         if use_similar > 0.0:
-            with concurrent.futures.ProcessPoolExecutor() as exctr:
-                for key, msgid in exctr.map(get_best_similar,
-                                            tuple((nk, use_similar, tuple(similar_pool.keys())) for nk in new_keys)):
-                    if msgid:
-                        # Try to get the same context, else just get one...
-                        skey = (key[0], msgid)
-                        if skey not in similar_pool[msgid]:
-                            skey = tuple(similar_pool[msgid])[0]
-                        # We keep org translation and comments, and mark message as fuzzy.
-                        msg, refmsg = self.msgs[skey].copy(), ref.msgs[key]
-                        msg.msgctxt = refmsg.msgctxt
-                        msg.msgid = refmsg.msgid
-                        msg.sources = refmsg.sources
-                        msg.is_fuzzy = True
-                        msg.is_commented = refmsg.is_commented
-                        msgs[key] = msg
-                    else:
-                        msgs[key] = ref.msgs[key]
+            for key, msgid in map(get_best_similar,
+                                  tuple((nk, use_similar, tuple(similar_pool.keys())) for nk in new_keys)):
+                if msgid:
+                    # Try to get the same context, else just get one...
+                    skey = (key[0], msgid)
+                    if skey not in similar_pool[msgid]:
+                        skey = tuple(similar_pool[msgid])[0]
+                    # We keep org translation and comments, and mark message as fuzzy.
+                    msg, refmsg = self.msgs[skey].copy(), ref.msgs[key]
+                    msg.msgctxt = refmsg.msgctxt
+                    msg.msgid = refmsg.msgid
+                    msg.sources = refmsg.sources
+                    msg.is_fuzzy = True
+                    msg.is_commented = refmsg.is_commented
+                    msgs[key] = msg
+                else:
+                    msgs[key] = ref.msgs[key]
         else:
             for key in new_keys:
                 msgs[key] = ref.msgs[key]
@@ -828,7 +846,7 @@ class I18nMessages:
     def parse_messages_from_po(self, src, key=None):
         """
         Parse a po file.
-        Note: This function will silently "arrange" mis-formated entries, thus using afterward write_messages() should
+        Note: This function will silently "arrange" mis-formatted entries, thus using afterward write_messages() should
               always produce a po-valid file, though not correct!
         """
         reading_msgid = False
@@ -1069,9 +1087,7 @@ class I18nMessages:
                 "-o",
                 fname,
             )
-            print("Running ", " ".join(cmd))
             ret = subprocess.call(cmd)
-            print("Finished.")
             return
         # XXX Code below is currently broken (generates corrupted mo files it seems :( )!
         # Using http://www.gnu.org/software/gettext/manual/html_node/MO-Files.html notation.
@@ -1152,7 +1168,7 @@ class I18n:
             print("WARNING: skipping file {}, too huge!".format(path))
             return None, None, None, False
         txt = ""
-        with open(path) as f:
+        with open(path, encoding="utf8") as f:
             txt = f.read()
         _in = 0
         _out = len(txt)
@@ -1333,7 +1349,7 @@ class I18n:
     def parse_from_py(self, src, langs=set()):
         """
         src must be a valid path, either a py file or a module directory (in which case all py files inside it
-        will be checked, first file macthing will win!).
+        will be checked, first file matching will win!).
         if langs set is void, all languages found are loaded.
         """
         default_context = self.settings.DEFAULT_CONTEXT
@@ -1407,8 +1423,8 @@ class I18n:
                 "#       and edit the translations by hand.",
                 "#       Just carefully respect the format of the tuple!",
                 "",
-                "# Tuple of tuples "
-                "((msgctxt, msgid), (sources, gen_comments), (lang, translation, (is_fuzzy, comments)), ...)",
+                "# Tuple of tuples:",
+                "# ((msgctxt, msgid), (sources, gen_comments), (lang, translation, (is_fuzzy, comments)), ...)",
                 "translations_tuple = (",
             ]
             # First gather all keys (msgctxt, msgid) - theoretically, all translations should share the same, but...
@@ -1538,7 +1554,7 @@ class I18n:
                 "",
                 self.settings.PARSER_PY_MARKER_END,
             ]
-        with open(dst, 'w') as f:
+        with open(dst, 'w', encoding="utf8") as f:
             f.write((prev or "") + "\n".join(txt) + (nxt or ""))
         self.unescape()
 

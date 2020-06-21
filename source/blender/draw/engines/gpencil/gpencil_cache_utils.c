@@ -1,6 +1,4 @@
 /*
- * Copyright 2017, Blender Foundation.
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -15,18 +13,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * Contributor(s): Antonio Vazquez
- *
+ * Copyright 2017, Blender Foundation.
  */
 
-/** \file blender/draw/engines/gpencil/gpencil_cache_utils.c
- *  \ingroup draw
+/** \file
+ * \ingroup draw
  */
 
 #include "DRW_engine.h"
 #include "DRW_render.h"
-
-#include "BKE_global.h"
 
 #include "ED_gpencil.h"
 #include "ED_view3d.h"
@@ -34,334 +29,399 @@
 #include "DNA_gpencil_types.h"
 #include "DNA_view3d_types.h"
 
+#include "BKE_gpencil.h"
+#include "BKE_lib_id.h"
+#include "BKE_object.h"
+
+#include "BLI_hash.h"
+#include "BLI_link_utils.h"
+#include "BLI_memblock.h"
+
 #include "gpencil_engine.h"
 
 #include "draw_cache_impl.h"
 
 #include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
 
-static bool gpencil_check_ob_duplicated(tGPencilObjectCache *cache_array,
-	int gp_cache_used, Object *ob, int *r_index)
+/* -------------------------------------------------------------------- */
+/** \name Object
+ * \{ */
+
+GPENCIL_tObject *gpencil_object_cache_add(GPENCIL_PrivateData *pd, Object *ob)
 {
-	if (gp_cache_used == 0) {
-		return false;
-	}
+  bGPdata *gpd = (bGPdata *)ob->data;
+  GPENCIL_tObject *tgp_ob = BLI_memblock_alloc(pd->gp_object_pool);
 
-	for (int i = 0; i < gp_cache_used; i++) {
-		tGPencilObjectCache *cache_elem = &cache_array[i];
-		if (cache_elem->ob == ob) {
-			*r_index = cache_elem->data_idx;
-			return true;
-		}
-	}
-	return false;
+  tgp_ob->layers.first = tgp_ob->layers.last = NULL;
+  tgp_ob->vfx.first = tgp_ob->vfx.last = NULL;
+  tgp_ob->camera_z = dot_v3v3(pd->camera_z_axis, ob->obmat[3]);
+  tgp_ob->is_drawmode3d = (gpd->draw_mode == GP_DRAWMODE_3D) || pd->draw_depth_only;
+  tgp_ob->object_scale = mat4_to_scale(ob->obmat);
+
+  /* Find the normal most likely to represent the gpObject. */
+  /* TODO: This does not work quite well if you use
+   * strokes not aligned with the object axes. Maybe we could try to
+   * compute the minimum axis of all strokes. But this would be more
+   * computationally heavy and should go into the GPData evaluation. */
+  BoundBox *bbox = BKE_object_boundbox_get(ob);
+  /* Convert bbox to matrix */
+  float mat[4][4], size[3], center[3];
+  BKE_boundbox_calc_size_aabb(bbox, size);
+  BKE_boundbox_calc_center_aabb(bbox, center);
+  unit_m4(mat);
+  copy_v3_v3(mat[3], center);
+  /* Avoid division by 0.0 later. */
+  add_v3_fl(size, 1e-8f);
+  rescale_m4(mat, size);
+  /* BBox space to World. */
+  mul_m4_m4m4(mat, ob->obmat, mat);
+  if (DRW_view_is_persp_get(NULL)) {
+    /* BBox center to camera vector. */
+    sub_v3_v3v3(tgp_ob->plane_normal, pd->camera_pos, mat[3]);
+  }
+  else {
+    copy_v3_v3(tgp_ob->plane_normal, pd->camera_z_axis);
+  }
+  /* World to BBox space. */
+  invert_m4(mat);
+  /* Normalize the vector in BBox space. */
+  mul_mat3_m4_v3(mat, tgp_ob->plane_normal);
+  normalize_v3(tgp_ob->plane_normal);
+
+  transpose_m4(mat);
+  /* mat is now a "normal" matrix which will transform
+   * BBox space normal to world space.  */
+  mul_mat3_m4_v3(mat, tgp_ob->plane_normal);
+  normalize_v3(tgp_ob->plane_normal);
+
+  /* Define a matrix that will be used to render a triangle to merge the depth of the rendered
+   * gpencil object with the rest of the scene. */
+  unit_m4(tgp_ob->plane_mat);
+  copy_v3_v3(tgp_ob->plane_mat[2], tgp_ob->plane_normal);
+  orthogonalize_m4(tgp_ob->plane_mat, 2);
+  mul_mat3_m4_v3(ob->obmat, size);
+  float radius = len_v3(size);
+  mul_m4_v3(ob->obmat, center);
+  rescale_m4(tgp_ob->plane_mat, (float[3]){radius, radius, radius});
+  copy_v3_v3(tgp_ob->plane_mat[3], center);
+
+  /* Add to corresponding list if is in front. */
+  if (ob->dtx & OB_DRAWXRAY) {
+    BLI_LINKS_APPEND(&pd->tobjects_infront, tgp_ob);
+  }
+  else {
+    BLI_LINKS_APPEND(&pd->tobjects, tgp_ob);
+  }
+
+  return tgp_ob;
 }
 
-static bool gpencil_check_datablock_duplicated(
-        tGPencilObjectCache *cache_array, int gp_cache_used,
-        Object *ob, bGPdata *gpd)
-{
-	if (gp_cache_used == 0) {
-		return false;
-	}
+#define SORT_IMPL_LINKTYPE GPENCIL_tObject
 
-	for (int i = 0; i < gp_cache_used; i++) {
-		tGPencilObjectCache *cache_elem = &cache_array[i];
-		if ((cache_elem->ob != ob) &&
-		    (cache_elem->gpd == gpd))
-		{
-			return true;
-		}
-	}
-	return false;
+#define SORT_IMPL_FUNC gpencil_tobject_sort_fn_r
+#include "../../blenlib/intern/list_sort_impl.h"
+#undef SORT_IMPL_FUNC
+
+#undef SORT_IMPL_LINKTYPE
+
+static int gpencil_tobject_dist_sort(const void *a, const void *b)
+{
+  const GPENCIL_tObject *ob_a = (const GPENCIL_tObject *)a;
+  const GPENCIL_tObject *ob_b = (const GPENCIL_tObject *)b;
+  /* Reminder, camera_z is negative in front of the camera. */
+  if (ob_a->camera_z > ob_b->camera_z) {
+    return 1;
+  }
+  else if (ob_a->camera_z < ob_b->camera_z) {
+    return -1;
+  }
+  else {
+    return 0;
+  }
 }
 
-static int gpencil_len_datablock_duplicated(
-	tGPencilObjectCache *cache_array, int gp_cache_used,
-	Object *ob, bGPdata *gpd)
+void gpencil_object_cache_sort(GPENCIL_PrivateData *pd)
 {
-	int tot = 0;
-	if (gp_cache_used == 0) {
-		return 0;
-	}
+  /* Sort object by distance to the camera. */
+  if (pd->tobjects.first) {
+    pd->tobjects.first = gpencil_tobject_sort_fn_r(pd->tobjects.first, gpencil_tobject_dist_sort);
+    /* Relink last pointer. */
+    while (pd->tobjects.last->next) {
+      pd->tobjects.last = pd->tobjects.last->next;
+    }
+  }
+  if (pd->tobjects_infront.first) {
+    pd->tobjects_infront.first = gpencil_tobject_sort_fn_r(pd->tobjects_infront.first,
+                                                           gpencil_tobject_dist_sort);
+    /* Relink last pointer. */
+    while (pd->tobjects_infront.last->next) {
+      pd->tobjects_infront.last = pd->tobjects_infront.last->next;
+    }
+  }
 
-	for (int i = 0; i < gp_cache_used; i++) {
-		tGPencilObjectCache *cache_elem = &cache_array[i];
-		if ((cache_elem->ob != ob) &&
-		    (cache_elem->gpd == gpd) &&
-		    (!cache_elem->is_dup_ob))
-		{
-			tot++;
-		}
-	}
-	return tot;
+  /* Join both lists, adding infront. */
+  if (pd->tobjects_infront.first != NULL) {
+    if (pd->tobjects.last != NULL) {
+      pd->tobjects.last->next = pd->tobjects_infront.first;
+      pd->tobjects.last = pd->tobjects_infront.last;
+    }
+    else {
+      /* Only in front objects. */
+      pd->tobjects.first = pd->tobjects_infront.first;
+      pd->tobjects.last = pd->tobjects_infront.last;
+    }
+  }
 }
 
- /* add a gpencil object to cache to defer drawing */
-tGPencilObjectCache *gpencil_object_cache_add(
-        tGPencilObjectCache *cache_array, Object *ob,
-        int *gp_cache_size, int *gp_cache_used)
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Layer
+ * \{ */
+
+static float gpencil_layer_final_opacity_get(const GPENCIL_PrivateData *pd,
+                                             const Object *ob,
+                                             const bGPDlayer *gpl)
 {
-	const DRWContextState *draw_ctx = DRW_context_state_get();
-	tGPencilObjectCache *cache_elem = NULL;
-	RegionView3D *rv3d = draw_ctx->rv3d;
-	tGPencilObjectCache *p = NULL;
+  const bool is_obact = ((pd->obact) && (pd->obact == ob));
+  const bool is_fade = ((pd->fade_layer_opacity > -1.0f) && (is_obact) &&
+                        ((gpl->flag & GP_LAYER_ACTIVE) == 0));
 
-	/* By default a cache is created with one block with a predefined number of free slots,
-	if the size is not enough, the cache is reallocated adding a new block of free slots.
-	This is done in order to keep cache small */
-	if (*gp_cache_used + 1 > *gp_cache_size) {
-		if ((*gp_cache_size == 0) || (cache_array == NULL)) {
-			p = MEM_callocN(sizeof(struct tGPencilObjectCache) * GP_CACHE_BLOCK_SIZE, "tGPencilObjectCache");
-			*gp_cache_size = GP_CACHE_BLOCK_SIZE;
-		}
-		else {
-			*gp_cache_size += GP_CACHE_BLOCK_SIZE;
-			p = MEM_recallocN(cache_array, sizeof(struct tGPencilObjectCache) * *gp_cache_size);
-		}
-		cache_array = p;
-	}
-	/* zero out all pointers */
-	cache_elem = &cache_array[*gp_cache_used];
-	memset(cache_elem, 0, sizeof(*cache_elem));
-
-	Object *ob_orig = (Object *)DEG_get_original_id(&ob->id);
-	cache_elem->ob = ob_orig;
-	cache_elem->gpd = (bGPdata *)ob_orig->data;
-	copy_v3_v3(cache_elem->loc, ob->loc);
-	copy_m4_m4(cache_elem->obmat, ob->obmat);
-	cache_elem->idx = *gp_cache_used;
-
-	/* check if object is duplicated */
-	cache_elem->is_dup_ob = gpencil_check_ob_duplicated(
-	        cache_array,
-	        *gp_cache_used, ob_orig,
-	        &cache_elem->data_idx);
-
-	if (!cache_elem->is_dup_ob) {
-		/* check if object reuse datablock */
-		cache_elem->is_dup_data = gpencil_check_datablock_duplicated(
-			cache_array, *gp_cache_used,
-			ob_orig, cache_elem->gpd);
-		if (cache_elem->is_dup_data) {
-			cache_elem->data_idx = gpencil_len_datablock_duplicated(
-				cache_array, *gp_cache_used,
-				ob_orig, cache_elem->gpd);
-
-			cache_elem->gpd->flag |= GP_DATA_CACHE_IS_DIRTY;
-		}
-		else {
-			cache_elem->data_idx = 0;
-		}
-	}
-	else {
-		cache_elem->is_dup_data = false;
-	}
-
-	/* save FXs */
-	cache_elem->pixfactor = cache_elem->gpd->pixfactor;
-	cache_elem->shader_fx = ob_orig->shader_fx;
-
-	cache_elem->init_grp = 0;
-	cache_elem->end_grp = -1;
-
-	/* calculate zdepth from point of view */
-	float zdepth = 0.0;
-	if (rv3d) {
-		if (rv3d->is_persp) {
-			zdepth = ED_view3d_calc_zfac(rv3d, ob->loc, NULL);
-		}
-		else {
-			zdepth = -dot_v3v3(rv3d->viewinv[2], ob->loc);
-		}
-	}
-	else {
-		/* In render mode, rv3d is not available, so use the distance to camera.
-		 * The real distance is not important, but the relative distance to the camera plane
-		 * in order to sort by z_depth of the objects
-		 */
-		float vn[3] = { 0.0f, 0.0f, -1.0f }; /* always face down */
-		float plane_cam[4];
-		struct Object *camera = draw_ctx->scene->camera;
-		if (camera) {
-			mul_m4_v3(camera->obmat, vn);
-			normalize_v3(vn);
-			plane_from_point_normal_v3(plane_cam, camera->loc, vn);
-			zdepth = dist_squared_to_plane_v3(ob->loc, plane_cam);
-		}
-	}
-	cache_elem->zdepth = zdepth;
-	/* increase slots used in cache */
-	(*gp_cache_used)++;
-
-	return cache_array;
+  /* Defines layer opacity. For active object depends of layer opacity factor, and
+   * for no active object, depends if the fade grease pencil objects option is enabled. */
+  if (!pd->is_render) {
+    if (is_obact && is_fade) {
+      return gpl->opacity * pd->fade_layer_opacity;
+    }
+    else if (!is_obact && (pd->fade_gp_object_opacity > -1.0f)) {
+      return gpl->opacity * pd->fade_gp_object_opacity;
+    }
+  }
+  return gpl->opacity;
 }
 
-/* get current cache data */
-static GpencilBatchCache *gpencil_batch_get_element(Object *ob)
+static void gpencil_layer_final_tint_and_alpha_get(const GPENCIL_PrivateData *pd,
+                                                   const bGPdata *gpd,
+                                                   const bGPDlayer *gpl,
+                                                   const bGPDframe *gpf,
+                                                   float r_tint[4],
+                                                   float *r_alpha)
 {
-	Object *ob_orig = (Object *)DEG_get_original_id(&ob->id);
-	return ob_orig->runtime.gpencil_cache;
+  const bool use_onion = (gpf != NULL) && (gpf->runtime.onion_id != 0.0f);
+  if (use_onion) {
+    const bool use_onion_custom_col = (gpd->onion_flag & GP_ONION_GHOST_PREVCOL) != 0;
+    const bool use_onion_fade = (gpd->onion_flag & GP_ONION_FADE) != 0;
+    const bool use_next_col = gpf->runtime.onion_id > 0.0f;
+
+    const float *onion_col_custom = (use_onion_custom_col) ?
+                                        (use_next_col ? gpd->gcolor_next : gpd->gcolor_prev) :
+                                        U.gpencil_new_layer_col;
+
+    copy_v4_fl4(r_tint, UNPACK3(onion_col_custom), 1.0f);
+
+    *r_alpha = use_onion_fade ? (1.0f / abs(gpf->runtime.onion_id)) : 0.5f;
+    *r_alpha *= gpd->onion_factor;
+    *r_alpha = (gpd->onion_factor > 0.0f) ? clamp_f(*r_alpha, 0.1f, 1.0f) :
+                                            clamp_f(*r_alpha, 0.01f, 1.0f);
+  }
+  else {
+    copy_v4_v4(r_tint, gpl->tintcolor);
+    if (GPENCIL_SIMPLIFY_TINT(pd->scene)) {
+      r_tint[3] = 0.0f;
+    }
+    *r_alpha = 1.0f;
+  }
+
+  *r_alpha *= pd->xray_alpha;
 }
 
-/* verify if cache is valid */
-static bool gpencil_batch_cache_valid(GpencilBatchCache *cache, bGPdata *gpd, int cfra)
+/* Random color by layer. */
+static void gpencil_layer_random_color_get(const Object *ob,
+                                           const bGPDlayer *gpl,
+                                           float r_color[3])
 {
-	if (cache == NULL) {
-		return false;
-	}
+  const float hsv_saturation = 0.7f;
+  const float hsv_value = 0.6f;
 
-	cache->is_editmode = GPENCIL_ANY_EDIT_MODE(gpd);
-
-	if (cfra != cache->cache_frame) {
-		return false;
-	}
-
-	if (gpd->flag & GP_DATA_CACHE_IS_DIRTY) {
-		return false;
-	}
-
-	if (cache->is_editmode) {
-		return false;
-	}
-
-	if (cache->is_dirty) {
-		return false;
-	}
-
-	return true;
+  uint ob_hash = BLI_ghashutil_strhash_p_murmur(ob->id.name);
+  uint gpl_hash = BLI_ghashutil_strhash_p_murmur(gpl->info);
+  float hue = BLI_hash_int_01(ob_hash * gpl_hash);
+  float hsv[3] = {hue, hsv_saturation, hsv_value};
+  hsv_to_rgb_v(hsv, r_color);
 }
 
-/* resize the cache to the number of slots */
-static void gpencil_batch_cache_resize(GpencilBatchCache *cache, int slots)
+GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
+                                        const Object *ob,
+                                        const bGPDlayer *gpl,
+                                        const bGPDframe *gpf,
+                                        GPENCIL_tObject *tgp_ob)
 {
-	cache->cache_size = slots;
-	cache->batch_stroke = MEM_recallocN(cache->batch_stroke, sizeof(struct Gwn_Batch *) * slots);
-	cache->batch_fill = MEM_recallocN(cache->batch_fill, sizeof(struct Gwn_Batch *) * slots);
-	cache->batch_edit = MEM_recallocN(cache->batch_edit, sizeof(struct Gwn_Batch *) * slots);
-	cache->batch_edlin = MEM_recallocN(cache->batch_edlin, sizeof(struct Gwn_Batch *) * slots);
+  bGPdata *gpd = (bGPdata *)ob->data;
+
+  const bool is_in_front = (ob->dtx & OB_DRAWXRAY);
+  const bool is_screenspace = (gpd->flag & GP_DATA_STROKE_KEEPTHICKNESS) != 0;
+  const bool overide_vertcol = (pd->v3d_color_type != -1);
+  const bool is_vert_col_mode = (pd->v3d_color_type == V3D_SHADING_VERTEX_COLOR) ||
+                                GPENCIL_VERTEX_MODE(gpd) || pd->is_render;
+  bool is_masked = (gpl->flag & GP_LAYER_USE_MASK) && !BLI_listbase_is_empty(&gpl->mask_layers);
+
+  float vert_col_opacity = (overide_vertcol) ?
+                               (is_vert_col_mode ? pd->vertex_paint_opacity : 0.0f) :
+                               pd->is_render ? gpl->vertex_paint_opacity :
+                                               pd->vertex_paint_opacity;
+  /* Negate thickness sign to tag that strokes are in screen space.
+   * Convert to world units (by default, 1 meter = 2000 px). */
+  float thickness_scale = (is_screenspace) ? -1.0f : (gpd->pixfactor / GPENCIL_PIXEL_FACTOR);
+  float layer_opacity = gpencil_layer_final_opacity_get(pd, ob, gpl);
+  float layer_tint[4];
+  float layer_alpha;
+  gpencil_layer_final_tint_and_alpha_get(pd, gpd, gpl, gpf, layer_tint, &layer_alpha);
+
+  /* Create the new layer descriptor. */
+  GPENCIL_tLayer *tgp_layer = BLI_memblock_alloc(pd->gp_layer_pool);
+  BLI_LINKS_APPEND(&tgp_ob->layers, tgp_layer);
+  tgp_layer->layer_id = BLI_findindex(&gpd->layers, gpl);
+  tgp_layer->mask_bits = NULL;
+  tgp_layer->mask_invert_bits = NULL;
+  tgp_layer->blend_ps = NULL;
+
+  /* Masking: Go through mask list and extract valid masks in a bitmap. */
+  if (is_masked) {
+    bool valid_mask = false;
+    /* Warning: only GP_MAX_MASKBITS amount of bits.
+     * TODO(fclem) Find a better system without any limitation. */
+    tgp_layer->mask_bits = BLI_memblock_alloc(pd->gp_maskbit_pool);
+    tgp_layer->mask_invert_bits = BLI_memblock_alloc(pd->gp_maskbit_pool);
+    BLI_bitmap_set_all(tgp_layer->mask_bits, false, GP_MAX_MASKBITS);
+
+    LISTBASE_FOREACH (bGPDlayer_Mask *, mask, &gpl->mask_layers) {
+      bGPDlayer *gpl_mask = BKE_gpencil_layer_named_get(gpd, mask->name);
+      if (gpl_mask && (gpl_mask != gpl) && ((gpl_mask->flag & GP_LAYER_HIDE) == 0) &&
+          ((mask->flag & GP_MASK_HIDE) == 0)) {
+        int index = BLI_findindex(&gpd->layers, gpl_mask);
+        if (index < GP_MAX_MASKBITS) {
+          const bool invert = (mask->flag & GP_MASK_INVERT) != 0;
+          BLI_BITMAP_SET(tgp_layer->mask_bits, index, true);
+          BLI_BITMAP_SET(tgp_layer->mask_invert_bits, index, invert);
+          valid_mask = true;
+        }
+      }
+    }
+
+    if (valid_mask) {
+      pd->use_mask_fb = true;
+    }
+    else {
+      tgp_layer->mask_bits = NULL;
+    }
+    is_masked = valid_mask;
+  }
+
+  /* Blending: Force blending for masked layer. */
+  if (is_masked || (gpl->blend_mode != eGplBlendMode_Regular) || (layer_opacity < 1.0f)) {
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_STENCIL_EQUAL;
+    switch (gpl->blend_mode) {
+      case eGplBlendMode_Regular:
+        state |= DRW_STATE_BLEND_ALPHA_PREMUL;
+        break;
+      case eGplBlendMode_Add:
+        state |= DRW_STATE_BLEND_ADD_FULL;
+        break;
+      case eGplBlendMode_Subtract:
+        state |= DRW_STATE_BLEND_SUB;
+        break;
+      case eGplBlendMode_Multiply:
+      case eGplBlendMode_Divide:
+      case eGplBlendMode_HardLight:
+        state |= DRW_STATE_BLEND_MUL;
+        break;
+    }
+
+    if (ELEM(gpl->blend_mode, eGplBlendMode_Subtract, eGplBlendMode_HardLight)) {
+      /* For these effect to propagate, we need a signed floating point buffer. */
+      pd->use_signed_fb = true;
+    }
+
+    tgp_layer->blend_ps = DRW_pass_create("GPencil Blend Layer", state);
+
+    GPUShader *sh = GPENCIL_shader_layer_blend_get();
+    DRWShadingGroup *grp = DRW_shgroup_create(sh, tgp_layer->blend_ps);
+    DRW_shgroup_uniform_int_copy(grp, "blendMode", gpl->blend_mode);
+    DRW_shgroup_uniform_float_copy(grp, "blendOpacity", layer_opacity);
+    DRW_shgroup_uniform_texture_ref(grp, "colorBuf", &pd->color_layer_tx);
+    DRW_shgroup_uniform_texture_ref(grp, "revealBuf", &pd->reveal_layer_tx);
+    DRW_shgroup_uniform_texture_ref(grp, "maskBuf", (is_masked) ? &pd->mask_tx : &pd->dummy_tx);
+    DRW_shgroup_stencil_mask(grp, 0xFF);
+    DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
+
+    if (gpl->blend_mode == eGplBlendMode_HardLight) {
+      /* We cannot do custom blending on MultiTarget framebuffers.
+       * Workaround by doing 2 passes. */
+      grp = DRW_shgroup_create(sh, tgp_layer->blend_ps);
+      DRW_shgroup_state_disable(grp, DRW_STATE_BLEND_MUL);
+      DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ADD_FULL);
+      DRW_shgroup_uniform_int_copy(grp, "blendMode", 999);
+      DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
+    }
+
+    pd->use_layer_fb = true;
+  }
+
+  /* Geometry pass */
+  {
+    GPUTexture *depth_tex = (is_in_front) ? pd->dummy_tx : pd->scene_depth_tx;
+    GPUTexture **mask_tex = (is_masked) ? &pd->mask_tx : &pd->dummy_tx;
+
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_BLEND_ALPHA_PREMUL;
+    /* For 2D mode, we render all strokes with uniform depth (increasing with stroke id). */
+    state |= tgp_ob->is_drawmode3d ? DRW_STATE_DEPTH_LESS_EQUAL : DRW_STATE_DEPTH_GREATER;
+    /* Always write stencil. Only used as optimization for blending. */
+    state |= DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS;
+
+    tgp_layer->geom_ps = DRW_pass_create("GPencil Layer", state);
+
+    struct GPUShader *sh = GPENCIL_shader_geometry_get();
+    DRWShadingGroup *grp = tgp_layer->base_shgrp = DRW_shgroup_create(sh, tgp_layer->geom_ps);
+
+    DRW_shgroup_uniform_texture(grp, "gpSceneDepthTexture", depth_tex);
+    DRW_shgroup_uniform_texture_ref(grp, "gpMaskTexture", mask_tex);
+    DRW_shgroup_uniform_vec3_copy(grp, "gpNormal", tgp_ob->plane_normal);
+    DRW_shgroup_uniform_bool_copy(grp, "strokeOrder3d", tgp_ob->is_drawmode3d);
+    DRW_shgroup_uniform_float_copy(grp, "thicknessScale", tgp_ob->object_scale);
+    DRW_shgroup_uniform_vec2_copy(grp, "sizeViewportInv", DRW_viewport_invert_size_get());
+    DRW_shgroup_uniform_vec2_copy(grp, "sizeViewport", DRW_viewport_size_get());
+    DRW_shgroup_uniform_float_copy(grp, "thicknessOffset", (float)gpl->line_change);
+    DRW_shgroup_uniform_float_copy(grp, "thicknessWorldScale", thickness_scale);
+    DRW_shgroup_uniform_float_copy(grp, "vertexColorOpacity", vert_col_opacity);
+
+    /* If random color type, need color by layer. */
+    float gpl_color[4];
+    copy_v4_v4(gpl_color, layer_tint);
+    if (pd->v3d_color_type == V3D_SHADING_RANDOM_COLOR) {
+      gpencil_layer_random_color_get(ob, gpl, gpl_color);
+      gpl_color[3] = 1.0f;
+    }
+    DRW_shgroup_uniform_vec4_copy(grp, "layerTint", gpl_color);
+
+    DRW_shgroup_uniform_float_copy(grp, "layerOpacity", layer_alpha);
+    DRW_shgroup_stencil_mask(grp, 0xFF);
+  }
+
+  return tgp_layer;
 }
 
-/* check size and increase if no free slots */
-void gpencil_batch_cache_check_free_slots(Object *ob)
+GPENCIL_tLayer *gpencil_layer_cache_get(GPENCIL_tObject *tgp_ob, int number)
 {
-	GpencilBatchCache *cache = gpencil_batch_get_element(ob);
-
-	/* the memory is reallocated by chunks, not for one slot only to improve speed */
-	if (cache->cache_idx >= cache->cache_size) {
-		cache->cache_size += GPENCIL_MIN_BATCH_SLOTS_CHUNK;
-		gpencil_batch_cache_resize(cache, cache->cache_size);
-	}
+  if (number >= 0) {
+    GPENCIL_tLayer *layer = tgp_ob->layers.first;
+    while (layer != NULL) {
+      if (layer->layer_id == number) {
+        return layer;
+      }
+      layer = layer->next;
+    }
+  }
+  return NULL;
 }
 
-/* cache init */
-static GpencilBatchCache *gpencil_batch_cache_init(Object *ob, int cfra)
-{
-	Object *ob_orig = (Object *)DEG_get_original_id(&ob->id);
-	bGPdata *gpd = (bGPdata *)ob_orig->data;
-
-	GpencilBatchCache *cache = gpencil_batch_get_element(ob);
-
-	if (G.debug_value >= 664) {
-		printf("gpencil_batch_cache_init: %s\n", ob->id.name);
-	}
-
-	if (!cache) {
-		cache = MEM_callocN(sizeof(*cache), __func__);
-		ob_orig->runtime.gpencil_cache = cache;
-	}
-	else {
-		memset(cache, 0, sizeof(*cache));
-	}
-
-	cache->cache_size = GPENCIL_MIN_BATCH_SLOTS_CHUNK;
-	cache->batch_stroke = MEM_callocN(sizeof(struct Gwn_Batch *) * cache->cache_size, "Gpencil_Batch_Stroke");
-	cache->batch_fill = MEM_callocN(sizeof(struct Gwn_Batch *) * cache->cache_size, "Gpencil_Batch_Fill");
-	cache->batch_edit = MEM_callocN(sizeof(struct Gwn_Batch *) * cache->cache_size, "Gpencil_Batch_Edit");
-	cache->batch_edlin = MEM_callocN(sizeof(struct Gwn_Batch *) * cache->cache_size, "Gpencil_Batch_Edlin");
-
-	cache->is_editmode = GPENCIL_ANY_EDIT_MODE(gpd);
-	gpd->flag &= ~GP_DATA_CACHE_IS_DIRTY;
-
-	cache->cache_idx = 0;
-	cache->is_dirty = true;
-	cache->cache_frame = cfra;
-
-	return cache;
-}
-
-/* clear cache */
-static void gpencil_batch_cache_clear(GpencilBatchCache *cache)
-{
-	if (!cache) {
-		return;
-	}
-
-	if (cache->cache_size == 0) {
-		return;
-	}
-
-	if (cache->cache_size > 0) {
-		for (int i = 0; i < cache->cache_size; i++) {
-			GPU_BATCH_DISCARD_SAFE(cache->batch_stroke[i]);
-			GPU_BATCH_DISCARD_SAFE(cache->batch_fill[i]);
-			GPU_BATCH_DISCARD_SAFE(cache->batch_edit[i]);
-			GPU_BATCH_DISCARD_SAFE(cache->batch_edlin[i]);
-		}
-		MEM_SAFE_FREE(cache->batch_stroke);
-		MEM_SAFE_FREE(cache->batch_fill);
-		MEM_SAFE_FREE(cache->batch_edit);
-		MEM_SAFE_FREE(cache->batch_edlin);
-	}
-
-	cache->cache_size = 0;
-}
-
-/* get cache */
-GpencilBatchCache *gpencil_batch_cache_get(Object *ob, int cfra)
-{
-	Object *ob_orig = (Object *)DEG_get_original_id(&ob->id);
-	bGPdata *gpd = (bGPdata *)ob_orig->data;
-
-	GpencilBatchCache *cache = gpencil_batch_get_element(ob);
-	if (!gpencil_batch_cache_valid(cache, gpd, cfra)) {
-		if (G.debug_value >= 664) {
-			printf("gpencil_batch_cache: %s\n", gpd->id.name);
-		}
-
-		if (cache) {
-			gpencil_batch_cache_clear(cache);
-		}
-		return gpencil_batch_cache_init(ob, cfra);
-	}
-	else {
-		return cache;
-	}
-}
-
-/* set cache as dirty */
-void DRW_gpencil_batch_cache_dirty_tag(bGPdata *gpd)
-{
-	bGPdata *gpd_orig = (bGPdata *)DEG_get_original_id(&gpd->id);
-	gpd_orig->flag |= GP_DATA_CACHE_IS_DIRTY;
-}
-
-/* free batch cache */
-void DRW_gpencil_batch_cache_free(bGPdata *UNUSED(gpd))
-{
-	return;
-}
-
-/* wrapper to clear cache */
-void DRW_gpencil_freecache(struct Object *ob)
-{
-	if ((ob) && (ob->type == OB_GPENCIL)) {
-		gpencil_batch_cache_clear(ob->runtime.gpencil_cache);
-		MEM_SAFE_FREE(ob->runtime.gpencil_cache);
-		bGPdata *gpd = (bGPdata *)ob->data;
-		if (gpd) {
-			gpd->flag |= GP_DATA_CACHE_IS_DIRTY;
-		}
-	}
-}
+/** \} */

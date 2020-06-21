@@ -28,7 +28,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
 /* ============================================================================
 
 This file is part of a sample implementation of the analytical skylight and
@@ -91,7 +90,6 @@ Please visit http://cgg.mff.cuni.cz/projects/SkylightModelling/ to check if
 an updated version of this code has been published!
 
 ============================================================================ */
-
 
 /*
 
@@ -300,13 +298,14 @@ HINT #1:   if you want to model the sky of an earth-like planet that orbits
            previous paragraph.
 */
 
+#include "util/util_types.h"
+
 CCL_NAMESPACE_BEGIN
 
 #ifndef _SKY_MODEL_H_
-#define _SKY_MODEL_H_
+#  define _SKY_MODEL_H_
 
 typedef double ArHosekSkyModelConfiguration[9];
-
 
 //   Spectral version of the model
 
@@ -336,18 +335,16 @@ typedef double ArHosekSkyModelConfiguration[9];
 
 ---------------------------------------------------------------------------- */
 
-typedef struct ArHosekSkyModelState
-{
-	ArHosekSkyModelConfiguration  configs[11];
-	double                        radiances[11];
-	double                        turbidity;
-	double                        solar_radius;
-	double                        emission_correction_factor_sky[11];
-	double                        emission_correction_factor_sun[11];
-	double                        albedo;
-	double                        elevation;
-}
-ArHosekSkyModelState;
+typedef struct ArHosekSkyModelState {
+  ArHosekSkyModelConfiguration configs[11];
+  double radiances[11];
+  double turbidity;
+  double solar_radius;
+  double emission_correction_factor_sky[11];
+  double emission_correction_factor_sun[11];
+  double albedo;
+  double elevation;
+} ArHosekSkyModelState;
 
 /* ----------------------------------------------------------------------------
 
@@ -358,11 +355,9 @@ ArHosekSkyModelState;
 
 ---------------------------------------------------------------------------- */
 
-ArHosekSkyModelState *arhosekskymodelstate_alloc_init(
-        const double solar_elevation,
-        const double atmospheric_turbidity,
-        const double ground_albedo);
-
+ArHosekSkyModelState *arhosekskymodelstate_alloc_init(const double solar_elevation,
+                                                      const double atmospheric_turbidity,
+                                                      const double ground_albedo);
 
 /* ----------------------------------------------------------------------------
 
@@ -393,14 +388,14 @@ ArHosekSkyModelState *arhosekskymodelstate_alloc_init(
 
 ---------------------------------------------------------------------------- */
 
-ArHosekSkyModelState* arhosekskymodelstate_alienworld_alloc_init(
-        const double solar_elevation,
-        const double solar_intensity,
-        const double solar_surface_temperature_kelvin,
-        const double atmospheric_turbidity,
-        const double ground_albedo);
+ArHosekSkyModelState *arhosekskymodelstate_alienworld_alloc_init(
+    const double solar_elevation,
+    const double solar_intensity,
+    const double solar_surface_temperature_kelvin,
+    const double atmospheric_turbidity,
+    const double ground_albedo);
 
-void arhosekskymodelstate_free(ArHosekSkyModelState  *state);
+void arhosekskymodelstate_free(ArHosekSkyModelState *state);
 
 double arhosekskymodel_radiance(ArHosekSkyModelState *state,
                                 double theta,
@@ -409,20 +404,15 @@ double arhosekskymodel_radiance(ArHosekSkyModelState *state,
 
 // CIE XYZ and RGB versions
 
+ArHosekSkyModelState *arhosek_xyz_skymodelstate_alloc_init(const double turbidity,
+                                                           const double albedo,
+                                                           const double elevation);
 
-ArHosekSkyModelState  * arhosek_xyz_skymodelstate_alloc_init(
-        const double turbidity,
-        const double albedo,
-        const double elevation);
+ArHosekSkyModelState *arhosek_rgb_skymodelstate_alloc_init(const double turbidity,
+                                                           const double albedo,
+                                                           const double elevation);
 
-
-ArHosekSkyModelState  * arhosek_rgb_skymodelstate_alloc_init(
-        const double turbidity,
-        const double albedo,
-        const double elevation);
-
-
-double arhosek_tristim_skymodel_radiance(ArHosekSkyModelState* state,
+double arhosek_tristim_skymodel_radiance(ArHosekSkyModelState *state,
                                          double theta,
                                          double gamma,
                                          int channel);
@@ -431,12 +421,33 @@ double arhosek_tristim_skymodel_radiance(ArHosekSkyModelState* state,
 //   Please read the above description before using this - there are several
 //   caveats!
 
-double arhosekskymodel_solar_radiance(ArHosekSkyModelState* state,
+double arhosekskymodel_solar_radiance(ArHosekSkyModelState *state,
                                       double theta,
                                       double gamma,
                                       double wavelength);
 
-
 #endif  // _SKY_MODEL_H_
+
+/* Nishita improved sky model */
+
+void nishita_skymodel_precompute_texture(float *pixels,
+                                         int stride,
+                                         int start_y,
+                                         int end_y,
+                                         int width,
+                                         int height,
+                                         float sun_elevation,
+                                         float altitude,
+                                         float air_density,
+                                         float dust_density,
+                                         float ozone_density);
+
+void nishita_skymodel_precompute_sun(float sun_elevation,
+                                     float angular_diameter,
+                                     float altitude,
+                                     float air_density,
+                                     float dust_density,
+                                     float *pixel_bottom,
+                                     float *pixel_top);
 
 CCL_NAMESPACE_END

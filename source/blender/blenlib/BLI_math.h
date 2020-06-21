@@ -1,6 +1,4 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -20,14 +18,13 @@
  *
  * The Original Code is: some of this file.
  *
- * ***** END GPL LICENSE BLOCK *****
  * */
 
 #ifndef __BLI_MATH_H__
 #define __BLI_MATH_H__
 
-/** \file BLI_math.h
- *  \ingroup bli
+/** \file
+ * \ingroup bli
  *
  * \section mathabbrev Abbreviations
  *
@@ -69,12 +66,12 @@
 
 #include "BLI_math_base.h"
 #include "BLI_math_color.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
 #include "BLI_math_geom.h"
 #include "BLI_math_interp.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
 #include "BLI_math_solvers.h"
 #include "BLI_math_statistics.h"
+#include "BLI_math_vector.h"
 
 #endif /* __BLI_MATH_H__ */

@@ -39,6 +39,7 @@ __all__ = (
     "unregister_manual_map",
     "register_classes_factory",
     "register_submodule_factory",
+    "register_tool",
     "make_rna_paths",
     "manual_map",
     "previews",
@@ -50,7 +51,9 @@ __all__ = (
     "smpte_from_seconds",
     "units",
     "unregister_class",
+    "unregister_tool",
     "user_resource",
+    "execfile",
 )
 
 from _bpy import (
@@ -62,6 +65,7 @@ from _bpy import (
     script_paths as _bpy_script_paths,
     unregister_class,
     user_resource as _user_resource,
+    system_resource,
 )
 
 import bpy as _bpy
@@ -70,9 +74,21 @@ import sys as _sys
 
 import addon_utils as _addon_utils
 
-_user_preferences = _bpy.context.user_preferences
+_preferences = _bpy.context.preferences
 _script_module_dirs = "startup", "modules"
 _is_factory_startup = _bpy.app.factory_startup
+
+
+def execfile(filepath, mod=None):
+    # module name isn't used or added to 'sys.modules'.
+    # passing in 'mod' allows re-execution without having to reload.
+
+    import importlib.util
+    mod_spec = importlib.util.spec_from_file_location("__main__", filepath)
+    if mod is None:
+        mod = importlib.util.module_from_spec(mod_spec)
+    mod_spec.loader.exec_module(mod)
+    return mod
 
 
 def _test_import(module_name, loaded_modules):
@@ -103,9 +119,15 @@ def _test_import(module_name, loaded_modules):
     return mod
 
 
-def _sys_path_ensure(path):
-    if path not in _sys.path:  # reloading would add twice
+# Reloading would add twice.
+def _sys_path_ensure_prepend(path):
+    if path not in _sys.path:
         _sys.path.insert(0, path)
+
+
+def _sys_path_ensure_append(path):
+    if path not in _sys.path:
+        _sys.path.append(path)
 
 
 def modules_from_path(path, loaded_modules):
@@ -122,7 +144,7 @@ def modules_from_path(path, loaded_modules):
     """
     modules = []
 
-    for mod_name, mod_path in _bpy.path.module_names(path):
+    for mod_name, _mod_path in _bpy.path.module_names(path):
         mod = _test_import(mod_name, loaded_modules)
         if mod:
             modules.append(mod)
@@ -147,7 +169,6 @@ def load_scripts(reload_scripts=False, refresh_scripts=False):
     """
     use_time = use_class_register_check = _bpy.app.debug_python
     use_user = not _is_factory_startup
-    is_background = _bpy.app.background
 
     if use_time:
         import time
@@ -163,7 +184,7 @@ def load_scripts(reload_scripts=False, refresh_scripts=False):
         # to reload. note that they will only actually reload of the
         # modification time changes. This `won't` work for packages so...
         # its not perfect.
-        for module_name in [ext.module for ext in _user_preferences.addons]:
+        for module_name in [ext.module for ext in _preferences.addons]:
             _addon_utils.disable(module_name)
 
     def register_module_call(mod):
@@ -238,14 +259,12 @@ def load_scripts(reload_scripts=False, refresh_scripts=False):
             for path_subdir in _script_module_dirs:
                 path = _os.path.join(base_path, path_subdir)
                 if _os.path.isdir(path):
-                    _sys_path_ensure(path)
+                    _sys_path_ensure_prepend(path)
 
-                    # only add this to sys.modules, don't run
-                    if path_subdir == "modules":
-                        continue
-
-                    for mod in modules_from_path(path, loaded_modules):
-                        test_register(mod)
+                    # Only add to 'sys.modules' unless this is 'startup'.
+                    if path_subdir == "startup":
+                        for mod in modules_from_path(path, loaded_modules):
+                            test_register(mod)
 
     # load template (if set)
     if any(_bpy.utils.app_template_paths()):
@@ -295,7 +314,7 @@ def script_path_user():
 
 def script_path_pref():
     """returns the user preference or None"""
-    path = _user_preferences.filepaths.script_directory
+    path = _preferences.filepaths.script_directory
     return _os.path.normpath(path) if path else None
 
 
@@ -339,10 +358,11 @@ def script_paths(subdir=None, user_pref=True, check_all=False, use_user=True):
             *base_paths,
         )
 
-    if use_user:
-        test_paths = (*base_paths, script_path_user(), script_path_pref())
-    else:
-        test_paths = (*base_paths, script_path_pref())
+    test_paths = (
+        *base_paths,
+        *((script_path_user(),) if use_user else ()),
+        *((script_path_pref(),) if user_pref else ()),
+    )
 
     for path in test_paths:
         if path:
@@ -371,13 +391,13 @@ def refresh_script_paths():
         for path_subdir in _script_module_dirs:
             path = _os.path.join(base_path, path_subdir)
             if _os.path.isdir(path):
-                _sys_path_ensure(path)
+                _sys_path_ensure_prepend(path)
 
     for path in _addon_utils.paths():
-        _sys_path_ensure(path)
+        _sys_path_ensure_append(path)
         path = _os.path.join(path, "modules")
         if _os.path.isdir(path):
-            _sys_path_ensure(path)
+            _sys_path_ensure_append(path)
 
 
 def app_template_paths(subdir=None):
@@ -389,26 +409,17 @@ def app_template_paths(subdir=None):
     :return: app template paths.
     :rtype: generator
     """
-    # Note: keep in sync with: Blender's BKE_appdir_app_template_any
-
-    subdir_tuple = (subdir,) if subdir is not None else ()
-
-    # Avoid adding 'bl_app_templates_system' twice.
-    # Either we have a portable build or an installed system build.
-    for resource_type, module_name in (
-            ('USER', "bl_app_templates_user"),
-            ('LOCAL', "bl_app_templates_system"),
-            ('SYSTEM', "bl_app_templates_system"),
+    subdir_args = (subdir,) if subdir is not None else ()
+    # Note: keep in sync with: Blender's 'BKE_appdir_app_template_any'.
+    # Uses 'BLENDER_USER_SCRIPTS', 'BLENDER_SYSTEM_SCRIPTS'
+    # ... in this case 'system' accounts for 'local' too.
+    for resource_fn, module_name in (
+            (_user_resource, "bl_app_templates_user"),
+            (system_resource, "bl_app_templates_system"),
     ):
-        path = resource_path(resource_type)
-        if path:
-            path = _os.path.join(
-                *(path, "scripts", "startup", module_name, *subdir_tuple))
-            if _os.path.isdir(path):
-                yield path
-                # Only load LOCAL or SYSTEM (never both).
-                if resource_type == 'LOCAL':
-                    break
+        path = resource_fn('SCRIPTS', _os.path.join("startup", module_name, *subdir_args))
+        if path and _os.path.isdir(path):
+            yield path
 
 
 def preset_paths(subdir):
@@ -437,12 +448,50 @@ def preset_paths(subdir):
     return dirs
 
 
-def smpte_from_seconds(time, fps=None):
+def is_path_builtin(path):
+    """
+    Returns True if the path is one of the built-in paths used by Blender.
+
+    :arg path: Path you want to check if it is in the built-in settings directory
+    :type path: str
+    :rtype: bool
+    """
+    # Note that this function is is not optimized for speed,
+    # it's intended to be used to check if it's OK to remove presets.
+    #
+    # If this is used in a draw-loop for example, we could cache some of the values.
+    user_path = resource_path('USER')
+
+    for res in ('SYSTEM', 'LOCAL'):
+        parent_path = resource_path(res)
+        if not parent_path or parent_path == user_path:
+            # Make sure that the current path is not empty string and that it is
+            # not the same as the user config path. IE "~/.config/blender" on Linux
+            # This can happen on portable installs.
+            continue
+
+        try:
+            if _os.path.samefile(
+                    _os.path.commonpath([parent_path]),
+                    _os.path.commonpath([parent_path, path])
+            ):
+                return True
+        except FileNotFoundError:
+            # The path we tried to look up doesn't exist.
+            pass
+        except ValueError:
+            # Happens on Windows when paths don't have the same drive.
+            pass
+
+    return False
+
+
+def smpte_from_seconds(time, fps=None, fps_base=None):
     """
     Returns an SMPTE formatted string from the *time*:
     ``HH:MM:SS:FF``.
 
-    If the *fps* is not given the current scene is used.
+    If *fps* and *fps_base* are not given the current scene is used.
 
     :arg time: time in seconds.
     :type time: int, float or ``datetime.timedelta``.
@@ -450,7 +499,11 @@ def smpte_from_seconds(time, fps=None):
     :rtype: string
     """
 
-    return smpte_from_frame(time_to_frame(time, fps=fps), fps)
+    return smpte_from_frame(
+        time_to_frame(time, fps=fps, fps_base=fps_base),
+        fps=fps,
+        fps_base=fps_base
+    )
 
 
 def smpte_from_frame(frame, fps=None, fps_base=None):
@@ -472,8 +525,9 @@ def smpte_from_frame(frame, fps=None, fps_base=None):
     if fps_base is None:
         fps_base = _bpy.context.scene.render.fps_base
 
+    fps = fps / fps_base
     sign = "-" if frame < 0 else ""
-    frame = abs(frame * fps_base)
+    frame = abs(frame)
 
     return (
         "%s%02d:%02d:%02d:%02d" % (
@@ -503,9 +557,11 @@ def time_from_frame(frame, fps=None, fps_base=None):
     if fps_base is None:
         fps_base = _bpy.context.scene.render.fps_base
 
+    fps = fps / fps_base
+
     from datetime import timedelta
 
-    return timedelta(0, (frame * fps_base) / fps)
+    return timedelta(0, frame / fps)
 
 
 def time_to_frame(time, fps=None, fps_base=None):
@@ -527,12 +583,14 @@ def time_to_frame(time, fps=None, fps_base=None):
     if fps_base is None:
         fps_base = _bpy.context.scene.render.fps_base
 
+    fps = fps / fps_base
+
     from datetime import timedelta
 
     if isinstance(time, timedelta):
         time = time.total_seconds()
 
-    return (time / fps_base) * fps
+    return time * fps
 
 
 def preset_find(name, preset_path, display_name=False, ext=".py"):
@@ -559,7 +617,7 @@ def preset_find(name, preset_path, display_name=False, ext=".py"):
 def keyconfig_init():
     # Key configuration initialization and refresh, called from the Blender
     # window manager on startup and refresh.
-    active_config = _user_preferences.inputs.active_keyconfig
+    active_config = _preferences.keymap.active_keyconfig
 
     # Load the default key configuration.
     default_filepath = preset_find("blender", "keyconfig")
@@ -574,43 +632,31 @@ def keyconfig_init():
 
 def keyconfig_set(filepath, report=None):
     from os.path import basename, splitext
-    from itertools import chain
 
     if _bpy.app.debug_python:
         print("loading preset:", filepath)
 
     keyconfigs = _bpy.context.window_manager.keyconfigs
 
-    keyconfigs_old = keyconfigs[:]
-
     try:
         error_msg = ""
-        with open(filepath, 'r', encoding='utf-8') as keyfile:
-            exec(
-                compile(keyfile.read(), filepath, "exec"),
-                {
-                    "__file__": filepath,
-                    "__name__": "__main__",
-                }
-            )
+        execfile(filepath)
     except:
         import traceback
         error_msg = traceback.format_exc()
+
+    name = splitext(basename(filepath))[0]
+    kc_new = keyconfigs.get(name)
 
     if error_msg:
         if report is not None:
             report({'ERROR'}, error_msg)
         print(error_msg)
-
-    kc_new = next(chain(iter(kc for kc in keyconfigs
-                             if kc not in keyconfigs_old), (None,)))
+        if kc_new is not None:
+            keyconfigs.remove(kc_new)
+        return False
 
     # Get name, exception for default keymap to keep backwards compatibility.
-    name = splitext(basename(filepath))[0]
-    if name == 'blender':
-        name = 'Blender'
-
-    kc_new = keyconfigs.get(name)
     if kc_new is None:
         if report is not None:
             report({'ERROR'}, "Failed to load keymap %r" % filepath)
@@ -715,45 +761,211 @@ def register_submodule_factory(module_name, submodule_names):
 
 
 # -----------------------------------------------------------------------------
-# Tool Registraion
+# Tool Registration
 
-def register_tool(space_type, context_mode, tool_def):
+
+def register_tool(tool_cls, *, after=None, separator=False, group=False):
+    """
+    Register a tool in the toolbar.
+
+    :arg tool: A tool subclass.
+    :type tool: :class:`bpy.types.WorkSpaceTool` subclass.
+    :arg space_type: Space type identifier.
+    :type space_type: string
+    :arg after: Optional identifiers this tool will be added after.
+    :type after: collection of strings or None.
+    :arg separator: When true, add a separator before this tool.
+    :type separator: bool
+    :arg group: When true, add a new nested group of tools.
+    :type group: bool
+    """
+    space_type = tool_cls.bl_space_type
+    context_mode = tool_cls.bl_context_mode
+
+    from bl_ui.space_toolsystem_common import (
+        ToolSelectPanelHelper,
+        ToolDef,
+    )
+
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    if cls is None:
+        raise Exception(f"Space type {space_type!r} has no toolbar")
+    tools = cls._tools[context_mode]
+
+    # First sanity check
+    from bpy.types import WorkSpaceTool
+    tools_id = {
+        item.idname for item in ToolSelectPanelHelper._tools_flatten(tools)
+        if item is not None
+    }
+    if not issubclass(tool_cls, WorkSpaceTool):
+        raise Exception(f"Expected WorkSpaceTool subclass, not {type(tool_cls)!r}")
+    if tool_cls.bl_idname in tools_id:
+        raise Exception(f"Tool {tool_cls.bl_idname!r} already exists!")
+    del tools_id, WorkSpaceTool
+
+    # Convert the class into a ToolDef.
+    def tool_from_class(tool_cls):
+        # Convert class to tuple, store in the class for removal.
+        tool_def = ToolDef.from_dict({
+            "idname": tool_cls.bl_idname,
+            "label": tool_cls.bl_label,
+            "description": getattr(tool_cls, "bl_description", tool_cls.__doc__),
+            "icon": getattr(tool_cls, "bl_icon", None),
+            "cursor": getattr(tool_cls, "bl_cursor", None),
+            "widget": getattr(tool_cls, "bl_widget", None),
+            "keymap": getattr(tool_cls, "bl_keymap", None),
+            "data_block": getattr(tool_cls, "bl_data_block", None),
+            "operator": getattr(tool_cls, "bl_operator", None),
+            "draw_settings": getattr(tool_cls, "draw_settings", None),
+            "draw_cursor": getattr(tool_cls, "draw_cursor", None),
+        })
+        tool_cls._bl_tool = tool_def
+
+        keymap_data = tool_def.keymap
+        if keymap_data is not None:
+            if context_mode is None:
+                context_descr = "All"
+            else:
+                context_descr = context_mode.replace("_", " ").title()
+            from bpy import context
+            wm = context.window_manager
+            keyconfigs = wm.keyconfigs
+            kc_default = keyconfigs.default
+            # Note that Blender's default tools use the default key-config for both.
+            # We need to use the add-ons for 3rd party tools so reloading the key-map doesn't clear them.
+            kc = keyconfigs.addon
+            if callable(keymap_data[0]):
+                cls._km_action_simple(kc_default, kc, context_descr, tool_def.label, keymap_data)
+        return tool_def
+
+    tool_converted = tool_from_class(tool_cls)
+
+    if group:
+        # Create a new group
+        tool_converted = (tool_converted,)
+
+
+    tool_def_insert = (
+        (None, tool_converted) if separator else
+        (tool_converted,)
+    )
+
+    def skip_to_end_of_group(seq, i):
+        i_prev = i
+        while i < len(seq) and seq[i] is not None:
+            i_prev = i
+            i += 1
+        return i_prev
+
+    changed = False
+    if after is not None:
+        for i, item in enumerate(tools):
+            if item is None:
+                pass
+            elif isinstance(item, ToolDef):
+                if item.idname in after:
+                    i = skip_to_end_of_group(item, i)
+                    tools[i + 1:i + 1] = tool_def_insert
+                    changed = True
+                    break
+            elif isinstance(item, tuple):
+                for j, sub_item in enumerate(item, 1):
+                    if isinstance(sub_item, ToolDef):
+                        if sub_item.idname in after:
+                            if group:
+                                # Can't add a group within a group,
+                                # add a new group after this group.
+                                i = skip_to_end_of_group(tools, i)
+                                tools[i + 1:i + 1] = tool_def_insert
+                            else:
+                                j = skip_to_end_of_group(item, j)
+                                item = item[:j + 1] + tool_def_insert + item[j + 1:]
+                                tools[i] = item
+                            changed = True
+                            break
+                if changed:
+                    break
+
+        if not changed:
+            print("bpy.utils.register_tool: could not find 'after'", after)
+    if not changed:
+        tools.extend(tool_def_insert)
+
+
+def unregister_tool(tool_cls):
+    space_type = tool_cls.bl_space_type
+    context_mode = tool_cls.bl_context_mode
+
     from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
     cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
     if cls is None:
         raise Exception(f"Space type {space_type!r} has no toolbar")
     tools = cls._tools[context_mode]
 
+    tool_def = tool_cls._bl_tool
+    try:
+        i = tools.index(tool_def)
+    except ValueError:
+        i = -1
+
+    def tool_list_clean(tool_list):
+        # Trim separators.
+        while tool_list and tool_list[-1] is None:
+            del tool_list[-1]
+        while tool_list and tool_list[0] is None:
+            del tool_list[0]
+        # Remove duplicate separators.
+        for i in range(len(tool_list) - 1, -1, -1):
+            is_none = tool_list[i] is None
+            if is_none and prev_is_none:
+                del tool_list[i]
+            prev_is_none = is_none
+
+    changed = False
+    if i != -1:
+        del tools[i]
+        tool_list_clean(tools)
+        changed = True
+
+    if not changed:
+        for i, item in enumerate(tools):
+            if isinstance(item, tuple):
+                try:
+                    j = item.index(tool_def)
+                except ValueError:
+                    j = -1
+
+                if j != -1:
+                    item_clean = list(item)
+                    del item_clean[j]
+                    tool_list_clean(item_clean)
+                    if item_clean:
+                        tools[i] = tuple(item_clean)
+                    else:
+                        del tools[i]
+                        tool_list_clean(tools)
+                    del item_clean
+
+                    # tuple(sub_item for sub_item in items if sub_item is not tool_def)
+                    changed = True
+                    break
+
+    if not changed:
+        raise Exception(f"Unable to remove {tool_cls!r}")
+    del tool_cls._bl_tool
+
     keymap_data = tool_def.keymap
     if keymap_data is not None:
-        if context_mode is None:
-            context_descr = "All"
-        else:
-            context_descr = context_mode.replace("_", " ").title()
         from bpy import context
         wm = context.window_manager
-        kc = wm.keyconfigs.default
-        if callable(keymap_data[0]):
-            cls._km_action_simple(kc, context_descr, tool_def.text, keymap_data)
-
-    tools.append(tool_def)
-
-
-def unregister_tool(space_type, context_mode, tool_def):
-    from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
-    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
-    if cls is None:
-        raise Exception(f"Space type {space_type!r} has no toolbar")
-    tools = cls._tools[context_mode]
-    tools.remove(tool_def)
-
-    keymap_data = tool_def.keymap
-    if keymap_data is not None:
-        from bpy import context
-        wm = context.window_manager
-        kc = wm.keyconfigs.default
-        km = keymap_data[0]
-        kc.keymaps.remove(km)
+        keyconfigs = wm.keyconfigs
+        for kc in (keyconfigs.default, keyconfigs.addon):
+            km = kc.keymaps.get(keymap_data[0])
+            if km is None:
+                print(f"Warning keymap {keymap_data[0]!r} not found in {kc.name!r}!")
+            else:
+                kc.keymaps.remove(km)
 
 
 # -----------------------------------------------------------------------------

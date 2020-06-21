@@ -1,6 +1,4 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -15,21 +13,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * ***** END GPL LICENSE BLOCK *****
  * */
 
 #ifndef __BLI_MATH_BITS_H__
 #define __BLI_MATH_BITS_H__
 
-/** \file BLI_math_bits.h
- *  \ingroup bli
+/** \file
+ * \ingroup bli
  */
+
+#include "BLI_math_inline.h"
+#include "BLI_utildefines.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "BLI_math_inline.h"
 
 /* Search the value from LSB to MSB for a set bit. Returns index of this bit. */
 MINLINE int bitscan_forward_i(int a);
@@ -64,7 +62,7 @@ MINLINE float uint_as_float(unsigned int i);
 MINLINE float xor_fl(float x, int y);
 
 #if BLI_MATH_DO_INLINE
-#include "intern/math_bits_inline.c"
+#  include "intern/math_bits_inline.c"
 #endif
 
 #ifdef __cplusplus

@@ -3,6 +3,7 @@
 # This script updates icons from the BLEND file
 import os
 import subprocess
+import sys
 
 
 def run(cmd):
@@ -38,6 +39,12 @@ ROOTDIR = os.path.normpath(os.path.join(BASEDIR, "..", ".."))
 blender_bin = os.environ.get("BLENDER_BIN", "blender")
 if not os.path.exists(blender_bin):
     blender_bin = os.path.join(ROOTDIR, "blender.bin")
+
+if not os.path.exists(blender_bin):
+    if sys.platform == 'darwin':
+        blender_app_path = '/Applications/Blender.app/Contents/MacOS/Blender'
+        if os.path.exists(blender_app_path):
+            blender_bin = blender_app_path
 
 icons_blend = (
     os.path.join(ROOTDIR, "..", "lib", "resources", "icon_geom.blend"),
@@ -79,5 +86,5 @@ edit_text_file(
     os.path.join(ROOTDIR, "source", "blender", "editors", "datafiles", "CMakeLists.txt"),
     "# BEGIN ICON_GEOM_NAMES",
     "# END ICON_GEOM_NAMES",
-    "\t" + "\n\t".join(icon_files) + "\n",
+    "  " + "\n  ".join(icon_files) + "\n",
 )

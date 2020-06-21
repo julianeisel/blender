@@ -22,14 +22,15 @@ from bpy.types import (
     Menu,
 )
 
+from bpy.app.translations import pgettext_tip as tip_
+
 __all__ = (
     "ToolDef",
     "ToolSelectPanelHelper",
-    "activate_by_name",
-    "activate_by_name_or_cycle",
-    "description_from_name",
-    "keymap_from_name",
-    "keymap_from_context",
+    "activate_by_id",
+    "activate_by_id_or_cycle",
+    "description_from_id",
+    "keymap_from_id",
 )
 
 # Support reloading icons.
@@ -47,20 +48,10 @@ _icon_cache = {}
 
 def _keymap_fn_from_seq(keymap_data):
 
-    # standalone
-    def _props_assign_recursive(rna_props, py_props):
-        for prop_id, value in py_props.items():
-            if isinstance(value, dict):
-                _props_assign_recursive(getattr(rna_props, prop_id), value)
-            else:
-                setattr(rna_props, prop_id, value)
-
     def keymap_fn(km):
-        for op_idname, op_props_dict, kmi_kwargs in keymap_fn.keymap_data:
-            kmi = km.keymap_items.new(op_idname, **kmi_kwargs)
-            kmi_props = kmi.properties
-            if op_props_dict:
-                _props_assign_recursive(kmi_props, op_props_dict)
+        if keymap_fn.keymap_data:
+            from bl_keymap_utils.io import keymap_init_from_data
+            keymap_init_from_data(km, keymap_fn.keymap_data)
     keymap_fn.keymap_data = keymap_data
     return keymap_fn
 
@@ -73,9 +64,12 @@ from collections import namedtuple
 ToolDef = namedtuple(
     "ToolDef",
     (
+        # Unique tool name (withing space & mode context).
+        "idname",
         # The name to display in the interface.
-        "text",
-        # Description (for tooltip), when not set, use the description of 'operator'.
+        "label",
+        # Description (for tool-tip), when not set, use the description of 'operator',
+        # may be a string or a 'function(context, item, key-map) -> string'.
         "description",
         # The name of the icon to use (found in ``release/datafiles/icons``) or None for no icon.
         "icon",
@@ -83,21 +77,42 @@ ToolDef = namedtuple(
         "cursor",
         # An optional gizmo group to activate when the tool is set or None for no gizmo.
         "widget",
-        # Optional keymap for tool, either:
-        # - A function that populates a keymaps passed in as an argument.
+        # Optional key-map for tool, possible values are:
+        #
+        # - ``None`` when the tool doesn't have a key-map.
+        #   Also the default value when no key-map value is defined.
+        #
+        # - A string literal for the key-map name, the key-map items are located in the default key-map.
+        #
+        # - ``()`` an empty tuple for a default name.
+        #   This is convenience functionality for generating a key-map name.
+        #   So if a tool name is "Bone Size", in "Edit Armature" mode for the "3D View",
+        #   All of these values are combined into an id, e.g:
+        #     "3D View Tool: Edit Armature, Bone Envelope"
+        #
+        #   Typically searching for a string ending with the tool name
+        #   in the default key-map will lead you to the key-map for a tool.
+        #
+        # - A function that populates a key-maps passed in as an argument.
+        #
         # - A tuple filled with triple's of:
         #   ``(operator_id, operator_properties, keymap_item_args)``.
         #
+        #   Use this to define the key-map in-line.
+        #
+        #   Note that this isn't used for Blender's built in tools which use the built-in key-map.
+        #   Keep this functionality since it's likely useful for add-on key-maps.
+        #
         # Warning: currently 'from_dict' this is a list of one item,
-        # so internally we can swap the keymap function for the keymap it's self.
+        # so internally we can swap the key-map function for the key-map it's self.
         # This isn't very nice and may change, tool definitions shouldn't care about this.
         "keymap",
-        # Optional data-block assosiated with this tool.
+        # Optional data-block associated with this tool.
         # (Typically brush name, usage depends on mode, we could use for non-brush ID's in other modes).
         "data_block",
         # Optional primary operator (for introspection only).
         "operator",
-        # Optional draw settings (operator options, toolsettings).
+        # Optional draw settings (operator options, tool_settings).
         "draw_settings",
         # Optional draw cursor.
         "draw_cursor",
@@ -126,7 +141,7 @@ def from_dict(kw_args):
     kw.update(kw_args)
 
     keymap = kw["keymap"]
-    if kw["keymap"] is None:
+    if keymap is None:
         pass
     elif type(keymap) is tuple:
         keymap = [_keymap_fn_from_seq(keymap)]
@@ -153,6 +168,25 @@ from_fn.with_args = with_args
 ToolDef.from_dict = from_dict
 ToolDef.from_fn = from_fn
 del from_dict, from_fn, with_args
+
+
+class ToolActivePanelHelper:
+    # Sub-class must define.
+    # bl_space_type = 'VIEW_3D'
+    # bl_region_type = 'UI'
+    bl_label = "Active Tool"
+    # bl_category = "Tool"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        ToolSelectPanelHelper.draw_active_tool_header(
+            context,
+            layout.column(),
+            show_tool_name=True,
+            tool_key=ToolSelectPanelHelper._tool_key_from_context(context, space_type=self.bl_space_type),
+        )
 
 
 class ToolSelectPanelHelper:
@@ -184,11 +218,8 @@ class ToolSelectPanelHelper:
             assert(type(icon_name) is str)
             icon_value = _icon_cache.get(icon_name)
             if icon_value is None:
-                dirname = bpy.utils.resource_path('LOCAL')
-                if not os.path.exists(dirname):
-                    # TODO(campbell): use a better way of finding datafiles.
-                    dirname = bpy.utils.resource_path('SYSTEM')
-                filename = os.path.join(dirname, "datafiles", "icons", icon_name + ".dat")
+                dirname = bpy.utils.system_resource('DATAFILES', "icons")
+                filename = os.path.join(dirname, icon_name + ".dat")
                 try:
                     icon_value = bpy.app.icons.new_triangles_from_file(filename)
                 except Exception as ex:
@@ -206,87 +237,180 @@ class ToolSelectPanelHelper:
         else:
             return 0
 
+    # tool flattening
+    #
+    # usually 'tools' is already expanded into ToolDef
+    # but when registering a tool, this can still be a function
+    # (_tools_flatten is usually called with cls.tools_from_context(context)
+    # [that already yields from the function])
+    # so if item is still a function (e.g._defs_XXX.generate_from_brushes)
+    # seems like we cannot expand here (have no context yet)
+    # if we yield None here, this will risk running into duplicate tool bl_idname [in register_tool()]
+    # but still better than erroring out
     @staticmethod
     def _tools_flatten(tools):
-        """
-        Flattens, skips None and calls generators.
-        """
-        for item in tools:
-            if item is None:
+        for item_parent in tools:
+            if item_parent is None:
                 yield None
-            elif type(item) is tuple:
-                for sub_item in item:
-                    if sub_item is None:
-                        yield None
-                    elif _item_is_fn(sub_item):
-                        yield from sub_item(context)
-                    else:
-                        yield sub_item
-            else:
-                if _item_is_fn(item):
-                    yield from item(context)
+            for item in item_parent if (type(item_parent) is tuple) else (item_parent,):
+                if item is None or _item_is_fn(item):
+                    yield None
                 else:
                     yield item
 
     @staticmethod
     def _tools_flatten_with_tool_index(tools):
-        for item in tools:
-            if item is None:
+        for item_parent in tools:
+            if item_parent is None:
                 yield None, -1
-            elif type(item) is tuple:
-                i = 0
-                for sub_item in item:
-                    if sub_item is None:
-                        yield None
-                    elif _item_is_fn(sub_item):
-                        for item_dyn in sub_item(context):
-                            yield item_dyn, i
-                            i += 1
-                    else:
-                        yield sub_item, i
-                        i += 1
-            else:
-                if _item_is_fn(item):
-                    for item_dyn in item(context):
-                        yield item_dyn, -1
+            i = 0
+            for item in item_parent if (type(item_parent) is tuple) else (item_parent,):
+                if item is None or _item_is_fn(item):
+                    yield None, -1
                 else:
-                    yield item, -1
+                    yield item, i
+                    i += 1
 
+    # Special internal function, gives use items that contain keymaps.
     @staticmethod
-    def _tool_get_active(context, space_type, mode, with_icon=False):
+    def _tools_flatten_with_keymap(tools):
+        for item_parent in tools:
+            if item_parent is None:
+                continue
+            for item in item_parent if (type(item_parent) is tuple) else (item_parent,):
+                # skip None or generator function
+                if item is None or _item_is_fn(item):
+                    continue
+                if item.keymap is not None:
+                    yield item
+
+    @classmethod
+    def _tool_get_active(cls, context, space_type, mode, with_icon=False):
         """
         Return the active Python tool definition and icon name.
         """
-        cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
-        if cls is not None:
-            tool_active = ToolSelectPanelHelper._tool_active_from_context(context, space_type, mode)
-            tool_active_text = getattr(tool_active, "name", None)
-            for item in ToolSelectPanelHelper._tools_flatten(cls.tools_from_context(context, mode)):
-                if item is not None:
-                    if item.text == tool_active_text:
-                        if with_icon:
-                            icon_value = ToolSelectPanelHelper._icon_value_from_icon_handle(item.icon)
-                        else:
-                            icon_value = 0
-                        return (item, tool_active, icon_value)
+        tool_active = ToolSelectPanelHelper._tool_active_from_context(context, space_type, mode)
+        tool_active_id = getattr(tool_active, "idname", None)
+        for item in ToolSelectPanelHelper._tools_flatten(cls.tools_from_context(context, mode)):
+            if item is not None:
+                if item.idname == tool_active_id:
+                    if with_icon:
+                        icon_value = ToolSelectPanelHelper._icon_value_from_icon_handle(item.icon)
+                    else:
+                        icon_value = 0
+                    return (item, tool_active, icon_value)
         return None, None, 0
 
-    @staticmethod
-    def _tool_get_by_name(context, space_type, text):
+    @classmethod
+    def _tool_get_by_id(cls, context, idname):
         """
         Return the active Python tool definition and index (if in sub-group, else -1).
         """
-        cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
-        if cls is not None:
-            for item, index in ToolSelectPanelHelper._tools_flatten_with_tool_index(cls.tools_from_context(context)):
-                if item is not None:
-                    if item.text == text:
-                        return (cls, item, index)
-        return None, None, -1
+        for item, index in ToolSelectPanelHelper._tools_flatten_with_tool_index(cls.tools_from_context(context)):
+            if item is not None:
+                if item.idname == idname:
+                    return (item, index)
+        return None, -1
+
+    @classmethod
+    def _tool_get_by_id_active(cls, context, idname):
+        """
+        Return the active Python tool definition and index (if in sub-group, else -1).
+        """
+        for item in cls.tools_from_context(context):
+            if item is not None:
+                if type(item) is tuple:
+                    if item[0].idname == idname:
+                        index = cls._tool_group_active.get(item[0].idname, 0)
+                        return (item[index], index)
+                else:
+                    if item.idname == idname:
+                        return (item, -1)
+        return None, -1
+
+    @classmethod
+    def _tool_get_by_id_active_with_group(cls, context, idname):
+        """
+        Return the active Python tool definition and index (if in sub-group, else -1).
+        """
+        for item in cls.tools_from_context(context):
+            if item is not None:
+                if type(item) is tuple:
+                    if item[0].idname == idname:
+                        index = cls._tool_group_active.get(item[0].idname, 0)
+                        return (item[index], index, item)
+                else:
+                    if item.idname == idname:
+                        return (item, -1, None)
+        return None, -1, None
+
+    @classmethod
+    def _tool_get_group_by_id(cls, context, idname, *, coerce=False):
+        """
+        Return the group which contains idname, or None.
+        """
+        for item in cls.tools_from_context(context):
+            if item is not None:
+                if type(item) is tuple:
+                    for subitem in item:
+                        if subitem.idname == idname:
+                            return item
+                else:
+                    if item.idname == idname:
+                        if coerce:
+                            return (item,)
+                        else:
+                            return None
+        return None
+
+    @classmethod
+    def _tool_get_by_flat_index(cls, context, tool_index):
+        """
+        Return the active Python tool definition and index (if in sub-group, else -1).
+
+        Return the index of the expanded list.
+        """
+        i = 0
+        for item, index in ToolSelectPanelHelper._tools_flatten_with_tool_index(cls.tools_from_context(context)):
+            if item is not None:
+                if i == tool_index:
+                    return (item, index)
+                i += 1
+        return None, -1
+
+    @classmethod
+    def _tool_get_active_by_index(cls, context, tool_index):
+        """
+        Return the active Python tool definition and index (if in sub-group, else -1).
+
+        Return the index of the list without expanding.
+        """
+        i = 0
+        for item in cls.tools_from_context(context):
+            if item is not None:
+                if i == tool_index:
+                    if type(item) is tuple:
+                        index = cls._tool_group_active.get(item[0].idname, 0)
+                        item = item[index]
+                    else:
+                        index = -1
+                    return (item, index)
+                i += 1
+        return None, -1
+
+    @classmethod
+    def _tool_group_active_set_by_id(cls, context, idname_group, idname):
+        item_group = cls._tool_get_group_by_id(context, idname_group, coerce=True)
+        if item_group:
+            for i, item in enumerate(item_group):
+                if item and item.idname == idname:
+                    cls._tool_group_active[item_group[0].idname] = i
+                    return True
+        return False
 
     @staticmethod
     def _tool_active_from_context(context, space_type, mode=None, create=False):
-        if space_type == 'VIEW_3D':
+        if space_type in {'VIEW_3D', 'PROPERTIES'}:
             if mode is None:
                 mode = context.mode
             tool = context.workspace.tools.from_space_view3d_mode(mode, create=create)
@@ -304,39 +428,45 @@ class ToolSelectPanelHelper:
             if tool is not None:
                 tool.refresh_from_context()
                 return tool
+        elif space_type == 'NODE_EDITOR':
+            space_data = context.space_data
+            tool = context.workspace.tools.from_space_node(create=create)
+            if tool is not None:
+                tool.refresh_from_context()
+                return tool
+        elif space_type == 'SEQUENCE_EDITOR':
+            space_data = context.space_data
+            if mode is None:
+                mode = space_data.view_type
+            tool = context.workspace.tools.from_space_sequencer(mode, create=create)
+            if tool is not None:
+                tool.refresh_from_context()
+                return tool
         return None
 
     @staticmethod
-    def _tool_text_from_button(context):
+    def _tool_identifier_from_button(context):
         return context.button_operator.name
 
     @classmethod
-    def _km_action_simple(cls, kc, context_descr, text, keymap_fn):
-        km_idname = f"{cls.keymap_prefix:s} {context_descr:s}, {text:s}"
+    def _km_action_simple(cls, kc_default, kc, context_descr, label, keymap_fn):
+        km_idname = f"{cls.keymap_prefix:s} {context_descr:s}, {label:s}"
         km = kc.keymaps.get(km_idname)
+        km_kwargs = dict(space_type=cls.bl_space_type, region_type='WINDOW', tool=True)
         if km is None:
-            km = kc.keymaps.new(km_idname, space_type=cls.bl_space_type, region_type='WINDOW', tool=True)
+            km = kc.keymaps.new(km_idname, **km_kwargs)
             keymap_fn[0](km)
-        keymap_fn[0] = km
+        keymap_fn[0] = km.name
 
-    # Special internal function, gives use items that contain keymaps.
-    @staticmethod
-    def _tools_flatten_with_keymap(tools):
-        for item_parent in tools:
-            if item_parent is None:
-                continue
-            for item in item_parent if (type(item_parent) is tuple) else (item_parent,):
-                # skip None or generator function
-                if item is None or _item_is_fn(item):
-                    continue
-                if item.keymap is not None:
-                    yield item
+        # Ensure we have a default key map, so the add-ons keymap is properly overlayed.
+        if kc_default is not kc:
+            kc_default.keymaps.new(km_idname, **km_kwargs)
 
     @classmethod
     def register(cls):
         wm = bpy.context.window_manager
         # Write into defaults, users may modify in preferences.
-        kc = wm.keyconfigs.default
+        kc_default = wm.keyconfigs.default
 
         # Track which tool-group was last used for non-active groups.
         # Blender stores the active tool-group index.
@@ -345,7 +475,7 @@ class ToolSelectPanelHelper:
         cls._tool_group_active = {}
 
         # ignore in background mode
-        if kc is None:
+        if kc_default is None:
             return
 
         for context_mode, tools in cls.tools_all():
@@ -357,22 +487,31 @@ class ToolSelectPanelHelper:
             for item in cls._tools_flatten_with_keymap(tools):
                 keymap_data = item.keymap
                 if callable(keymap_data[0]):
-                    cls._km_action_simple(kc, context_descr, item.text, keymap_data)
+                    cls._km_action_simple(kc_default, kc_default, context_descr, item.label, keymap_data)
 
     @classmethod
     def keymap_ui_hierarchy(cls, context_mode):
         # See: bpy_extras.keyconfig_utils
+
+        # Keymaps may be shared, don't show them twice.
+        visited = set()
+
         for context_mode_test, tools in cls.tools_all():
             if context_mode_test == context_mode:
                 for item in cls._tools_flatten_with_keymap(tools):
-                    km = item.keymap[0]
+                    km_name = item.keymap[0]
                     # print((km.name, cls.bl_space_type, 'WINDOW', []))
-                    yield (km.name, cls.bl_space_type, 'WINDOW', [])
+
+                    if km_name in visited:
+                        continue
+                    visited.add(km_name)
+
+                    yield (km_name, cls.bl_space_type, 'WINDOW', [])
 
     # -------------------------------------------------------------------------
     # Layout Generators
     #
-    # Meaning of recieved values:
+    # Meaning of received values:
     # - Bool: True for a separator, otherwise False for regular tools.
     # - None: Signal to finish (complete any final operations, e.g. add padding).
 
@@ -435,7 +574,7 @@ class ToolSelectPanelHelper:
         """
         # Currently this just checks the width,
         # we could have different layouts as preferences too.
-        system = bpy.context.user_preferences.system
+        system = bpy.context.preferences.system
         view2d = region.view2d
         view2d_scale = (
             view2d.region_to_view(1.0, 0.0)[0] -
@@ -455,9 +594,13 @@ class ToolSelectPanelHelper:
                 column_count = 1
 
         if column_count == 1:
-            ui_gen = ToolSelectPanelHelper._layout_generator_single_column(layout, scale_y=scale_y)
+            ui_gen = ToolSelectPanelHelper._layout_generator_single_column(
+                layout, scale_y=scale_y,
+            )
         else:
-            ui_gen = ToolSelectPanelHelper._layout_generator_multi_columns(layout, column_count=column_count, scale_y=scale_y)
+            ui_gen = ToolSelectPanelHelper._layout_generator_multi_columns(
+                layout, column_count=column_count, scale_y=scale_y,
+            )
 
         return ui_gen, show_text
 
@@ -472,9 +615,9 @@ class ToolSelectPanelHelper:
         # - ability to click and hold to expose sub-tools.
 
         space_type = context.space_data.type
-        tool_active_text = getattr(
+        tool_active_id = getattr(
             ToolSelectPanelHelper._tool_active_from_context(context, space_type),
-            "name", None,
+            "idname", None,
         )
 
         if detect_layout:
@@ -497,7 +640,7 @@ class ToolSelectPanelHelper:
                 for i, sub_item in enumerate(item):
                     if sub_item is None:
                         continue
-                    is_active = (sub_item.text == tool_active_text)
+                    is_active = (sub_item.idname == tool_active_id)
                     if is_active:
                         index = i
                         break
@@ -505,9 +648,9 @@ class ToolSelectPanelHelper:
 
                 if is_active:
                     # not ideal, write this every time :S
-                    cls._tool_group_active[item[0].text] = index
+                    cls._tool_group_active[item[0].idname] = index
                 else:
-                    index = cls._tool_group_active.get(item[0].text, 0)
+                    index = cls._tool_group_active.get(item[0].idname, 0)
 
                 item = item[index]
                 use_menu = True
@@ -515,26 +658,26 @@ class ToolSelectPanelHelper:
                 index = -1
                 use_menu = False
 
-            is_active = (item.text == tool_active_text)
+            is_active = (item.idname == tool_active_id)
             icon_value = ToolSelectPanelHelper._icon_value_from_icon_handle(item.icon)
 
             sub = ui_gen.send(False)
 
             if use_menu:
                 sub.operator_menu_hold(
-                    "wm.tool_set_by_name",
-                    text=item.text if show_text else "",
+                    "wm.tool_set_by_id",
+                    text=item.label if show_text else "",
                     depress=is_active,
                     menu="WM_MT_toolsystem_submenu",
                     icon_value=icon_value,
-                ).name = item.text
+                ).name = item.idname
             else:
                 sub.operator(
-                    "wm.tool_set_by_name",
-                    text=item.text if show_text else "",
+                    "wm.tool_set_by_id",
+                    text=item.label if show_text else "",
                     depress=is_active,
                     icon_value=icon_value,
-                ).name = item.text
+                ).name = item.idname
         # Signal to finish any remaining layout edits.
         ui_gen.send(None)
 
@@ -542,33 +685,191 @@ class ToolSelectPanelHelper:
         self.draw_cls(self.layout, context)
 
     @staticmethod
+    def _tool_key_from_context(context, *, space_type=None):
+        if space_type is None:
+            space_data = context.space_data
+            space_type = space_data.type
+        else:
+            space_data = None
+
+        if space_type == 'VIEW_3D':
+            return space_type, context.mode
+        elif space_type == 'IMAGE_EDITOR':
+            if space_data is None:
+                space_data = context.space_data
+            return space_type, space_data.mode
+        elif space_type == 'NODE_EDITOR':
+            return space_type, None
+        elif space_type == 'SEQUENCE_EDITOR':
+            return space_type, context.space_data.view_type
+        else:
+            return None, None
+
+    @staticmethod
     def tool_active_from_context(context):
-        # BAD DESIGN WARNING: last used tool
-        workspace = context.workspace
-        space_type = workspace.tools_space_type
-        mode = workspace.tools_mode
-        return ToolSelectPanelHelper._tool_active_from_context(context, space_type, mode)
+        space_type = context.space_data.type
+        return ToolSelectPanelHelper._tool_active_from_context(context, space_type)
+
+    @staticmethod
+    def draw_active_tool_fallback(
+            context, layout, tool,
+            *,
+            is_horizontal_layout=False,
+    ):
+        idname_fallback = tool.idname_fallback
+        space_type = tool.space_type
+        cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+        item_fallback, _index = cls._tool_get_by_id(context, idname_fallback)
+        if item_fallback is not None:
+            draw_settings = item_fallback.draw_settings
+            if draw_settings is not None:
+                if not is_horizontal_layout:
+                    layout.separator()
+                draw_settings(context, layout, tool)
 
     @staticmethod
     def draw_active_tool_header(
             context, layout,
             *,
             show_tool_name=False,
+            tool_key=None,
     ):
-        # BAD DESIGN WARNING: last used tool
-        workspace = context.workspace
-        space_type = workspace.tools_space_type
-        mode = workspace.tools_mode
-        item, tool, icon_value = ToolSelectPanelHelper._tool_get_active(context, space_type, mode, with_icon=True)
+        if tool_key is None:
+            space_type, mode = ToolSelectPanelHelper._tool_key_from_context(context)
+        else:
+            space_type, mode = tool_key
+
+        if space_type is None:
+            return None
+
+        cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+        item, tool, icon_value = cls._tool_get_active(context, space_type, mode, with_icon=True)
         if item is None:
             return None
         # Note: we could show 'item.text' here but it makes the layout jitter when switching tools.
         # Add some spacing since the icon is currently assuming regular small icon size.
-        layout.label(text="    " + item.text if show_tool_name else " ", icon_value=icon_value)
+        layout.label(text="    " + item.label if show_tool_name else " ", icon_value=icon_value)
+        if show_tool_name:
+            layout.separator()
         draw_settings = item.draw_settings
         if draw_settings is not None:
             draw_settings(context, layout, tool)
+
+        idname_fallback = tool.idname_fallback
+        if idname_fallback and idname_fallback != item.idname:
+            tool_settings = context.tool_settings
+
+            # Show popover which looks like an enum but isn't one.
+            if tool_settings.workspace_tool_type == 'FALLBACK':
+                tool_fallback_id = cls.tool_fallback_id
+                item, _select_index = cls._tool_get_by_id_active(context, tool_fallback_id)
+                label = item.label
+            else:
+                label = "Active Tool"
+
+            split = layout.split(factor=0.33)
+            row = split.row()
+            row.alignment = 'RIGHT'
+            row.label(text="Drag:")
+            row = split.row()
+            row.context_pointer_set("tool", tool)
+            row.popover(panel="TOPBAR_PT_tool_fallback", text=label)
+
         return tool
+
+    # Show a list of tools in the popover.
+    @staticmethod
+    def draw_fallback_tool_items(layout, context):
+        space_type = context.space_data.type
+        if space_type == 'PROPERTIES':
+            space_type = 'VIEW_3D'
+
+        cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+        tool_fallback_id = cls.tool_fallback_id
+
+        _item, _select_index, item_group = cls._tool_get_by_id_active_with_group(context, tool_fallback_id)
+
+        if item_group is None:
+            # Could print comprehensive message - listing available items.
+            raise Exception("Fallback tool doesn't exist")
+
+        col = layout.column(align=True)
+        tool_settings = context.tool_settings
+        col.prop_enum(
+            tool_settings,
+            "workspace_tool_type",
+            value='DEFAULT',
+            text="Active Tool",
+        )
+        is_active_tool = (tool_settings.workspace_tool_type == 'DEFAULT')
+
+        col = layout.column(align=True)
+        if is_active_tool:
+            index_current = -1
+        else:
+            index_current = cls._tool_group_active.get(item_group[0].idname, 0)
+        for i, sub_item in enumerate(item_group):
+            is_active = (i == index_current)
+
+            props = col.operator(
+                "wm.tool_set_by_id",
+                text=sub_item.label,
+                depress=is_active,
+            )
+            props.name = sub_item.idname
+            props.as_fallback = True
+            props.space_type = space_type
+
+    @staticmethod
+    def draw_fallback_tool_items_for_pie_menu(layout, context):
+        space_type = context.space_data.type
+        if space_type == 'PROPERTIES':
+            space_type = 'VIEW_3D'
+
+        cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+        tool_fallback_id = cls.tool_fallback_id
+
+        _item, _select_index, item_group = cls._tool_get_by_id_active_with_group(context, tool_fallback_id)
+
+        if item_group is None:
+            # Could print comprehensive message - listing available items.
+            raise Exception("Fallback tool doesn't exist")
+
+        # Allow changing the active tool,
+        # even though this isn't the purpose of the pie menu
+        # it's confusing from a user perspective if we don't allow it.
+        is_fallback_group_active = getattr(
+            ToolSelectPanelHelper._tool_active_from_context(context, space_type),
+            "idname", None,
+        ) in (item.idname for item in item_group)
+
+        pie = layout.menu_pie()
+        tool_settings = context.tool_settings
+        pie.prop_enum(
+            tool_settings,
+            "workspace_tool_type",
+            value='DEFAULT',
+            text="Active Tool",
+            icon='TOOL_SETTINGS',  # Could use a less generic icon.
+        )
+        is_active_tool = (tool_settings.workspace_tool_type == 'DEFAULT')
+
+        if is_active_tool:
+            index_current = -1
+        else:
+            index_current = cls._tool_group_active.get(item_group[0].idname, 0)
+        for i, sub_item in enumerate(item_group):
+            is_active = (i == index_current)
+            props = pie.operator(
+                "wm.tool_set_by_id",
+                text=sub_item.label,
+                depress=is_active,
+                icon_value=ToolSelectPanelHelper._icon_value_from_icon_handle(sub_item.icon),
+            )
+            props.name = sub_item.idname
+            props.space_type = space_type
+            if not is_fallback_group_active:
+                props.as_fallback = True
 
 
 # The purpose of this menu is to be a generic popup to select between tools
@@ -581,11 +882,11 @@ class WM_MT_toolsystem_submenu(Menu):
         # Lookup the tool definitions based on the space-type.
         cls = ToolSelectPanelHelper._tool_class_from_space_type(context.space_data.type)
         if cls is not None:
-            button_text = ToolSelectPanelHelper._tool_text_from_button(context)
+            button_identifier = ToolSelectPanelHelper._tool_identifier_from_button(context)
             for item_group in cls.tools_from_context(context):
                 if type(item_group) is tuple:
                     for sub_item in item_group:
-                        if sub_item.text == button_text:
+                        if (sub_item is not None) and (sub_item.idname == button_identifier):
                             return cls, item_group
         return None, None
 
@@ -605,29 +906,73 @@ class WM_MT_toolsystem_submenu(Menu):
                 continue
             icon_value = ToolSelectPanelHelper._icon_value_from_icon_handle(item.icon)
             layout.operator(
-                "wm.tool_set_by_name",
-                text=item.text,
+                "wm.tool_set_by_id",
+                text=item.label,
                 icon_value=icon_value,
-            ).name = item.text
+            ).name = item.idname
 
 
-def _activate_by_item(context, space_type, item, index):
+def _activate_by_item(context, space_type, item, index, *, as_fallback=False):
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
     tool = ToolSelectPanelHelper._tool_active_from_context(context, space_type, create=True)
+    tool_fallback_id = cls.tool_fallback_id
+
+    if as_fallback:
+        # To avoid complicating logic too much, isolate all fallback logic to this block.
+        # This will set the tool again, using the item for the fallback instead of the primary tool.
+        #
+        # If this ends up needing to be more complicated,
+        # it would be better to split it into a separate function.
+
+        _item, _select_index, item_group = cls._tool_get_by_id_active_with_group(context, tool_fallback_id)
+
+        if item_group is None:
+            # Could print comprehensive message - listing available items.
+            raise Exception("Fallback tool doesn't exist")
+        index_new = -1
+        for i, sub_item in enumerate(item_group):
+            if sub_item.idname == item.idname:
+                index_new = i
+                break
+        if index_new == -1:
+            raise Exception("Fallback tool not found in group")
+
+        cls._tool_group_active[tool_fallback_id] = index_new
+
+        # Done, now get the current tool to replace the item & index.
+        tool_active = ToolSelectPanelHelper._tool_active_from_context(context, space_type)
+        item, index = cls._tool_get_by_id(context, getattr(tool_active, "idname", None))
+    else:
+        # Ensure the active fallback tool is read from saved state (even if the fallback tool is not in use).
+        stored_idname_fallback = tool.idname_fallback
+        if stored_idname_fallback:
+            cls._tool_group_active_set_by_id(context, tool_fallback_id, stored_idname_fallback)
+        del stored_idname_fallback
+
+    # Find fallback keymap.
+    item_fallback = None
+    _item, select_index = cls._tool_get_by_id(context, tool_fallback_id)
+    if select_index != -1:
+        item_fallback, _index = cls._tool_get_active_by_index(context, select_index)
+    # End calculating fallback.
+
     tool.setup(
-        name=item.text,
-        keymap=item.keymap[0].name if item.keymap is not None else "",
+        idname=item.idname,
+        keymap=item.keymap[0] if item.keymap is not None else "",
         cursor=item.cursor or 'DEFAULT',
         gizmo_group=item.widget or "",
         data_block=item.data_block or "",
         operator=item.operator or "",
         index=index,
+        idname_fallback=(item_fallback and item_fallback.idname) or "",
+        keymap_fallback=(item_fallback and item_fallback.keymap and item_fallback.keymap[0]) or "",
     )
 
     WindowManager = bpy.types.WindowManager
 
     handle_map = _activate_by_item._cursor_draw_handle
     handle = handle_map.pop(space_type, None)
-    if (handle is not None):
+    if handle is not None:
         WindowManager.draw_cursor_remove(handle)
     if item.draw_cursor is not None:
         def handle_fn(context, item, tool, xy):
@@ -635,80 +980,145 @@ def _activate_by_item(context, space_type, item, index):
         handle = WindowManager.draw_cursor_add(handle_fn, (context, item, tool), space_type)
         handle_map[space_type] = handle
 
+
 _activate_by_item._cursor_draw_handle = {}
 
 
-def activate_by_name(context, space_type, text):
-    _cls, item, index = ToolSelectPanelHelper._tool_get_by_name(context, space_type, text)
+def activate_by_id(context, space_type, idname, *, as_fallback=False):
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    if cls is None:
+        return False
+    item, index = cls._tool_get_by_id(context, idname)
     if item is None:
         return False
-    _activate_by_item(context, space_type, item, index)
+    _activate_by_item(context, space_type, item, index, as_fallback=as_fallback)
     return True
 
 
-def activate_by_name_or_cycle(context, space_type, text, offset=1):
+def activate_by_id_or_cycle(context, space_type, idname, *, offset=1, as_fallback=False):
 
     # Only cycle when the active tool is activated again.
-    cls, item, _index = ToolSelectPanelHelper._tool_get_by_name(context, space_type, text)
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    item, _index = cls._tool_get_by_id(context, idname)
     if item is None:
         return False
 
     tool_active = ToolSelectPanelHelper._tool_active_from_context(context, space_type)
-    text_active = getattr(tool_active, "name", None)
+    id_active = getattr(tool_active, "idname", None)
 
-    text_current = ""
+    id_current = ""
     for item_group in cls.tools_from_context(context):
         if type(item_group) is tuple:
-            index_current = cls._tool_group_active.get(item_group[0].text, 0)
+            index_current = cls._tool_group_active.get(item_group[0].idname, 0)
             for sub_item in item_group:
-                if sub_item.text == text:
-                    text_current = item_group[index_current].text
+                if sub_item.idname == idname:
+                    id_current = item_group[index_current].idname
                     break
-            if text_current:
+            if id_current:
                 break
 
-    if text_current == "":
-        return activate_by_name(context, space_type, text)
-    if text_active != text_current:
-        return activate_by_name(context, space_type, text_current)
+    if id_current == "":
+        return activate_by_id(context, space_type, idname)
+    if id_active != id_current:
+        return activate_by_id(context, space_type, id_current)
 
     index_found = (tool_active.index + offset) % len(item_group)
 
-    cls._tool_group_active[item_group[0].text] = index_found
+    cls._tool_group_active[item_group[0].idname] = index_found
 
     item_found = item_group[index_found]
     _activate_by_item(context, space_type, item_found, index_found)
     return True
 
 
-def description_from_name(context, space_type, text, *, use_operator=True):
+def description_from_id(context, space_type, idname, *, use_operator=True):
     # Used directly for tooltips.
-    _cls, item, _index = ToolSelectPanelHelper._tool_get_by_name(context, space_type, text)
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    item, _index = cls._tool_get_by_id(context, idname)
     if item is None:
         return False
 
     # Custom description.
     description = item.description
     if description is not None:
-        return description
+        if callable(description):
+            km = _keymap_from_item(context, item)
+            return description(context, item, km)
+        return tip_(description)
 
     # Extract from the operator.
     if use_operator:
         operator = item.operator
-
         if operator is None:
             if item.keymap is not None:
-                operator = item.keymap[0].keymap_items[0].idname
+                km = _keymap_from_item(context, item)
+                if km is not None:
+                    for kmi in km.keymap_items:
+                        if kmi.active:
+                            operator = kmi.idname
+                            break
 
         if operator is not None:
             import _bpy
-            return _bpy.ops.get_rna_type(operator).description
+            return tip_(_bpy.ops.get_rna_type(operator).description)
     return ""
 
 
-def keymap_from_name(context, space_type, text):
+def item_from_id(context, space_type, idname):
     # Used directly for tooltips.
-    _cls, item, _index = ToolSelectPanelHelper._tool_get_by_name(context, space_type, text)
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    if cls is None:
+        return None
+    item, _index = cls._tool_get_by_id(context, idname)
+    return item
+
+
+def item_from_id_active(context, space_type, idname):
+    # Used directly for tooltips.
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    if cls is None:
+        return None
+    item, _index = cls._tool_get_by_id_active(context, idname)
+    return item
+
+
+def item_from_id_active_with_group(context, space_type, idname):
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    if cls is None:
+        return None
+    cls, item, _index = cls._tool_get_by_id_active_with_group(context, idname)
+    return item
+
+
+def item_group_from_id(context, space_type, idname, *, coerce=False):
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    if cls is None:
+        return None
+    return cls._tool_get_group_by_id(context, idname, coerce=coerce)
+
+
+def item_from_flat_index(context, space_type, index):
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    if cls is None:
+        return None
+    item, _index = cls._tool_get_by_flat_index(context, index)
+    return item
+
+
+def item_from_index_active(context, space_type, index):
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    if cls is None:
+        return None
+    item, _index = cls._tool_get_active_by_index(context, index)
+    return item
+
+
+def keymap_from_id(context, space_type, idname):
+    # Used directly for tooltips.
+    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
+    if cls is None:
+        return None
+    item, _index = cls._tool_get_by_id(context, idname)
     if item is None:
         return False
 
@@ -719,312 +1129,12 @@ def keymap_from_name(context, space_type, text):
     return ""
 
 
-def keymap_from_context(context, space_type):
-    """
-    Keymap for popup toolbar, currently generated each time.
-    """
-
-    def modifier_keywords_from_item(kmi):
-        kw = {}
-        for (attr, default) in (
-                ("any", False),
-                ("shift", False),
-                ("ctrl", False),
-                ("alt", False),
-                ("oskey", False),
-                ("key_modifier", 'NONE'),
-        ):
-            val = getattr(kmi, attr)
-            if val != default:
-                kw[attr] = val
-        return kw
-
-    def dict_as_tuple(d):
-        return tuple((k, v) for (k, v) in sorted(d.items()))
-
-    use_simple_keymap = False
-
-    # Press the toolbar popup key again to set the default tool,
-    # this is useful because the cursor tool is useful as a way
-    # to 'drop' currently active tools (it's basically a 'none' tool).
-    # so this allows us to quickly go back to a state that allows
-    # a shortcut based workflow (before the tool system was added).
-    use_tap_reset = True
-    # TODO: support other tools for modes which don't use the cursor.
-    tap_reset_tool = "Cursor"
-    # Check the tool is available in the current context.
-    if ToolSelectPanelHelper._tool_get_by_name(context, space_type, tap_reset_tool)[1] is None:
-        use_tap_reset = False
-
-    # Pie-menu style release to activate.
-    use_release_confirm = True
-
-    # Generate items when no keys are mapped.
-    use_auto_keymap = True
-
-    # Temporary, only create so we can pass 'properties' to find_item_from_operator.
-    use_hack_properties = True
-
-    km_name = "Toolbar Popup"
-    wm = context.window_manager
-    keyconf = wm.keyconfigs.active
-    keymap = keyconf.keymaps.get(km_name)
-    if keymap is None:
-        keymap = keyconf.keymaps.new(km_name, space_type='EMPTY', region_type='TEMPORARY', tool=True)
-    for kmi in keymap.keymap_items:
-        keymap.keymap_items.remove(kmi)
-
-    kmi_unique_args = set()
-
-    cls = ToolSelectPanelHelper._tool_class_from_space_type(space_type)
-
-    items_all = [
-        # 0: tool
-        # 1: keymap item (direct access)
-        # 2: keymap item (newly calculated for toolbar)
-        [item, None, None]
-        for item in ToolSelectPanelHelper._tools_flatten(cls.tools_from_context(context))
-        if item is not None
-    ]
-
-    if use_hack_properties:
-        kmi_hack = keymap.keymap_items.new("wm.tool_set_by_name", 'A', 'PRESS')
-        kmi_hack_properties = kmi_hack.properties
-
-        kmi_hack_brush_select = keymap.keymap_items.new("paint.brush_select", 'A', 'PRESS')
-        kmi_hack_brush_select_properties = kmi_hack_brush_select.properties
-
-    if use_release_confirm or use_tap_reset:
-        kmi_toolbar = wm.keyconfigs.find_item_from_operator(idname="wm.toolbar")[1]
-        kmi_toolbar_type = None if not kmi_toolbar else kmi_toolbar.type
-        if use_tap_reset and kmi_toolbar_type is not None:
-            kmi_toolbar_args = {
-                "type": kmi_toolbar_type,
-                **modifier_keywords_from_item(kmi_toolbar),
-            }
-        else:
-            use_tap_reset = False
-        del kmi_toolbar
-
-    if use_tap_reset:
-        kmi_found = None
-        if use_hack_properties:
-            # First check for direct assignment, if this tool already has a key, no need to add a new one.
-            kmi_hack_properties.name = tap_reset_tool
-            kmi_found = wm.keyconfigs.find_item_from_operator(
-                idname="wm.tool_set_by_name",
-                context='INVOKE_REGION_WIN',
-                # properties={"name": item.text},
-                properties=kmi_hack_properties,
-            )[1]
-            if kmi_found:
-                use_tap_reset = False
-        del kmi_found
-
-    if use_tap_reset:
-        kmi_toolbar_tuple = dict_as_tuple(kmi_toolbar_args)
-        if kmi_toolbar_tuple not in kmi_unique_args:
-            kmi = keymap.keymap_items.new(
-                "wm.tool_set_by_name",
-                value='DOUBLE_CLICK',
-                **kmi_toolbar_args,
-            )
-            kmi.properties.name = tap_reset_tool
-        kmi_unique_args.add(kmi_toolbar_tuple)
-        del kmi_toolbar_tuple
-
-    if use_simple_keymap:
-        # Simply assign a key from A-Z.
-        for i, (item, _, _) in enumerate(items_all):
-            key = chr(ord('A') + i)
-            kmi = keymap.keymap_items.new("wm.tool_set_by_name", key, 'PRESS')
-            kmi.properties.name = item.text
-    else:
-        for item_container in items_all:
-            item = item_container[0]
-            # Only check the first item in the tools key-map (a little arbitrary).
-
-            if use_hack_properties:
-                # First check for direct assignment.
-                kmi_hack_properties.name = item.text
-                kmi_found = wm.keyconfigs.find_item_from_operator(
-                    idname="wm.tool_set_by_name",
-                    context='INVOKE_REGION_WIN',
-                    # properties={"name": item.text},
-                    properties=kmi_hack_properties,
-                )[1]
-
-                if kmi_found is None:
-                    if item.data_block:
-                        # PAINT_OT_brush_select
-                        mode = context.active_object.mode
-                        # See: BKE_paint_get_tool_prop_id_from_paintmode
-                        attr = {
-                            'SCULPT': "sculpt_tool",
-                            'VERTEX_PAINT': "vertex_tool",
-                            'WEIGHT_PAINT': "weight_tool",
-                            'TEXTURE_PAINT': "image_tool",
-                            'GPENCIL_PAINT': "gpencil_tool",
-                        }.get(mode, None)
-                        if attr is not None:
-                            setattr(kmi_hack_brush_select_properties, attr, item.data_block)
-                            kmi_found = wm.keyconfigs.find_item_from_operator(
-                                idname="paint.brush_select",
-                                context='INVOKE_REGION_WIN',
-                                properties=kmi_hack_brush_select_properties,
-                            )[1]
-                        else:
-                            print("Unsupported mode:", mode)
-                        del mode, attr
-
-            else:
-                kmi_found = None
-
-            if kmi_found is not None:
-                pass
-            elif item.operator is not None:
-                kmi_found = wm.keyconfigs.find_item_from_operator(
-                    idname=item.operator,
-                    context='INVOKE_REGION_WIN',
-                )[1]
-            elif item.keymap is not None:
-                kmi_first = item.keymap[0].keymap_items[0]
-                kmi_found = wm.keyconfigs.find_item_from_operator(
-                    idname=kmi_first.idname,
-                    # properties=kmi_first.properties,  # prevents matches, don't use.
-                    context='INVOKE_REGION_WIN',
-                )[1]
-                del kmi_first
-            else:
-                kmi_found = None
-            item_container[1] = kmi_found
-
-        # More complex multi-pass test.
-        for item_container in items_all:
-            item, kmi_found = item_container[:2]
-            if kmi_found is None:
-                continue
-            kmi_found_type = kmi_found.type
-
-            # Only for single keys.
-            if (
-                    (len(kmi_found_type) == 1) or
-                    # When a tool is being activated instead of running an operator, just copy the shortcut.
-                    (kmi_found.idname in {"wm.tool_set_by_name", "WM_OT_tool_set_by_name"})
-            ):
-                kmi_args = {"type": kmi_found_type, **modifier_keywords_from_item(kmi_found)}
-                kmi = keymap.keymap_items.new(idname="wm.tool_set_by_name", value='PRESS', **kmi_args)
-                kmi.properties.name = item.text
-                item_container[2] = kmi
-                if use_auto_keymap:
-                    kmi_unique_args.add(dict_as_tuple(kmi_args))
-
-        # Test for key_modifier, where alpha key is used as a 'key_modifier'
-        # (grease pencil holding 'D' for example).
-        for item_container in items_all:
-            item, kmi_found, kmi_exist = item_container
-            if kmi_found is None or kmi_exist:
-                continue
-
-            kmi_found_type = kmi_found.type
-            if kmi_found_type in {
-                    'LEFTMOUSE',
-                    'RIGHTMOUSE',
-                    'MIDDLEMOUSE',
-                    'BUTTON4MOUSE',
-                    'BUTTON5MOUSE',
-                    'BUTTON6MOUSE',
-                    'BUTTON7MOUSE',
-                    'ACTIONMOUSE',
-                    'SELECTMOUSE',
-            }:
-                kmi_found_type = kmi_found.key_modifier
-                # excludes 'NONE'
-                if len(kmi_found_type) == 1:
-                    kmi_args = {"type": kmi_found_type, **modifier_keywords_from_item(kmi_found)}
-                    del kmi_args["key_modifier"]
-                    kmi_tuple = dict_as_tuple(kmi_args)
-                    if kmi_tuple in kmi_unique_args:
-                        continue
-                    kmi = keymap.keymap_items.new(idname="wm.tool_set_by_name", value='PRESS', **kmi_args)
-                    kmi.properties.name = item.text
-                    item_container[2] = kmi
-                    if use_auto_keymap:
-                        kmi_unique_args.add(kmi_tuple)
-
-        if use_auto_keymap:
-            # Map all unmapped keys to numbers,
-            # while this is a bit strange it means users will not confuse regular key bindings to ordered bindings.
-
-            # Free events (last used first).
-            kmi_type_auto = ('ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'ZERO')
-            # Map both numbers and num-pad.
-            kmi_type_dupe = {
-                'ONE': 'NUMPAD_1',
-                'TWO': 'NUMPAD_2',
-                'THREE': 'NUMPAD_3',
-                'FOUR': 'NUMPAD_4',
-                'FIVE': 'NUMPAD_5',
-                'SIX': 'NUMPAD_6',
-                'SEVEN': 'NUMPAD_7',
-                'EIGHT': 'NUMPAD_8',
-                'NINE': 'NUMPAD_9',
-                'ZERO': 'NUMPAD_0',
-            }
-
-            def iter_free_events():
-                for mod in ({}, {"shift": True}, {"ctrl": True}, {"alt": True}):
-                    for e in kmi_type_auto:
-                        yield (e, mod)
-
-            iter_events = iter(iter_free_events())
-
-            for item_container in items_all:
-                item, kmi_found, kmi_exist = item_container
-                if kmi_exist:
-                    continue
-                kmi_args = None
-                while True:
-                    key, mod = next(iter_events, (None, None))
-                    if key is None:
-                        break
-                    kmi_args = {"type": key, **mod}
-                    kmi_tuple = dict_as_tuple(kmi_args)
-                    if kmi_tuple in kmi_unique_args:
-                        kmi_args = None
-                    else:
-                        break
-
-                if kmi_args is not None:
-                    kmi = keymap.keymap_items.new(idname="wm.tool_set_by_name", value='PRESS', **kmi_args)
-                    kmi.properties.name = item.text
-                    item_container[2] = kmi
-                    if use_auto_keymap:
-                        kmi_unique_args.add(kmi_tuple)
-
-                    key = kmi_type_dupe.get(kmi_args["type"])
-                    if key is not None:
-                        kmi_args["type"] = key
-                        kmi_tuple = dict_as_tuple(kmi_args)
-                        if not kmi_tuple in kmi_unique_args:
-                            kmi = keymap.keymap_items.new(idname="wm.tool_set_by_name", value='PRESS', **kmi_args)
-                            kmi.properties.name = item.text
-                            if use_auto_keymap:
-                                kmi_unique_args.add(kmi_tuple)
-
-    if use_hack_properties:
-        keymap.keymap_items.remove(kmi_hack)
-
-    if use_release_confirm:
-        kmi = keymap.keymap_items.new(
-            "ui.button_execute",
-            type=kmi_toolbar_type,
-            value='RELEASE',
-        )
-        kmi.properties.skip_depressed = True
-
-    wm.keyconfigs.update()
-    return keymap
+def _keymap_from_item(context, item):
+    if item.keymap is not None:
+        wm = context.window_manager
+        keyconf = wm.keyconfigs.active
+        return keyconf.keymaps.get(item.keymap[0])
+    return None
 
 
 classes = (

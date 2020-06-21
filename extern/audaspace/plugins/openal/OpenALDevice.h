@@ -95,10 +95,15 @@ private:
 		/// Current status of the handle
 		Status m_status;
 
+		/// Whether the source is relative or not.
+		ALint m_relative;
+
 		/// Own device.
 		OpenALDevice* m_device;
 
 		AUD_LOCAL bool pause(bool keep);
+
+		AUD_LOCAL bool reinitialize();
 
 		// delete copy constructor and operator=
 		OpenALHandle(const OpenALHandle&) = delete;
@@ -121,8 +126,8 @@ private:
 		virtual bool stop();
 		virtual bool getKeep();
 		virtual bool setKeep(bool keep);
-		virtual bool seek(float position);
-		virtual float getPosition();
+		virtual bool seek(double position);
+		virtual double getPosition();
 		virtual Status getStatus();
 		virtual float getVolume();
 		virtual bool setVolume(float volume);
@@ -174,9 +179,19 @@ private:
 	DeviceSpecs m_specs;
 
 	/**
+	 * The device name.
+	 */
+	std::string m_name;
+
+	/**
 	 * Whether the device has the AL_EXT_MCFORMATS extension.
 	 */
 	bool m_useMC;
+
+	/**
+	 * Whether the ALC_EXT_disconnect extension is present and device disconnect should be checked repeatedly.
+	 */
+	bool m_checkDisconnect;
 
 	/**
 	 * The list of sounds that are currently playing.

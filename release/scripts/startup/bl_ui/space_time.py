@@ -33,12 +33,12 @@ class TIME_HT_editor_buttons(Header):
     @staticmethod
     def draw_header(context, layout):
         scene = context.scene
-        toolsettings = context.tool_settings
+        tool_settings = context.tool_settings
         screen = context.screen
 
         layout.separator_spacer()
 
-        layout.prop(toolsettings, "use_keyframe_insert_auto", text="", toggle=True)
+        layout.prop(tool_settings, "use_keyframe_insert_auto", text="", toggle=True)
 
         row = layout.row(align=True)
         row.operator("screen.frame_jump", text="", icon='REW').end = False
@@ -47,27 +47,28 @@ class TIME_HT_editor_buttons(Header):
             # if using JACK and A/V sync:
             #   hide the play-reversed button
             #   since JACK transport doesn't support reversed playback
-            if scene.sync_mode == 'AUDIO_SYNC' and context.user_preferences.system.audio_device == 'JACK':
-                sub = row.row(align=True)
-                sub.scale_x = 1.4
-                sub.operator("screen.animation_play", text="", icon='PLAY')
+            if scene.sync_mode == 'AUDIO_SYNC' and context.preferences.system.audio_device == 'JACK':
+                row.scale_x = 2
+                row.operator("screen.animation_play", text="", icon='PLAY')
+                row.scale_x = 1
             else:
                 row.operator("screen.animation_play", text="", icon='PLAY_REVERSE').reverse = True
                 row.operator("screen.animation_play", text="", icon='PLAY')
         else:
-            sub = row.row(align=True)
-            sub.scale_x = 1.4
-            sub.operator("screen.animation_play", text="", icon='PAUSE')
+            row.scale_x = 2
+            row.operator("screen.animation_play", text="", icon='PAUSE')
+            row.scale_x = 1
         row.operator("screen.keyframe_jump", text="", icon='NEXT_KEYFRAME').next = True
         row.operator("screen.frame_jump", text="", icon='FF').end = True
 
         layout.separator_spacer()
 
         row = layout.row()
-        row.scale_x = 0.95
         if scene.show_subframe:
+            row.scale_x = 1.15
             row.prop(scene, "frame_float", text="")
         else:
+            row.scale_x = 0.95
             row.prop(scene, "frame_current", text="")
 
         row = layout.row(align=True)
@@ -87,10 +88,9 @@ class TIME_MT_editor_menus(Menu):
     bl_label = ""
 
     def draw(self, context):
-        self.draw_menus(self.layout, context, horizontal=False)
-
-    @staticmethod
-    def draw_menus(layout, context, horizontal=True):
+        layout = self.layout
+        horizontal = (layout.direction == 'VERTICAL')
+        st = context.space_data
         if horizontal:
             row = layout.row()
             sub = row.row(align=True)
@@ -110,7 +110,8 @@ class TIME_MT_editor_menus(Menu):
             sub = row.row(align=True)
 
         sub.menu("TIME_MT_view")
-        sub.menu("TIME_MT_marker")
+        if st.show_markers:
+            sub.menu("TIME_MT_marker")
 
 
 class TIME_MT_marker(Menu):
@@ -119,7 +120,7 @@ class TIME_MT_marker(Menu):
     def draw(self, context):
         layout = self.layout
 
-        marker_menu_generic(layout)
+        marker_menu_generic(layout, context)
 
 
 class TIME_MT_view(Menu):
@@ -136,8 +137,12 @@ class TIME_MT_view(Menu):
 
         layout.separator()
 
-        layout.prop(st, "show_frame_indicator")
+        layout.prop(st, "show_markers")
+
+        layout.separator()
+
         layout.prop(scene, "show_keys_from_selected_only")
+        layout.prop(st.dopesheet, "show_only_errors")
 
         layout.separator()
 
@@ -176,8 +181,7 @@ class TIME_MT_cache(Menu):
         col.prop(st, "cache_rigidbody")
 
 
-def marker_menu_generic(layout):
-    from bpy import context
+def marker_menu_generic(layout, context):
 
     # layout.operator_context = 'EXEC_REGION_WIN'
 
@@ -208,8 +212,8 @@ def marker_menu_generic(layout):
     layout.operator("screen.marker_jump", text="Jump to Previous Marker").next = False
 
     layout.separator()
-    ts = context.tool_settings
-    layout.prop(ts, "lock_markers")
+    tool_settings = context.tool_settings
+    layout.prop(tool_settings, "lock_markers")
 
 ###################################
 
@@ -276,8 +280,8 @@ class TIME_PT_keyframing_settings(TimelinePanelButtons, Panel):
         layout = self.layout
 
         scene = context.scene
-        toolsettings = context.tool_settings
-        userprefs = context.user_preferences
+        tool_settings = context.tool_settings
+        prefs = context.preferences
 
         col = layout.column(align=True)
         col.label(text="Active Keying Set:")
@@ -288,17 +292,17 @@ class TIME_PT_keyframing_settings(TimelinePanelButtons, Panel):
 
         col = layout.column(align=True)
         col.label(text="New Keyframe Type:")
-        col.prop(toolsettings, "keyframe_type", text="")
+        col.prop(tool_settings, "keyframe_type", text="")
 
         col = layout.column(align=True)
         col.label(text="Auto Keyframing:")
         row = col.row()
-        row.prop(toolsettings, "auto_keying_mode", text="")
-        row.prop(toolsettings, "use_keyframe_insert_keyingset", text="")
-        if not userprefs.edit.use_keyframe_insert_available:
-            col.prop(toolsettings, "use_record_with_nla", text="Layered Recording")
+        row.prop(tool_settings, "auto_keying_mode", text="")
+        row.prop(tool_settings, "use_keyframe_insert_keyingset", text="")
+        if not prefs.edit.use_keyframe_insert_available:
+            col.prop(tool_settings, "use_record_with_nla", text="Layered Recording")
 
-        layout.prop(toolsettings, "use_keyframe_cycle_aware")
+        layout.prop(tool_settings, "use_keyframe_cycle_aware")
 
 
 ###################################

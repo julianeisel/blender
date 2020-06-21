@@ -18,11 +18,10 @@
 
 # <pep8 compliant>
 
-import bpy
 from bpy.types import (
     Panel,
 )
-from .properties_physics_common import (
+from bl_ui.properties_physics_common import (
     basic_force_field_settings_ui,
     basic_force_field_falloff_ui,
 )
@@ -33,10 +32,12 @@ class PhysicButtonsPanel:
     bl_region_type = 'WINDOW'
     bl_context = "physics"
 
+    @staticmethod
     def poll_force_field(context):
         ob = context.object
         return (ob and (ob.field) and (ob.field.type != 'NONE'))
 
+    @staticmethod
     def poll_collision(context):
         ob = context.object
         return (ob and ob.type == 'MESH') and (context.collision)
@@ -44,7 +45,7 @@ class PhysicButtonsPanel:
 
 class PHYSICS_PT_field(PhysicButtonsPanel, Panel):
     bl_label = "Force Fields"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -66,7 +67,7 @@ class PHYSICS_PT_field(PhysicButtonsPanel, Panel):
 class PHYSICS_PT_field_settings(PhysicButtonsPanel, Panel):
     bl_label = "Settings"
     bl_parent_id = 'PHYSICS_PT_field'
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -122,7 +123,7 @@ class PHYSICS_PT_field_settings(PhysicButtonsPanel, Panel):
             col.prop(field, "use_object_coords")
             col.prop(field, "use_2d_force")
 
-        elif field.type == 'SMOKE_FLOW':
+        elif field.type == 'FLUID_FLOW':
             col = flow.column()
             col.prop(field, "strength")
             col.prop(field, "flow")
@@ -132,13 +133,13 @@ class PHYSICS_PT_field_settings(PhysicButtonsPanel, Panel):
             col.prop(field, "use_smoke_density")
         else:
             del flow
-            basic_force_field_settings_ui(self, context, field)
+            basic_force_field_settings_ui(self, field)
 
 
 class PHYSICS_PT_field_settings_kink(PhysicButtonsPanel, Panel):
     bl_label = "Kink"
     bl_parent_id = 'PHYSICS_PT_field_settings'
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -172,7 +173,7 @@ class PHYSICS_PT_field_settings_kink(PhysicButtonsPanel, Panel):
 class PHYSICS_PT_field_settings_texture_select(PhysicButtonsPanel, Panel):
     bl_label = "Texture"
     bl_parent_id = 'PHYSICS_PT_field_settings'
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -194,7 +195,7 @@ class PHYSICS_PT_field_settings_texture_select(PhysicButtonsPanel, Panel):
 class PHYSICS_PT_field_falloff(PhysicButtonsPanel, Panel):
     bl_label = "Falloff"
     bl_parent_id = "PHYSICS_PT_field"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -213,13 +214,13 @@ class PHYSICS_PT_field_falloff(PhysicButtonsPanel, Panel):
 
         layout.prop(field, "falloff_type", text="Shape")
 
-        basic_force_field_falloff_ui(self, context, field)
+        basic_force_field_falloff_ui(self, field)
 
 
 class PHYSICS_PT_field_falloff_angular(PhysicButtonsPanel, Panel):
     bl_label = "Angular"
     bl_parent_id = "PHYSICS_PT_field_falloff"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -258,7 +259,7 @@ class PHYSICS_PT_field_falloff_angular(PhysicButtonsPanel, Panel):
 class PHYSICS_PT_field_falloff_radial(PhysicButtonsPanel, Panel):
     bl_label = "Radial"
     bl_parent_id = "PHYSICS_PT_field_falloff"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -302,7 +303,7 @@ def collision_warning(layout):
 
 class PHYSICS_PT_collision(PhysicButtonsPanel, Panel):
     bl_label = "Collision"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -333,7 +334,7 @@ class PHYSICS_PT_collision(PhysicButtonsPanel, Panel):
 class PHYSICS_PT_collision_particle(PhysicButtonsPanel, Panel):
     bl_label = "Particle"
     bl_parent_id = "PHYSICS_PT_collision"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -379,7 +380,7 @@ class PHYSICS_PT_collision_particle(PhysicButtonsPanel, Panel):
 class PHYSICS_PT_collision_softbody(PhysicButtonsPanel, Panel):
     bl_label = "Softbody And Cloth"
     bl_parent_id = "PHYSICS_PT_collision"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_OPENGL'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):

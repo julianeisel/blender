@@ -1,6 +1,4 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -14,12 +12,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/editors/interface/interface_icons_event.c
- *  \ingroup edinterface
+/** \file
+ * \ingroup edinterface
  *
  * A special set of icons to represent input devices,
  * this is a mix of text (via fonts) and a handful of custom glyphs for special keys.
@@ -33,16 +29,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "GPU_draw.h"
-#include "GPU_matrix.h"
 #include "GPU_batch.h"
 #include "GPU_immediate.h"
 #include "GPU_state.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_utildefines.h"
-#include "BLI_fileops_types.h"
 #include "BLI_math_vector.h"
+#include "BLI_utildefines.h"
 
 #include "DNA_brush_types.h"
 #include "DNA_curve_types.h"
@@ -55,17 +48,14 @@
 #include "RNA_access.h"
 #include "RNA_enum_types.h"
 
-#include "BKE_context.h"
-#include "BKE_global.h"
-#include "BKE_icons.h"
 #include "BKE_appdir.h"
+#include "BKE_icons.h"
 #include "BKE_studiolight.h"
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 #include "IMB_thumbs.h"
 
-#include "BIF_glutil.h"
 #include "BLF_api.h"
 
 #include "DEG_depsgraph.h"
@@ -84,213 +74,155 @@
 
 #include "interface_intern.h"
 
-static void icon_draw_rect_input_small_text_ex(
-        const rctf *rect, const float color[4], const float margin[2], const char *str,
-        int font_size)
+static void icon_draw_rect_input_text(const rctf *rect,
+                                      const float color[4],
+                                      const char *str,
+                                      int font_size)
 {
-	BLF_batch_draw_flush();
-	const int font_id = BLF_default();
-	BLF_color4fv(font_id, color);
-	BLF_size(font_id, font_size * U.pixelsize, U.dpi);
-	BLF_position(font_id, rect->xmin + margin[0] * 2, rect->ymin + margin[1] * 5, 0.0f);
-	BLF_draw(font_id, str, BLF_DRAW_STR_DUMMY_MAX);
-	BLF_batch_draw_flush();
+  BLF_batch_draw_flush();
+  const int font_id = BLF_default();
+  BLF_color4fv(font_id, color);
+  BLF_size(font_id, font_size * U.pixelsize, U.dpi);
+  float width, height;
+  BLF_width_and_height(font_id, str, BLF_DRAW_STR_DUMMY_MAX, &width, &height);
+  float x = rect->xmin + (((rect->xmax - rect->xmin) - width) / 2.0f);
+  float y = rect->ymin + (((rect->ymax - rect->ymin) - height) / 2.0f);
+  BLF_position(font_id, x, y, 0.0f);
+  BLF_draw(font_id, str, BLF_DRAW_STR_DUMMY_MAX);
+  BLF_batch_draw_flush();
 }
 
-static void icon_draw_rect_input_small_text(
-        const rctf *rect, const float color[4], const float margin[2], const char *str)
+static void icon_draw_rect_input_symbol(const rctf *rect, const float color[4], const char *str)
 {
-	icon_draw_rect_input_small_text_ex(rect, color, margin, str, 8);
+  BLF_batch_draw_flush();
+  const int font_id = blf_mono_font;
+  BLF_color4fv(font_id, color);
+  BLF_size(font_id, 19 * U.pixelsize, U.dpi);
+  float x = rect->xmin + (2.0f * U.pixelsize);
+  float y = rect->ymin + (1.0f * U.pixelsize);
+  BLF_position(font_id, x, y, 0.0f);
+  BLF_draw(font_id, str, BLF_DRAW_STR_DUMMY_MAX);
+  BLF_batch_draw_flush();
 }
 
-static void icon_draw_rect_input_default_text(
-        const rctf *rect,
-        const float color[4], const float margin[2], const char *str)
+void icon_draw_rect_input(float x,
+                          float y,
+                          int w,
+                          int h,
+                          float UNUSED(alpha),
+                          short event_type,
+                          short UNUSED(event_value))
 {
-	BLF_batch_draw_flush();
-	const int font_id = BLF_default();
-	BLF_color4fv(font_id, color);
-	BLF_position(font_id, (int)(rect->xmin + margin[0] * 5), (int)(rect->ymin + margin[1] * 5), 0.0f);
-	BLF_draw(font_id, str, BLF_DRAW_STR_DUMMY_MAX);
-	BLF_batch_draw_flush();
-}
+  float color[4];
+  GPU_line_width(1.0f);
+  UI_GetThemeColor4fv(TH_TEXT, color);
+  UI_draw_roundbox_corner_set(UI_CNR_ALL);
+  UI_draw_roundbox_aa(
+      false, (int)x - U.pixelsize, (int)y, (int)(x + w), (int)(y + h), 3.0f * U.pixelsize, color);
 
-static void icon_draw_rect_input_mono_text(
-        const rctf *rect,
-        const float color[4], const float margin[2], const char *str)
-{
-	BLF_batch_draw_flush();
-	const int font_id = blf_mono_font;
-	BLF_color4fv(font_id, color);
-	BLF_size(font_id, 20 * U.pixelsize, U.dpi);
-	BLF_position(font_id, (int)(rect->xmin + margin[0] * 5), (int)(rect->ymin + margin[1] * 5), 0.0f);
-	BLF_draw(font_id, str, BLF_DRAW_STR_DUMMY_MAX);
-	BLF_batch_draw_flush();
-}
+  const enum {
+    UNIX,
+    MACOS,
+    MSWIN,
+  } platform =
 
-static void icon_draw_rect_input_line_prim(
-        const rctf *rect,
-        const float color[4],
-        const int prim,
-        const char lines[][2], int lines_len)
-{
-	glEnable(GL_LINE_SMOOTH);
-	glEnable(GL_BLEND);
-	BLI_assert(ELEM(prim, GPU_PRIM_LINE_LOOP, GPU_PRIM_LINE_STRIP));
-	const uint pos_id = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-	immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
-	immUniformColor4fv(color);
-	immBegin(prim, lines_len);
-	float w_inv = BLI_rctf_size_x(rect) / 255.0f;
-	float h_inv = BLI_rctf_size_y(rect) / 255.0f;
-	for (int i = 0; i < lines_len; i++) {
-		immVertex2f(
-		        pos_id,
-		        round_fl_to_int(rect->xmin + ((float)lines[i][0] * w_inv)),
-		        round_fl_to_int(rect->ymin + ((float)lines[i][1] * h_inv))
-		);
-	}
-	immEnd();
-	immUnbindProgram();
-	glDisable(GL_LINE_SMOOTH);
-	glDisable(GL_BLEND);
-}
+#if defined(__APPLE__)
+      MACOS
+#elif defined(_WIN32)
+      MSWIN
+#else
+      UNIX
+#endif
+      ;
 
-void icon_draw_rect_input(
-        float x, float y, int w, int h, float UNUSED(alpha),
-        short event_type, short UNUSED(event_value))
-{
-	float color[4];
-	const float margin[2] = {w / 20.0f, h / 20.0f};
-	GPU_line_width(1.0f);
-	UI_GetThemeColor4fv(TH_TEXT, color);
-	UI_draw_roundbox_corner_set(UI_CNR_ALL);
-	UI_draw_roundbox_aa(
-	        false,
-	        (int)x,
-	        (int)y,
-	        (int)(x + w),
-	        (int)(y + h), 4.0f, color
-	);
+  const rctf rect = {
+      .xmin = x,
+      .ymin = y,
+      .xmax = x + w,
+      .ymax = y + h,
+  };
 
-	const rctf rect = {
-		.xmin = x,
-		.ymin = y,
-		.xmax = x + w,
-		.ymax = y + h,
-	};
-
-	const bool simple_text = false;
-
-	if ((event_type >= AKEY) || (ZKEY <= event_type)) {
-		char str[2] = {'A' + (event_type - AKEY), '\0'};
-		icon_draw_rect_input_default_text(&rect, color, margin, str);
-	}
-	if ((event_type >= F1KEY) || (F12KEY <= event_type)) {
-		char str[3] = {'F', '1' + (event_type - F1KEY), '\0'};
-		icon_draw_rect_input_default_text(&rect, color, margin, str);
-	}
-	else if (event_type == LEFTSHIFTKEY) {
-		if (simple_text) {
-			icon_draw_rect_input_small_text(&rect, color, margin, "Shift");
-		}
-		else {
-			rctf rect_ofs = rect;
-			BLI_rctf_translate(&rect_ofs, (w / -14.0f), (w / -14.0f));
-			icon_draw_rect_input_mono_text(&rect_ofs, color, margin, (const char[]){0xe2, 0x87, 0xa7, 0x0});
-		}
-	}
-	else if (event_type == LEFTCTRLKEY) {
-		if (simple_text) {
-			icon_draw_rect_input_small_text(&rect, color, margin, "Ctrl");
-		}
-		else {
-			rctf rect_ofs = rect;
-			BLI_rctf_translate(&rect_ofs, (w / -16.0f), 0.0f);
-			icon_draw_rect_input_default_text(&rect_ofs, color, margin, "^");
-		}
-	}
-	else if (event_type == LEFTALTKEY) {
-		if (simple_text) {
-			icon_draw_rect_input_small_text(&rect, color, margin, "Alt");
-		}
-		else {
-			rctf rect_ofs = rect;
-			BLI_rctf_translate(&rect_ofs, (w / -8.0f), 0.0f);
-			icon_draw_rect_input_default_text(&rect_ofs, color, margin, (const char[]){0xe2, 0x8c, 0xa5, 0x0});
-		}
-	}
-	else if (event_type == OSKEY) {
-		icon_draw_rect_input_small_text(&rect, color, margin, "OS");
-	}
-	else if (event_type == DELKEY) {
-		icon_draw_rect_input_small_text(&rect, color, margin, "Del");
-	}
-	else if (event_type == TABKEY) {
-		if (simple_text) {
-			icon_draw_rect_input_small_text(&rect, color, margin, "Tab");
-		}
-		else {
-			rctf rect_ofs = rect;
-			BLI_rctf_translate(&rect_ofs, (w / -12.0f), (w / -12.0f));
-			icon_draw_rect_input_mono_text(&rect_ofs, color, margin, (const char[]){0xe2, 0x86, 0xb9, 0x0});
-		}
-	}
-	else if (event_type == HOMEKEY) {
-		if (simple_text) {
-			icon_draw_rect_input_small_text(&rect, color, margin, "Home");
-		}
-		else {
-			rctf rect_ofs = rect;
-			BLI_rctf_translate(&rect_ofs, (w / -12.0f), (w / -12.0f));
-			icon_draw_rect_input_mono_text(&rect_ofs, color, margin, (const char[]){0xe2, 0x87, 0xa4, 0x0});
-		}
-	}
-	else if (event_type == ENDKEY) {
-		if (simple_text) {
-			icon_draw_rect_input_small_text(&rect, color, margin, "End");
-		}
-		else {
-			rctf rect_ofs = rect;
-			BLI_rctf_translate(&rect_ofs, (w / -12.0f), (w / -12.0f));
-			icon_draw_rect_input_mono_text(&rect_ofs, color, margin, (const char[]){0xe2, 0x87, 0xa5, 0x0});
-		}
-	}
-	else if (event_type == RETKEY) {
-		if (simple_text) {
-			icon_draw_rect_input_small_text(&rect, color, margin, "Ret");
-		}
-		else {
-			rctf rect_ofs = rect;
-			BLI_rctf_translate(&rect_ofs, (w / -8.0f), (w / -6.0f));
-			icon_draw_rect_input_mono_text(&rect_ofs, color, margin, (const char[]){0xe2, 0x8f, 0x8e, 0x0});
-		}
-	}
-	else if (event_type == ESCKEY) {
-		icon_draw_rect_input_small_text(&rect, color, margin, "Esc");
-	}
-	else if (event_type == PAGEUPKEY) {
-		icon_draw_rect_input_small_text_ex(&rect, color, margin, (const char[]){'P', 0xe2, 0x86, 0x91, 0x0}, 10);
-	}
-	else if (event_type == PAGEDOWNKEY) {
-		icon_draw_rect_input_small_text_ex(&rect, color, margin, (const char[]){'P', 0xe2, 0x86, 0x93, 0x0}, 10);
-	}
-	else if (event_type == LEFTARROWKEY) {
-		icon_draw_rect_input_default_text(&rect, color, margin, (const char[]){0xe2, 0x86, 0x90, 0x0});
-	}
-	else if (event_type == UPARROWKEY) {
-		icon_draw_rect_input_default_text(&rect, color, margin, (const char[]){0xe2, 0x86, 0x91, 0x0});
-	}
-	else if (event_type == RIGHTARROWKEY) {
-		icon_draw_rect_input_default_text(&rect, color, margin, (const char[]){0xe2, 0x86, 0x92, 0x0});
-	}
-	else if (event_type == DOWNARROWKEY) {
-		icon_draw_rect_input_default_text(&rect, color, margin, (const char[]){0xe2, 0x86, 0x93, 0x0});
-	}
-	else if (event_type == SPACEKEY) {
-		const uchar lines[] = {60, 118, 60, 60, 195, 60, 195, 118};
-		icon_draw_rect_input_line_prim(
-		        &rect, color, GPU_PRIM_LINE_STRIP,
-		        (const void *)lines, ARRAY_SIZE(lines) / 2);
-	}
+  if ((event_type >= EVT_AKEY) && (event_type <= EVT_ZKEY)) {
+    char str[2] = {'A' + (event_type - EVT_AKEY), '\0'};
+    icon_draw_rect_input_text(&rect, color, str, 13);
+  }
+  else if ((event_type >= EVT_F1KEY) && (event_type <= EVT_F12KEY)) {
+    char str[4];
+    SNPRINTF(str, "F%d", 1 + (event_type - EVT_F1KEY));
+    icon_draw_rect_input_text(&rect, color, str, event_type > EVT_F9KEY ? 8 : 10);
+  }
+  else if (event_type == EVT_LEFTSHIFTKEY) {
+    icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x87, 0xa7, 0x0});
+  }
+  else if (event_type == EVT_LEFTCTRLKEY) {
+    if (platform == MACOS) {
+      icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x8c, 0x83, 0x0});
+    }
+    else {
+      icon_draw_rect_input_text(&rect, color, "Ctrl", 9);
+    }
+  }
+  else if (event_type == EVT_LEFTALTKEY) {
+    if (platform == MACOS) {
+      icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x8c, 0xa5, 0x0});
+    }
+    else {
+      icon_draw_rect_input_text(&rect, color, "Alt", 10);
+    }
+  }
+  else if (event_type == EVT_OSKEY) {
+    if (platform == MACOS) {
+      icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x8c, 0x98, 0x0});
+    }
+    else if (platform == MSWIN) {
+      icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x9d, 0x96, 0x0});
+    }
+    else {
+      icon_draw_rect_input_text(&rect, color, "OS", 10);
+    }
+  }
+  else if (event_type == EVT_DELKEY) {
+    icon_draw_rect_input_text(&rect, color, "Del", 9);
+  }
+  else if (event_type == EVT_TABKEY) {
+    icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0xad, 0xbe, 0x0});
+  }
+  else if (event_type == EVT_HOMEKEY) {
+    icon_draw_rect_input_text(&rect, color, "Home", 6);
+  }
+  else if (event_type == EVT_ENDKEY) {
+    icon_draw_rect_input_text(&rect, color, "End", 8);
+  }
+  else if (event_type == EVT_RETKEY) {
+    icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x8f, 0x8e, 0x0});
+  }
+  else if (event_type == EVT_ESCKEY) {
+    if (platform == MACOS) {
+      icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x8e, 0x8b, 0x0});
+    }
+    else {
+      icon_draw_rect_input_text(&rect, color, "Esc", 8);
+    }
+  }
+  else if (event_type == EVT_PAGEUPKEY) {
+    icon_draw_rect_input_text(&rect, color, (const char[]){'P', 0xe2, 0x86, 0x91, 0x0}, 8);
+  }
+  else if (event_type == EVT_PAGEDOWNKEY) {
+    icon_draw_rect_input_text(&rect, color, (const char[]){'P', 0xe2, 0x86, 0x93, 0x0}, 8);
+  }
+  else if (event_type == EVT_LEFTARROWKEY) {
+    icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x86, 0x90, 0x0});
+  }
+  else if (event_type == EVT_UPARROWKEY) {
+    icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x86, 0x91, 0x0});
+  }
+  else if (event_type == EVT_RIGHTARROWKEY) {
+    icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x86, 0x92, 0x0});
+  }
+  else if (event_type == EVT_DOWNARROWKEY) {
+    icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x86, 0x93, 0x0});
+  }
+  else if (event_type == EVT_SPACEKEY) {
+    icon_draw_rect_input_symbol(&rect, color, (const char[]){0xe2, 0x90, 0xa3, 0x0});
+  }
 }

@@ -16,21 +16,16 @@
 #
 # The Original Code is Copyright (C) 2006, Blender Foundation
 # All rights reserved.
-#
-# The Original Code is: all of this file.
-#
-# Contributor(s): Jacques Beaurain.
-#
 # ***** END GPL LICENSE BLOCK *****
 
 # add_subdirectory(atomic)  # header only
 add_subdirectory(bwidgets)
 add_subdirectory(clog)
-add_subdirectory(string)
 add_subdirectory(ghost)
 add_subdirectory(guardedalloc)
 add_subdirectory(libmv)
 add_subdirectory(memutil)
+add_subdirectory(numaapi)
 add_subdirectory(opencolorio)
 add_subdirectory(opensubdiv)
 add_subdirectory(mikktspace)
@@ -38,46 +33,50 @@ add_subdirectory(glew-mx)
 add_subdirectory(eigen)
 
 if(WITH_AUDASPACE)
-	add_subdirectory(audaspace)
+  add_subdirectory(audaspace)
 endif()
 
 if(WITH_MOD_REMESH)
-	add_subdirectory(dualcon)
-endif()
-
-if(WITH_MOD_FLUID)
-	add_subdirectory(elbeem)
-endif()
-
-if(WITH_MOD_SMOKE)
-	add_subdirectory(smoke)
+  add_subdirectory(dualcon)
 endif()
 
 if(WITH_IK_SOLVER)
-	add_subdirectory(iksolver)
+  add_subdirectory(iksolver)
 endif()
 
 if(WITH_IK_ITASC)
-	add_subdirectory(itasc)
+  add_subdirectory(itasc)
 endif()
 
 if(WITH_CYCLES)
-	add_subdirectory(cycles)
+  add_subdirectory(cycles)
 endif()
 
 if(WITH_INTERNATIONAL)
-	add_subdirectory(locale)
+  add_subdirectory(locale)
 endif()
 
 if(WITH_BULLET)
-	add_subdirectory(rigidbody)
+  add_subdirectory(rigidbody)
 endif()
 
 # only windows needs utf16 converter
 if(WIN32)
-	add_subdirectory(utfconv)
+  add_subdirectory(utfconv)
+endif()
+
+if(WITH_MOD_FLUID)
+  add_subdirectory(mantaflow)
 endif()
 
 if(WITH_OPENVDB)
-	add_subdirectory(openvdb)
+  add_subdirectory(openvdb)
+endif()
+
+if(WITH_QUADRIFLOW)
+  add_subdirectory(quadriflow)
+endif()
+
+if(UNIX AND NOT APPLE)
+  add_subdirectory(libc_compat)
 endif()
