@@ -3,32 +3,31 @@
 #include <array>
 
 #include "bwStyle.h"
-#include "bwUtil.h"
-
 
 namespace bWidgets {
 
 /**
  * \brief Singleton class for managing styles through type ID's.
  */
-class bwStyleManager
-{
-public:
-	static bwStyleManager& getStyleManager();
-	static bwPtr<bwStyle> createStyleFromTypeID(bwStyle::StyleTypeID type_id);
+class bwStyleManager {
+ public:
+  using StyleTypeArray = std::array<bwStyle::StyleType, int(bwStyle::TypeID::BUILTIN_TOT)>;
 
-	void registerDefaultStyleTypes();
+  static auto getStyleManager() -> bwStyleManager&;
+  static auto createStyleFromTypeID(bwStyle::TypeID type_id) -> std::unique_ptr<bwStyle>;
 
-	using StyleTypeArray = std::array<bwStyle::StyleType, bwStyle::STYLE_BUILTIN_TOT>;
-	const StyleTypeArray& getBuiltinStyleTypes() const;
+  void registerDefaultStyleTypes();
 
-private:
-	bwStyleManager() = default;
-	bwStyleManager(bwStyleManager const&) = delete;
-	void operator=(bwStyleManager const&) = delete;
+  auto getBuiltinStyleTypes() const -> const StyleTypeArray&;
 
-	StyleTypeArray builtin_style_types;
-//	std::vector<StyleType> custom_types;
+ private:
+  bwStyleManager() = default;
+  bwStyleManager(bwStyleManager const&) = delete;
+
+  void operator=(bwStyleManager const&) = delete;
+
+  StyleTypeArray builtin_style_types;
+  //	std::vector<StyleType> custom_types;
 };
 
-}
+}  // namespace bWidgets

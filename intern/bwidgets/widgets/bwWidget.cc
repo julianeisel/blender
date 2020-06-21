@@ -1,71 +1,38 @@
+#include "bwStyle.h"
+
 #include "bwWidget.h"
 
-using namespace bWidgets;
+namespace bWidgets {
 
-
-bwWidget::bwWidget(
-        const WidgetType type, std::string identifier,
-        const unsigned int width_hint, const unsigned int height_hint) :
-    type(type),
-    state(STATE_NORMAL),
-    rectangle(0, 0, 0, 0),
-    width_hint(width_hint), height_hint(height_hint),
-    identifier(std::move(identifier))
+bwWidget::bwWidget(const std::string& identifier,
+                   std::optional<unsigned int> width_hint,
+                   std::optional<unsigned int> height_hint)
+    : state(State::NORMAL),
+      rectangle(0, 0, 0, 0),
+      width_hint(width_hint.value_or(bwStyle::s_default_widget_size_hint)),
+      height_hint(height_hint.value_or(bwStyle::s_default_widget_size_hint)),
+      identifier(identifier)
 {
-	
 }
 
-bool bwWidget::isCoordinateInside(const bwPoint& point) const
+auto bwWidget::isCoordinateInside(const bwPoint& point) const -> bool
 {
-	return rectangle.isCoordinateInside(point.x, point.y);
+  return rectangle.isCoordinateInside(point.x, point.y);
 }
 
-void bwWidget::mousePressEvent(
-        const MouseButton /*button*/,
-        const bwPoint& /*location*/)
+auto bwWidget::getIdentifier() const -> const std::string&
 {
-	
+  return identifier;
 }
 
-void bwWidget::mouseReleaseEvent(
-        const MouseButton /*button*/,
-        const bwPoint& /*location*/)
+auto bwWidget::getLabel() const -> const std::string*
 {
-	
+  return nullptr;
 }
 
-void bwWidget::mouseClickEvent(
-        const MouseButton /*button*/,
-        const bwPoint& /*location*/)
+auto bwWidget::canAlign() const -> bool
 {
-	
-}
-
-void bwWidget::mouseDragEvent(
-        const MouseButton /*button*/,
-        const bwDistance /*drag_distance*/)
-{
-	
-}
-
-void bwWidget::mouseEnter()
-{
-	
-}
-
-void bwWidget::mouseLeave()
-{
-	
-}
-
-const std::string& bwWidget::getIdentifier() const
-{
-	return identifier;
-}
-
-const std::string* bwWidget::getLabel() const
-{
-	return nullptr;
+  return false;
 }
 
 /**
@@ -73,11 +40,13 @@ const std::string* bwWidget::getLabel() const
  */
 void bwWidget::initialize()
 {
-	/* Has to be done in init, can't be called from bwWidget constructor (wouldn't call overwritten function). */
-	registerProperties();
+  /* Has to be done in init, can't be called from bwWidget constructor (wouldn't call overwritten
+   * function). */
+  registerProperties();
 }
 
 void bwWidget::registerProperties()
 {
-	
 }
+
+}  // namespace bWidgets

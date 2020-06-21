@@ -2,60 +2,48 @@
 
 #include "bwTextBox.h"
 
-
 namespace bWidgets {
 
-class bwNumberSlider : public bwTextBox
-{
-public:
-	bwNumberSlider(
-	        const unsigned int width_hint = 0, const unsigned int height_hint = 0);
+class bwPainter;
+class bwStyle;
 
-	void draw(class bwStyle &style) override;
+class bwNumberSlider : public bwTextBox {
+ public:
+  friend class bwNumberSliderHandler;
 
-	void mousePressEvent(
-	        const MouseButton button,
-	        const bwPoint& location) override;
-	void mouseReleaseEvent(
-	        const MouseButton button,
-	        const bwPoint& location) override;
-	void mouseClickEvent(
-	        const MouseButton button,
-	        const bwPoint& location) override;
-	void mouseDragEvent(
-	        const MouseButton button,
-	        const bwDistance drag_distance) override;
+  bwNumberSlider(std::optional<unsigned int> width_hint = std::nullopt,
+                 std::optional<unsigned int> height_hint = std::nullopt);
 
-	void setValue(float value);
-	float getValue() const;
-	void setMinMax(float min, float max);
+  void draw(bwStyle& style) override;
 
-	bwPtr<bwFunctorInterface> apply_functor{nullptr};
+  auto createHandler() -> std::unique_ptr<bwScreenGraph::EventHandler> override;
 
-private:
-	std::string valueToString(unsigned int precision) const;
-	void drawValueIndicator(
-	        class bwPainter& painter,
-	        class bwStyle& style) const;
-	float calcValueIndicatorWidth(class bwStyle& style) const;
+  void setValue(float value);
+  auto getValue() const -> float;
+  void setMinMax(float min, float max);
 
-	/**
-	 * Support multiple numeric types. bwNumberSlider could be made
-	 * a template class for this, but using union is just fine.
-	 */
-	union {
-		// float
-		struct {
-			float value;
-			float min, max;
-			// Initial value before starting to edit.
-			float initial_value;
-			unsigned int precision;
-		};
-		// struct { int value; ...}
-		// struct { char value; ...}
-		// ...
-	};
+  std::unique_ptr<bwFunctorInterface> apply_functor{nullptr};
+
+ private:
+  auto valueToString(unsigned int precision) const -> std::string;
+  void drawValueIndicator(bwPainter& painter, bwStyle& style) const;
+  auto calcValueIndicatorWidth(class bwStyle& style) const -> float;
+
+  /**
+   * Support multiple numeric types. bwNumberSlider could be made
+   * a template class for this, but using union is just fine.
+   */
+  union {
+    // float
+    struct {
+      float value;
+      float min, max;
+      unsigned int precision;
+    };
+    // struct { int value; ...}
+    // struct { char value; ...}
+    // ...
+  };
 };
 
-} // namespace bWidgets
+}  // namespace bWidgets

@@ -1,44 +1,45 @@
 #pragma once
 
-#include "bwWidget.h"
-#include "bwWidgetBaseStyle.h"
-
+#include "bwContainerWidget.h"
 
 namespace bWidgets {
 
-class bwPanel : public bwWidget
-{
-public:
-	bwPanel(
-	        std::string label,
-	        unsigned int header_height_hint);
+class bwPanel : public bwContainerWidget {
+  friend class bwPanelHandler;
 
-	void draw(class bwStyle& style) override;
+ public:
+  enum class State {
+    OPEN,
+    CLOSED,
+  };
 
-	void registerProperties() override;
-	void mousePressEvent(
-	        const MouseButton button,
-	        const bwPoint& location) override;
+  bwPanel(const bwScreenGraph::ContainerNode& node,
+          std::string label,
+          std::optional<unsigned int> header_height_hint = std::nullopt);
 
-	const std::string* getLabel() const override;
+  void draw(class bwStyle& style) override;
 
-	bool isCoordinateInsideHeader(const bwPoint &point) const;
-	unsigned int getHeaderHeightHint() const;
-	unsigned int header_height;
+  void registerProperties() override;
 
-	enum {
-		PANEL_OPEN,
-		PANEL_CLOSED,
-	} panel_state{PANEL_OPEN};
+  auto getLabel() const -> const std::string* override;
+  auto childrenVisible() const -> bool override;
 
-private:
-	void drawHeader(class bwStyle& style) const;
-	bwRectanglePixel getHeaderRectangle() const;
+  auto createHandler() -> std::unique_ptr<bwScreenGraph::EventHandler> override;
 
-	std::string label;
+  unsigned int getHeaderHeightHint() const;
 
-public: bwWidgetBaseStyle base_style; // XXX public for setWidgetStyle. Should only be temporarily needed.
-public: bool draw_separator = false;
+  unsigned int header_height;
+  State panel_state{State::OPEN};
+
+ private:
+  void drawHeader(class bwStyle& style) const;
+  auto getHeaderRectangle() const -> bwRectanglePixel;
+  auto isCoordinateInsideHeader(const bwPoint& point) const -> bool;
+
+  std::string label;
+
+ public:
+  bool draw_separator = false;
 };
 
-} // namespace bWidgets
+}  // namespace bWidgets

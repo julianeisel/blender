@@ -5,27 +5,28 @@
 #include "bwColor.h"
 #include "bwWidget.h"
 
-
 namespace bWidgets {
 
-class bwLabel : public bwWidget
-{
-public:
-	bwLabel(
-	        std::string text,
-	        unsigned int width_hint = 0, unsigned int height_hint = 0);
+class bwIconInterface;
 
-	void draw(class bwStyle& style) override;
-	void registerProperties() override;
-	const std::string* getLabel() const override;
+class bwLabel : public bwWidget {
+ public:
+  bwLabel(std::string text,
+          std::optional<unsigned int> width_hint = std::nullopt,
+          std::optional<unsigned int> height_hint = std::nullopt);
 
-	bwLabel& setIcon(const class bwIconInterface& icon_interface);
+  void draw(class bwStyle& style) override;
+  void registerProperties() override;
+  auto getLabel() const -> const std::string* override;
+  auto createHandler() -> std::unique_ptr<bwScreenGraph::EventHandler> override;
 
-private:
-	const std::string text;
-	const class bwIconInterface* icon{nullptr};
+  auto setIcon(const bwIconInterface& icon_interface) -> bwLabel&;
 
-	bwColor text_color;
+ private:
+  const std::string text;
+  const class bwIconInterface* icon{nullptr};
+
+  bwColor text_color;
 };
 
-} // namespace bWidgets
+}  // namespace bWidgets

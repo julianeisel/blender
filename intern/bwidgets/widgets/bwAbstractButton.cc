@@ -1,90 +1,99 @@
+#include "bwEvent.h"
 #include "bwPainter.h"
 #include "bwStyle.h"
 
 #include "bwAbstractButton.h"
 
-using namespace bWidgets;
+namespace bWidgets {
 
-
-bwAbstractButton::bwAbstractButton(
-        std::string text,
-        const WidgetType type, const std::string& identifier,
-        const unsigned int width_hint, const unsigned int height_hint) :
-    bwWidget(type, identifier, width_hint, height_hint),
-    rounded_corners(RoundboxCorner::ALL),
-    text(std::move(text))
+bwAbstractButton::bwAbstractButton(const std::string& text,
+                                   const std::string& identifier,
+                                   std::optional<unsigned int> width_hint,
+                                   std::optional<unsigned int> height_hint)
+    : bwWidget(identifier, width_hint, height_hint),
+      rounded_corners(RoundboxCorner::ALL),
+      text(std::move(text))
 {
-	initialize();
+  initialize();
 }
 
 void bwAbstractButton::draw(bwStyle& style)
 {
-	style.setWidgetStyle(*this);
+  const bwGradient gradient{
+      base_style.backgroundColor(), base_style.shadeTop(), base_style.shadeBottom()};
+  bwPainter painter;
 
-	const bwGradient gradient{
-	        base_style.backgroundColor(),
-	        base_style.shadeTop(), base_style.shadeBottom()
-	};
-	bwPainter painter;
+  painter.drawRoundboxWidgetBase(base_style, style, rectangle, gradient, base_style.corner_radius);
 
-	painter.drawRoundboxWidgetBase(base_style, style, rectangle, gradient, base_style.corner_radius);
-
-	// Text
-	painter.setContentMask(rectangle);
-	painter.setActiveColor(base_style.textColor());
-	painter.drawTextAndIcon(text, getIcon(), rectangle, base_style.text_alignment, style.dpi_fac);
+  // Text
+  painter.setContentMask(rectangle);
+  painter.setActiveColor(base_style.textColor());
+  painter.drawTextAndIcon(text, getIcon(), rectangle, base_style.text_alignment, style.dpi_fac);
 }
 
 void bwAbstractButton::registerProperties()
 {
-	base_style.registerProperties(style_properties);
+  base_style.registerProperties(style_properties);
 }
 
-void bwAbstractButton::mousePressEvent(
-        const bwWidget::MouseButton button,
-        const bwPoint& /*location*/)
+auto bwAbstractButton::getLabel() const -> const std::string*
 {
-	if (button == MOUSE_BUTTON_LEFT) {
-		state = STATE_SUNKEN;
-	}
+  return &text;
 }
 
-void bwAbstractButton::mouseReleaseEvent(
-        const bwWidget::MouseButton button,
-        const bwPoint& /*location*/)
+auto bwAbstractButton::getIcon() const -> const bwIconInterface*
 {
-	if ((button == MOUSE_BUTTON_LEFT) && (state == STATE_SUNKEN)) {
-		state = STATE_NORMAL;
-	}
+  return nullptr;
 }
 
-void bwAbstractButton::mouseEnter()
+auto bwAbstractButton::createHandler() -> std::unique_ptr<bwScreenGraph::EventHandler>
 {
-	if (state == STATE_NORMAL) {
-		state = STATE_HIGHLIGHTED;
-	}
+  return std::make_unique<bwAbstractButtonHandler>(*this);
 }
 
-void bwAbstractButton::mouseLeave()
+// ------------------ Handling ------------------
+
+bwAbstractButtonHandler::bwAbstractButtonHandler(bwAbstractButton& button) : button(button)
 {
-	if (state == STATE_HIGHLIGHTED) {
-		state = STATE_NORMAL;
-	}
 }
 
-const std::string* bwAbstractButton::getLabel() const
+void bwAbstractButtonHandler::onMouseEnter(bwEvent&)
 {
-	return &text;
+  if (button.state == bwWidget::State::NORMAL) {
+    button.state = bwWidget::State::HIGHLIGHTED;
+  }
 }
 
-const bwIconInterface *bwAbstractButton::getIcon() const
+void bwAbstractButtonHandler::onMouseLeave(bwEvent&)
 {
-	return nullptr;
+  if (button.state == bwWidget::State::HIGHLIGHTED) {
+    button.state = bwWidget::State::NORMAL;
+  }
 }
 
-void bwAbstractButton::apply()
+void bwAbstractButtonHandler::onMousePress(bwMouseButtonEvent& event)
 {
-	if (apply_functor) {
-		(*apply_functor)();
-	}
+  if (event.button == bwMouseButtonEvent::Button::LEFT) {
+    button.state = bwWidget::State::SUNKEN;
+    event.swallow();
+  }
 }
+
+void bwAbstractButtonHandler::onMouseRelease(bwMouseButtonEvent& event)
+{
+  if ((event.button == bwMouseButtonEvent::Button::LEFT) &&
+      (button.state == bwWidget::State::SUNKEN)) {
+    button.state = bwWidget::State::NORMAL;
+
+    event.swallow();
+  }
+}
+
+void bwAbstractButtonHandler::apply()
+{
+  if (button.apply_functor) {
+    (*button.apply_functor)();
+  }
+}
+
+}  // namespace bWidgets

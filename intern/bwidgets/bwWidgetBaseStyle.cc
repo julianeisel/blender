@@ -5,11 +5,10 @@
 
 #include "bwWidgetBaseStyle.h"
 
-using namespace bWidgets;
+namespace bWidgets {
 
-
-bwWidgetBaseStyle::bwWidgetBaseStyle() :
-	text_alignment(TEXT_ALIGN_LEFT), roundbox_corners(NONE)
+bwWidgetBaseStyle::bwWidgetBaseStyle()
+    : text_alignment(TextAlignment::LEFT), roundbox_corners(NONE)
 {
 }
 
@@ -19,43 +18,50 @@ bwWidgetBaseStyle::bwWidgetBaseStyle() :
  */
 void bwWidgetBaseStyle::registerProperties(bwStyleProperties& style_properties)
 {
-	style_properties.addColor(           "color",       text_color);
-	style_properties.addColor("background-color", background_color);
-	style_properties.addColor("decoration-color", decoration_color);
-	style_properties.addColor(    "border-color",     border_color);
+  style_properties.addColor("color", text_color);
+  style_properties.addColor("background-color", background_color);
+  style_properties.addColor("decoration-color", decoration_color);
+  style_properties.addColor("border-color", border_color);
 
-	style_properties.addInteger("shade-top", shade_top);
-	style_properties.addInteger("shade-bottom", shade_bottom);
+  style_properties.addInteger("shade-top", shade_top);
+  style_properties.addInteger("shade-bottom", shade_bottom);
 
-	style_properties.addFloat("border-radius", corner_radius);
+  style_properties.addFloat("border-radius", corner_radius);
 }
 
-const bwColor& bwWidgetBaseStyle::backgroundColor() const
+auto bwWidgetBaseStyle::backgroundColor() const -> const bwColor&
 {
-	return background_color;
+  return background_color;
 }
 
-const bwColor& bwWidgetBaseStyle::textColor() const
+auto bwWidgetBaseStyle::textColor() const -> const bwColor&
 {
-	return text_color;
+  return text_color;
 }
 
-const bwColor& bwWidgetBaseStyle::borderColor() const
+auto bwWidgetBaseStyle::borderColor() const -> const bwColor&
 {
-	return border_color;
+  return border_color;
 }
 
-const bwColor& bwWidgetBaseStyle::decorationColor() const
+auto bwWidgetBaseStyle::decorationColor() const -> const bwColor&
 {
-	return decoration_color;
+  return decoration_color;
 }
 
-float bwWidgetBaseStyle::shadeTop() const
+auto bwWidgetBaseStyle::shadeTop() const -> float
 {
-	return shade_top / 255.0f;
+  return shade_top / 255.0f;
 }
 
-float bwWidgetBaseStyle::shadeBottom() const
+auto bwWidgetBaseStyle::shadeBottom() const -> float
 {
-	return shade_bottom / 255.0f;
+  return shade_bottom / 255.0f;
 }
+
+auto bwWidgetBaseStyle::isBorderVisible() const -> bool
+{
+  return (background_color == border_color) == false;
+}
+
+}  // namespace bWidgets

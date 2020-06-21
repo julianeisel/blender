@@ -7,48 +7,59 @@
 #include "bwWidget.h"
 #include "bwWidgetBaseStyle.h"
 
-
 namespace bWidgets {
+
+class bwIconInterface;
 
 /**
  * \brief Base class for button like widgets.
  */
-class bwAbstractButton : public bwWidget
-{
-public:
-	virtual void draw(class bwStyle &style) override;
-	virtual void registerProperties() override;
+class bwAbstractButton : public bwWidget {
+ public:
+  void draw(class bwStyle& style) override;
+  void registerProperties() override;
 
-	virtual void mousePressEvent(
-	        const MouseButton button,
-	        const bwPoint& location) override;
-	virtual void mouseReleaseEvent(
-	        const MouseButton button,
-	        const bwPoint& location) override;
-	virtual void mouseEnter() override;
-	virtual void mouseLeave() override;
+  auto getLabel() const -> const std::string* override;
+  virtual auto getIcon() const -> const bwIconInterface*;
 
-	virtual const std::string* getLabel() const override;
-	virtual const class bwIconInterface* getIcon() const;
+  auto createHandler() -> std::unique_ptr<bwScreenGraph::EventHandler> override;
 
-	/**
-	 * Function object called when applying changes to widget.
-	 */
-	bwPtr<bwFunctorInterface> apply_functor{nullptr};
+  /**
+   * Function object called when applying changes to widget.
+   */
+  std::unique_ptr<bwFunctorInterface> apply_functor{nullptr};
 
-	unsigned int rounded_corners;
+  unsigned int rounded_corners;
 
-protected:
-	// Protected constructor to force calling through inherited class (pseudo abstract).
-	bwAbstractButton(
-	        std::string text,
-	        const WidgetType type, const std::string& identifier,
-	        const unsigned int width_hint = 0, const unsigned int height_hint = 0);
-	void apply();
+ protected:
+  // Protected constructor to force calling through inherited class (pseudo abstract).
+  bwAbstractButton(const std::string& text,
+                   const std::string& identifier,
+                   std::optional<unsigned int> width_hint = std::nullopt,
+                   std::optional<unsigned int> height_hint = std::nullopt);
+  void apply();
 
-	const std::string text;
+  const std::string text;
 
-public: bwWidgetBaseStyle base_style; // XXX public for setWidgetStyle. Should only be temporarily needed.
+ public:
+  bwWidgetBaseStyle
+      base_style;  // XXX public for setWidgetStyle. Should only be temporarily needed.
 };
 
-} // namespace bWidgets
+class bwAbstractButtonHandler : public bwScreenGraph::EventHandler {
+ public:
+  bwAbstractButtonHandler(bwAbstractButton& button);
+  virtual ~bwAbstractButtonHandler() = default;
+
+  void onMouseEnter(bwEvent&) override;
+  void onMouseLeave(bwEvent&) override;
+  void onMousePress(bwMouseButtonEvent&) override;
+  void onMouseRelease(bwMouseButtonEvent&) override;
+
+ protected:
+  bwAbstractButton& button;
+
+  void apply();
+};
+
+}  // namespace bWidgets

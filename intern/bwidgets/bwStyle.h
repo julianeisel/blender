@@ -3,39 +3,41 @@
 #include <array>
 #include <string>
 
-
 namespace bWidgets {
 
-class bwStyle
-{
-public:
-	enum StyleTypeID {
-		STYLE_CLASSIC,
-		STYLE_CLASSIC_CSS,
-		STYLE_FLAT_GREY,
-		STYLE_FLAT_DARK,
-		STYLE_FLAT_LIGHT,
+class bwWidget;
 
-		STYLE_BUILTIN_TOT,
+class bwStyle {
+ public:
+  enum class TypeID {
+    CLASSIC,
+    CLASSIC_CSS,
+    FLAT_GREY,
+    FLAT_DARK,
+    FLAT_LIGHT,
 
-//		STYLE_CUSTOM, // For the future
-	} type_id;
+    BUILTIN_TOT,
 
-	virtual ~bwStyle() {}
+    //		STYLE_CUSTOM, // For the future
+  };
 
-	virtual void setWidgetStyle(class bwWidget& widget) = 0;
-	virtual void polish(class bwWidget& widget) = 0;
+  struct StyleType {
+    TypeID type_id;
+    std::string name;
+  };
 
-	float dpi_fac{1.0f};
+  virtual ~bwStyle() = default;
 
-	struct StyleType
-	{
-		StyleTypeID type_id;
-		std::string name;
-	};
+  virtual void setWidgetStyle(bwWidget& widget) = 0;
+  virtual void polish(bwWidget&);
 
-protected:
-	bwStyle(StyleTypeID type_id);
+  static unsigned int s_default_widget_size_hint;
+
+  TypeID type_id;
+  float dpi_fac{1.0f};
+
+ protected:
+  bwStyle(TypeID type_id);
 };
 
-} // namespace bWidgets
+}  // namespace bWidgets

@@ -2,32 +2,25 @@
 
 #include "bwAbstractButton.h"
 
-
 namespace bWidgets {
 
-class bwCheckbox : public bwAbstractButton
-{
-public:
-	bwCheckbox(
-	        const std::string& text,
-	        unsigned int width_hint, unsigned int height_hint);
+class bwCheckbox : public bwAbstractButton {
+ public:
+  bwCheckbox(const std::string& text,
+             std::optional<unsigned int> width_hint = std::nullopt,
+             std::optional<unsigned int> height_hint = std::nullopt);
 
-	void draw(class bwStyle &style) override;
+  void draw(class bwStyle& style) override;
 
-	void mousePressEvent(
-	        const MouseButton button,
-	        const bwPoint& location) override;
-	void mouseReleaseEvent(
-	        const MouseButton button,
-	        const bwPoint& location) override;
+  auto createHandler() -> std::unique_ptr<bwScreenGraph::EventHandler> override;
 
-	bool isChecked() const;
+  auto isChecked() const -> bool;
 
-private:
-	bool isInsideCheckbox(const bwPoint& point) const;
+ private:
+  auto isInsideCheckbox(const bwPoint& point) const -> bool;
 
-	bwRectanglePixel getCheckboxRectangle() const;
-	bwRectanglePixel getTextRectangle(const bwRectanglePixel& checkbox_rectangle) const;
+  auto getCheckboxRectangle() const -> bwRectanglePixel;
+  auto getTextRectangle(const bwRectanglePixel& checkbox_rectangle) const -> bwRectanglePixel;
 };
 
-} // namespace bWidgets
+}  // namespace bWidgets

@@ -1,28 +1,52 @@
 #include "bwRadioButton.h"
+#include "bwEvent.h"
 
-using namespace bWidgets;
+namespace bWidgets {
 
-bwRadioButton::bwRadioButton(
-        const std::string& text,
-        unsigned int width_hint, unsigned int height_hint) :
-    bwAbstractButton(text, WIDGET_TYPE_RADIO_BUTTON, "bwRadioButton", width_hint, height_hint)
+bwRadioButton::bwRadioButton(const std::string& text,
+                             std::optional<unsigned int> width_hint,
+                             std::optional<unsigned int> height_hint)
+    : bwAbstractButton(text, "bwRadioButton", width_hint, height_hint)
 {
-	
 }
 
-void bwRadioButton::mousePressEvent(
-        const bwWidget::MouseButton button,
-        const bwPoint& /*location*/)
+auto bwRadioButton::canAlign() const -> bool
 {
-	if (button == bwWidget::MOUSE_BUTTON_LEFT) {
-		state = STATE_SUNKEN;
-		apply();
-	}
+  return true;
 }
 
-void bwRadioButton::mouseReleaseEvent(
-        const bwWidget::MouseButton /*button*/,
-        const bwPoint& /*location*/)
+// ------------------ Handling ------------------
+
+class bwRadioButtonHandler : public bwAbstractButtonHandler {
+ public:
+  bwRadioButtonHandler(bwRadioButton& button);
+  ~bwRadioButtonHandler() = default;
+
+  void onMousePress(bwMouseButtonEvent&) override;
+  void onMouseRelease(bwMouseButtonEvent&) override;
+};
+
+bwRadioButtonHandler::bwRadioButtonHandler(bwRadioButton& button) : bwAbstractButtonHandler(button)
 {
-	
 }
+
+auto bwRadioButton::createHandler() -> std::unique_ptr<bwScreenGraph::EventHandler>
+{
+  return std::make_unique<bwRadioButtonHandler>(*this);
+}
+
+void bwRadioButtonHandler::onMousePress(bwMouseButtonEvent& event)
+{
+  if (event.button == bwMouseButtonEvent::Button::LEFT) {
+    button.state = bwWidget::State::SUNKEN;
+    apply();
+    event.swallow();
+  }
+}
+
+void bwRadioButtonHandler::onMouseRelease(bwMouseButtonEvent& event)
+{
+  event.swallow();
+}
+
+}  // namespace bWidgets
