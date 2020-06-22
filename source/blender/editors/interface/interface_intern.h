@@ -893,10 +893,7 @@ BIFIconID ui_but_widget_icon_id(const uiBut *but);
 
 /* interface_bwidgets.cc */
 void ui_widgets_init(void);
-void ui_widget_draw(
-        const uiBut *but,
-        const rcti *rect,
-        const int roundboxalign);
+void ui_widget_draw(const uiBut *but, const rcti *rect, const int roundboxalign);
 
 void ui_draw_menu_item(const struct uiFontStyle *fstyle,
                        rcti *rect,

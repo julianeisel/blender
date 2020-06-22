@@ -32,54 +32,45 @@
 /**
  * \brief A bWidgets style for Blender themes.
  */
-class BlenderThemeStyle : public bWidgets::bwStyle
-{
-public:
-	BlenderThemeStyle();
+class BlenderThemeStyle : public bWidgets::bwStyle {
+ public:
+  BlenderThemeStyle();
 
-	void setupGlobals();
-	void setWidgetStyle(bWidgets::bwWidget&) override;
-	void polish(bWidgets::bwWidget&) override;
+  void setupGlobals();
+  void setWidgetStyle(bWidgets::bwWidget &) override;
+  void polish(bWidgets::bwWidget &) override;
 };
 
 /**
  * \brief A paint-engine implementation based on the Gawain graphics library.
  */
-class GawainPaintEngine : public bWidgets::bwPaintEngine
-{
-public:
-	void setupViewport(
-	        const bWidgets::bwRectanglePixel& rect,
-	        const bWidgets::bwColor& clear_color) override;
-	void drawPolygon(
-	        const bWidgets::bwPainter&,
-	        const bWidgets::bwPolygon&) override;
-	void drawText(
-	        const bWidgets::bwPainter& painter,
-	        const std::string& text,
-	        const bWidgets::bwRectanglePixel& rect,
-	        const bWidgets::TextAlignment alignment) override;
-	void drawIcon(
-	        const bWidgets::bwPainter&,
-	        const bWidgets::bwIconInterface&,
-	        const bWidgets::bwRectanglePixel&) override;
+class GawainPaintEngine : public bWidgets::bwPaintEngine {
+ public:
+  void setupViewport(const bWidgets::bwRectanglePixel &rect,
+                     const bWidgets::bwColor &clear_color) override;
+  void enableMask(const bWidgets::bwRectanglePixel &rect) override;
+  void drawPolygon(const bWidgets::bwPainter &, const bWidgets::bwPolygon &) override;
+  void drawText(const bWidgets::bwPainter &painter,
+                const std::string &text,
+                const bWidgets::bwRectanglePixel &rect,
+                const bWidgets::TextAlignment alignment) override;
+  void drawIcon(const bWidgets::bwPainter &,
+                const bWidgets::bwIconInterface &,
+                const bWidgets::bwRectanglePixel &) override;
 };
 
-class Icon : public bWidgets::bwIconInterface
-{
-public:
-	Icon(BIFIconID icon_id, float aspect) :
-	    iconid(icon_id), aspect(aspect)
-	{
-		
-	}
+class Icon : public bWidgets::bwIconInterface {
+ public:
+  Icon(BIFIconID icon_id, float aspect) : iconid(icon_id), aspect(aspect)
+  {
+  }
 
-	bool isValid() const override
-	{
-		return iconid != ICON_NONE;
-	}
-	BIFIconID iconid;
-	float aspect;
+  bool isValid() const override
+  {
+    return iconid != ICON_NONE;
+  }
+  BIFIconID iconid;
+  float aspect;
 };
 
 #endif /* __INTERFACE_BWIDGETS_INTERN_H__ */

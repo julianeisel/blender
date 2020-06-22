@@ -36,8 +36,6 @@ set(INC
   ../../../../intern/bwidgets/generics
   ../../../../intern/bwidgets/utils
   ../../../../intern/bwidgets/widgets
-  ../../../../intern/guardedalloc
-  ../../../../intern/glew-mx
 )
 
 set(INC_SYS
@@ -98,6 +96,7 @@ set(LIB
   bf_blenkernel
   bf_blenlib
   bf_editor_datafiles
+  bf_intern_bwidgets
 )
 
 if(WITH_INTERNATIONAL)

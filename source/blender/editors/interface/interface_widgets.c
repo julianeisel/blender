@@ -2449,17 +2449,17 @@ static void widget_draw_node_link_socket(const uiWidgetColors *wcol,
 
 BIFIconID ui_but_widget_icon_id(const uiBut *but)
 {
-	if (!(but->flag & UI_HAS_ICON)) {
-		return ICON_NONE;
-	}
+  if (!(but->flag & UI_HAS_ICON)) {
+    return ICON_NONE;
+  }
 
-	/* Consecutive icons can be toggle between. */
-	if (but->drawflag & UI_BUT_ICON_REVERSE) {
-		return but->icon - but->iconadd;
-	}
-	else {
-		return but->icon + but->iconadd;
-	}
+  /* Consecutive icons can be toggle between. */
+  if (but->drawflag & UI_BUT_ICON_REVERSE) {
+    return but->icon - but->iconadd;
+  }
+  else {
+    return but->icon + but->iconadd;
+  }
 }
 
 /* draws text and icons for buttons */
@@ -2491,18 +2491,15 @@ static void widget_draw_text_icon(const uiFontStyle *fstyle,
       rect->xmax = temp.xmin;
     }
 
-	/* Big previews with optional text label below */
-	if (but->flag & UI_BUT_ICON_PREVIEW && ui_block_is_menu(but->block)) {
-		const BIFIconID icon = ui_but_widget_icon_id(but);
-		int icon_size = BLI_rcti_size_y(rect);
-		int text_size = 0;
+    widget_draw_node_link_socket(wcol, rect, but, alpha);
+  }
 
   /* If there's an icon too (made with uiDefIconTextBut) then draw the icon
    * and offset the text label to accommodate it */
 
   /* Big previews with optional text label below */
   if (but->flag & UI_BUT_ICON_PREVIEW && ui_block_is_menu(but->block)) {
-    const BIFIconID icon = ui_but_icon(but);
+    const BIFIconID icon = ui_but_widget_icon_id(but);
     int icon_size = BLI_rcti_size_y(rect);
     int text_size = 0;
 
@@ -4920,20 +4917,18 @@ void ui_draw_but(const bContext *C, struct ARegion *region, uiStyle *style, uiBu
         ui_draw_but_TRACKPREVIEW(region, but, &tui->wcol_regular, rect);
         break;
 
-	const int roundboxalign = widget_roundbox_set(but, rect);
-
       default:
         wt = widget_type(UI_WTYPE_REGULAR);
         break;
     }
   }
 
+  const int roundboxalign = widget_roundbox_set(but, rect);
+
   if (wt) {
     // rcti disablerect = *rect; /* rect gets clipped smaller for text */
-    int roundboxalign, state, drawflag;
+    int state, drawflag;
     bool disabled = false;
-
-    roundboxalign = widget_roundbox_set(but, rect);
 
     /* Mask out flags re-used for local state. */
     state = but->flag & ~UI_STATE_FLAGS_ALL;

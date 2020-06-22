@@ -30,7 +30,7 @@ set(SRC
 )
 
 set(LIB
-	bWidgets
+#	bWidgets
 )
 
 add_library(bw_widgets ${SRC})

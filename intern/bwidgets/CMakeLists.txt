@@ -53,9 +53,7 @@ set(LIB
 	bw_widgets
 )
 
-add_library(bWidgets ${SRC})
-include_directories(${INC})
-target_link_libraries(bWidgets ${LIB})
+blender_add_lib(bf_intern_bwidgets "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
 add_subdirectory(generics)
 add_subdirectory(utils)
