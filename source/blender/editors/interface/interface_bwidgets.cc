@@ -26,6 +26,7 @@
 #include "bwPainter.h"
 #include "bwPolygon.h"
 #include "bwPushButton.h"
+#include "bwStyle.h"
 #include "bwStyleManager.h"
 
 #ifdef __cplusplus
@@ -170,6 +171,7 @@ void ui_widget_draw(const uiBut *but, const rcti *rect, const int roundboxalign)
                          // here for now.
 
   if (widget) {
+    style.setWidgetStyle(*widget);
     widget->draw(style);
   }
 }

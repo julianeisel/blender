@@ -218,13 +218,7 @@ void GawainPaintEngine::drawIcon(const bwPainter &painter,
   convert_bwColor_to_uchar(painter.getActiveColor(), col);
 
   GPU_blend(true);
-  UI_icon_draw_ex(rect.xmin,
-                  rect.ymin,
-                  static_cast<int>(icon.iconid),
-                  icon.aspect,
-                  1.0f,
-                  0.0f,
-                  reinterpret_cast<const uchar *>(col),
-                  false);
+  UI_icon_draw_ex(
+      rect.xmin, rect.ymin, static_cast<int>(icon.iconid), icon.aspect, 1.0f, 0.0f, col, false);
   GPU_blend(false);
 }
